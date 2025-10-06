@@ -4,13 +4,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "${INTERNAL_BACKEND_PORT}:${EXTERNAL_BACKEND_PORT}"
+      - "${EXTERNAL_BACKEND_PORT:-3001}:3001"
     environment:
       - DATABASE_URL=/app/data/recipes.db
       - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
       - PORT=3001
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme123}
     volumes:
       - recipe-data:/app/data
     restart: unless-stopped
@@ -20,9 +20,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "${INTERNAL_FRONTEND_PORT}:${EXTERNAL_FRONTEND_PORT}"
+      - "${EXTERNAL_FRONTEND_PORT:-3000}:3000"
     environment:
-      - ORIGIN=http://localhost:${EXTERNAL_BACKEND_PORT}
+      - ORIGIN=http://localhost:${EXTERNAL_FRONTEND_PORT:-3000}
       - BODY_SIZE_LIMIT=10485760
     depends_on:
       - backend
@@ -34,4 +34,4 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${FOLDER_LOCATION}
+      device: ${FOLDER_LOCATION:-/mnt/ssd_cache/docker-apps/recipe-manager}
