@@ -22,10 +22,13 @@ RUN npm install -g pnpm@10.13.1 node-gyp
 ENV PYTHON=/usr/bin/python3
 ENV SQLITE_SKIP_BINARIES=1
 
-# Install dependencies and enable build scripts
+# Install dependencies except better-sqlite3
 RUN pnpm config set enable-pre-post-scripts true && \
-    pnpm install --frozen-lockfile && \
-    pnpm rebuild better-sqlite3 --verbose
+    pnpm install --frozen-lockfile
+
+# Remove better-sqlite3 and reinstall with npm to ensure proper compilation
+RUN pnpm remove better-sqlite3 && \
+    npm install better-sqlite3@11.10.0 --verbose
 
 # Copy source code
 COPY . .
@@ -34,7 +37,11 @@ COPY . .
 RUN pnpm build
 
 # Verify better-sqlite3 was built correctly
-RUN ls -la /app/node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3/build/ || echo "Build directory not found"
+RUN echo "Checking for better-sqlite3 bindings..." && \
+    ls -la /app/node_modules/better-sqlite3/build/ 2>/dev/null || \
+    ls -la /app/node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3/build/ 2>/dev/null || \
+    echo "Build directory not found - listing all better-sqlite3 locations:" && \
+    find /app/node_modules -name "better-sqlite3" -type d
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data
