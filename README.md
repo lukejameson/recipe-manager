@@ -36,72 +36,68 @@ A modern, mobile-responsive Progressive Web App (PWA) for managing personal reci
 - pnpm 10.x or later (recommended) or npm
 - Docker and Docker Compose (for containerized deployment)
 
-## Installation
+## Quick Start
 
-### 1. Clone the repository
+### 1. Clone and install
 
 ```bash
 git clone <repository-url>
 cd recipe-manager
+pnpm install:all  # Installs both backend and frontend dependencies
 ```
 
-### 2. Install dependencies
+### 2. Configure environment variables
 
-#### Backend
 ```bash
-cd backend
-pnpm install
+# Backend
+cp backend/.env.example backend/.env
+# Edit backend/.env and set your JWT_SECRET
+
+# Frontend
+cp frontend/.env.example frontend/.env
+# Edit if needed (defaults work for local development)
 ```
 
-#### Frontend
+### 3. Initialize the database
+
 ```bash
-cd frontend
-pnpm install
+pnpm db:migrate
 ```
 
-### 3. Configure environment variables
-
-#### Backend
-```bash
-cd backend
-cp .env.example .env
-# Edit .env and set your JWT_SECRET
-```
-
-#### Frontend
-```bash
-cd frontend
-cp .env.example .env
-# Edit .env if you need to change the API URL
-```
-
-### 4. Initialize the database
+### 4. Start development servers
 
 ```bash
-cd backend
-pnpm db:generate  # Generate migrations
-pnpm db:migrate   # Run migrations
-```
-
-## Development
-
-### Start the backend server
-
-```bash
-cd backend
 pnpm dev
 ```
 
-The backend will run at http://localhost:3001
+This single command starts both backend and frontend:
+- Backend: http://localhost:3001
+- Frontend: http://localhost:5173
 
-### Start the frontend development server
+## Available Commands
 
 ```bash
-cd frontend
-pnpm dev
-```
+# Development
+pnpm dev              # Start both backend and frontend
+pnpm dev:backend      # Start only backend
+pnpm dev:frontend     # Start only frontend
 
-The frontend will run at http://localhost:5173
+# Installation
+pnpm install:all      # Install all dependencies
+
+# Database
+pnpm db:generate      # Generate database migrations
+pnpm db:migrate       # Run database migrations
+
+# Production Build
+pnpm build            # Build both projects
+pnpm start            # Start both in production mode
+
+# Docker
+pnpm docker:up        # Start with Docker Compose
+pnpm docker:down      # Stop Docker containers
+pnpm docker:logs      # View Docker logs
+```
 
 ### First-time setup
 

@@ -1,74 +1,21 @@
 import { z } from 'zod';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
-import { db } from '../../db/index.js';
-import { users } from '../../db/schema.js';
-import { hashPassword, verifyPassword, generateToken } from '../../utils/auth.js';
-import { eq } from 'drizzle-orm';
+import { generateToken } from '../../utils/auth.js';
 
 const t = initTRPC.context<Context>().create();
 
+// Fixed user ID for single-user mode
+const ADMIN_USER_ID = 'admin-user';
+
+// Get credentials from environment variables
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme123';
+
 export const authRouter = t.router({
   /**
-   * Register a new user (only if no users exist)
-   */
-  register: t.procedure
-    .input(
-      z.object({
-        username: z.string().min(3).max(50),
-        password: z.string().min(8),
-      })
-    )
-    .mutation(async ({ input }) => {
-      // Check if any users exist
-      const existingUsers = await db.select().from(users).limit(1);
-
-      if (existingUsers.length > 0) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'User registration is disabled - a user already exists',
-        });
-      }
-
-      // Check if username is taken (shouldn't be possible but just in case)
-      const existingUser = await db
-        .select()
-        .from(users)
-        .where(eq(users.username, input.username))
-        .limit(1);
-
-      if (existingUser.length > 0) {
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message: 'Username already exists',
-        });
-      }
-
-      // Hash password and create user
-      const passwordHash = await hashPassword(input.password);
-
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          username: input.username,
-          passwordHash,
-        })
-        .returning();
-
-      // Generate token
-      const token = await generateToken(newUser.id);
-
-      return {
-        token,
-        user: {
-          id: newUser.id,
-          username: newUser.username,
-        },
-      };
-    }),
-
-  /**
-   * Login with username and password
+   * Login with hardcoded credentials from environment variables
+   * Single-user authentication - no registration needed
    */
   login: t.procedure
     .input(
@@ -78,44 +25,28 @@ export const authRouter = t.router({
       })
     )
     .mutation(async ({ input }) => {
-      // Find user by username
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.username, input.username))
-        .limit(1);
-
-      if (!user) {
+      // Check credentials against environment variables
+      if (input.username !== ADMIN_USERNAME || input.password !== ADMIN_PASSWORD) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
           message: 'Invalid username or password',
         });
       }
 
-      // Verify password
-      const isValid = await verifyPassword(input.password, user.passwordHash);
-
-      if (!isValid) {
-        throw new TRPCError({
-          code: 'UNAUTHORIZED',
-          message: 'Invalid username or password',
-        });
-      }
-
-      // Generate token
-      const token = await generateToken(user.id);
+      // Generate token for the fixed admin user
+      const token = await generateToken(ADMIN_USER_ID);
 
       return {
         token,
         user: {
-          id: user.id,
-          username: user.username,
+          id: ADMIN_USER_ID,
+          username: ADMIN_USERNAME,
         },
       };
     }),
 
   /**
-   * Get current user from token
+   * Get current user from token (returns fixed admin user)
    */
   me: t.procedure.query(async ({ ctx }) => {
     if (!ctx.userId) {
@@ -125,22 +56,10 @@ export const authRouter = t.router({
       });
     }
 
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, ctx.userId))
-      .limit(1);
-
-    if (!user) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'User not found',
-      });
-    }
-
+    // Return fixed admin user info
     return {
-      id: user.id,
-      username: user.username,
+      id: ADMIN_USER_ID,
+      username: ADMIN_USERNAME,
     };
   }),
 });

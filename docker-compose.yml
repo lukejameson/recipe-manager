@@ -11,6 +11,8 @@ services:
       - DATABASE_URL=/app/data/recipes.db
       - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
       - PORT=3001
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=changeme123
     volumes:
       - recipe-data:/app/data
     restart: unless-stopped

@@ -7,19 +7,13 @@
   let password = $state('');
   let error = $state('');
   let loading = $state(false);
-  let isRegister = $state(false);
 
   async function handleSubmit() {
     error = '';
     loading = true;
 
     try {
-      let result;
-      if (isRegister) {
-        result = await trpc.auth.register.mutate({ username, password });
-      } else {
-        result = await trpc.auth.login.mutate({ username, password });
-      }
+      const result = await trpc.auth.login.mutate({ username, password });
 
       authStore.setToken(result.token);
       authStore.setUser(result.user);
@@ -35,7 +29,7 @@
 <div class="login-container">
   <div class="login-box">
     <h1>🍳 Recipe Manager</h1>
-    <h2>{isRegister ? 'Create Account' : 'Login'}</h2>
+    <h2>Login</h2>
 
     {#if error}
       <div class="error">{error}</div>
@@ -49,8 +43,8 @@
           type="text"
           bind:value={username}
           required
-          minlength="3"
           placeholder="Enter username"
+          autocomplete="username"
         />
       </div>
 
@@ -61,29 +55,15 @@
           type="password"
           bind:value={password}
           required
-          minlength="8"
           placeholder="Enter password"
+          autocomplete="current-password"
         />
       </div>
 
       <button type="submit" disabled={loading}>
-        {loading ? 'Please wait...' : isRegister ? 'Register' : 'Login'}
+        {loading ? 'Logging in...' : 'Login'}
       </button>
     </form>
-
-    <p class="toggle-text">
-      {isRegister ? 'Already have an account?' : "Don't have an account?"}
-      <button
-        type="button"
-        class="toggle-button"
-        onclick={() => {
-          isRegister = !isRegister;
-          error = '';
-        }}
-      >
-        {isRegister ? 'Login' : 'Register'}
-      </button>
-    </p>
   </div>
 </div>
 
@@ -93,110 +73,101 @@
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    padding: 1rem;
+    padding: var(--spacing-lg);
   }
 
   .login-box {
-    background: white;
-    padding: 2rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background: var(--color-surface);
+    padding: var(--spacing-2xl);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
     width: 100%;
-    max-width: 400px;
+    max-width: 440px;
+    border: 2px solid var(--color-border);
   }
 
   h1 {
     text-align: center;
-    margin: 0 0 0.5rem;
-    color: #333;
-    font-size: 2rem;
+    margin: 0 0 var(--spacing-sm);
+    font-size: 2.5rem;
+    font-weight: 800;
   }
 
   h2 {
     text-align: center;
-    margin: 0 0 1.5rem;
-    color: #666;
-    font-size: 1.5rem;
-    font-weight: normal;
+    margin: 0 0 var(--spacing-xl);
+    color: var(--color-text-light);
+    font-size: 1.25rem;
+    font-weight: 500;
   }
 
   .error {
-    background: #fee;
-    color: #c33;
-    padding: 0.75rem;
-    border-radius: 4px;
-    margin-bottom: 1rem;
+    background: #ffe5e5;
+    color: var(--color-error);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-lg);
     text-align: center;
+    font-weight: 500;
+    border-left: 4px solid var(--color-error);
   }
 
   form {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: var(--spacing-lg);
   }
 
   .form-group {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: var(--spacing-xs);
   }
 
   label {
-    font-weight: 500;
-    color: #333;
+    font-weight: 600;
+    color: var(--color-text);
+    font-size: 0.9375rem;
   }
 
   input {
-    padding: 0.75rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    padding: var(--spacing-md);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
     font-size: 1rem;
+    background: var(--color-surface);
+    transition: all 0.2s;
   }
 
   input:focus {
     outline: none;
-    border-color: #4a9eff;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
   }
 
   button[type='submit'] {
-    padding: 0.75rem;
-    background: #4a9eff;
+    padding: var(--spacing-md);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
     color: white;
     border: none;
-    border-radius: 4px;
-    font-size: 1rem;
-    font-weight: 500;
+    border-radius: var(--radius-md);
+    font-size: 1.0625rem;
+    font-weight: 600;
     cursor: pointer;
-    margin-top: 0.5rem;
+    margin-top: var(--spacing-sm);
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
   }
 
   button[type='submit']:hover:not(:disabled) {
-    background: #3a8eef;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
   }
 
   button[type='submit']:disabled {
     background: #ccc;
     cursor: not-allowed;
+    transform: none;
   }
 
-  .toggle-text {
-    text-align: center;
-    margin-top: 1.5rem;
-    color: #666;
-  }
-
-  .toggle-button {
-    background: none;
-    border: none;
-    color: #4a9eff;
-    cursor: pointer;
-    font-size: inherit;
-    text-decoration: underline;
-    padding: 0;
-    margin-left: 0.25rem;
-  }
-
-  .toggle-button:hover {
-    color: #3a8eef;
-  }
 </style>

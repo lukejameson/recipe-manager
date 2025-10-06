@@ -1,22 +1,22 @@
 {
   "name": "Recipe Manager",
   "short_name": "Recipes",
-  "description": "Manage your recipes with ease",
+  "description": "A beautiful and intuitive recipe manager to organize, browse, and cook your favorite recipes",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#fef6f3",
+  "theme_color": "#ff6b35",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><text y='140' font-size='140'>🍳</text></svg>",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><text y='380' font-size='380'>🍳</text></svg>",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]

@@ -97,4 +97,126 @@ export const tagRouter = t.router({
 
       return { success: true };
     }),
+
+  /**
+   * Rename a tag
+   */
+  rename: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        newName: z.string().min(1).max(50),
+      })
+    )
+    .mutation(async ({ input }) => {
+      // Check if tag exists
+      const [existing] = await db
+        .select()
+        .from(tags)
+        .where(eq(tags.id, input.id))
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tag not found',
+        });
+      }
+
+      // Check if new name already exists
+      const [duplicate] = await db
+        .select()
+        .from(tags)
+        .where(eq(tags.name, input.newName))
+        .limit(1);
+
+      if (duplicate && duplicate.id !== input.id) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'A tag with this name already exists',
+        });
+      }
+
+      // Rename the tag
+      const [updated] = await db
+        .update(tags)
+        .set({ name: input.newName })
+        .where(eq(tags.id, input.id))
+        .returning();
+
+      return updated;
+    }),
+
+  /**
+   * Merge two tags (combine sourceTagId into targetTagId)
+   */
+  merge: protectedProcedure
+    .input(
+      z.object({
+        sourceTagId: z.string(),
+        targetTagId: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      if (input.sourceTagId === input.targetTagId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Cannot merge a tag with itself',
+        });
+      }
+
+      // Check if both tags exist
+      const [sourceTag] = await db
+        .select()
+        .from(tags)
+        .where(eq(tags.id, input.sourceTagId))
+        .limit(1);
+
+      const [targetTag] = await db
+        .select()
+        .from(tags)
+        .where(eq(tags.id, input.targetTagId))
+        .limit(1);
+
+      if (!sourceTag || !targetTag) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'One or both tags not found',
+        });
+      }
+
+      // Get all recipes with the source tag
+      const recipesWithSourceTag = await db
+        .select()
+        .from(recipeTags)
+        .where(eq(recipeTags.tagId, input.sourceTagId));
+
+      // For each recipe, check if it already has the target tag
+      // If not, add it. If yes, skip it.
+      for (const rt of recipesWithSourceTag) {
+        const [existingTarget] = await db
+          .select()
+          .from(recipeTags)
+          .where(
+            sql`${recipeTags.recipeId} = ${rt.recipeId} AND ${recipeTags.tagId} = ${input.targetTagId}`
+          )
+          .limit(1);
+
+        if (!existingTarget) {
+          // Add target tag to this recipe
+          await db.insert(recipeTags).values({
+            recipeId: rt.recipeId,
+            tagId: input.targetTagId,
+          });
+        }
+      }
+
+      // Delete all associations with source tag
+      await db.delete(recipeTags).where(eq(recipeTags.tagId, input.sourceTagId));
+
+      // Delete the source tag
+      await db.delete(tags).where(eq(tags.id, input.sourceTagId));
+
+      return { success: true, targetTag };
+    }),
 });

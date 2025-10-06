@@ -286,10 +286,218 @@ export function convertIngredient(ingredientStr: string): string {
 }
 
 /**
+ * Clean up dual measurements (e.g., "10 ml / 6 g" → "6 g")
+ * Prefers weight over volume when both are present
+ */
+function cleanDualMeasurements(ingredientStr: string): string {
+  // Pattern: quantity unit / quantity unit ingredient
+  // Example: "10 ml / 6 g active dry yeast" → "6 g active dry yeast"
+  const dualPattern = /^([\d\s\/.-]+)\s*([a-zA-Z.]+)\s*\/\s*([\d\s\/.-]+)\s*([a-zA-Z.]+)\s+(.+)$/i;
+  const match = ingredientStr.match(dualPattern);
+
+  if (match) {
+    const [, qty1, unit1, qty2, unit2, ingredient] = match;
+    const lowerUnit1 = unit1.toLowerCase().replace(/\./g, '');
+    const lowerUnit2 = unit2.toLowerCase().replace(/\./g, '');
+
+    // Prefer weight (g, kg) over volume (ml, L)
+    const isWeight1 = ['g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms'].includes(lowerUnit1);
+    const isWeight2 = ['g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms'].includes(lowerUnit2);
+
+    if (isWeight2) {
+      // Use the second measurement (weight)
+      return `${qty2.trim()} ${unit2.trim()} ${ingredient.trim()}`;
+    } else if (isWeight1) {
+      // Use the first measurement (weight)
+      return `${qty1.trim()} ${unit1.trim()} ${ingredient.trim()}`;
+    } else {
+      // Both are volume or other, use second one
+      return `${qty2.trim()} ${unit2.trim()} ${ingredient.trim()}`;
+    }
+  }
+
+  return ingredientStr;
+}
+
+/**
+ * Clean up range measurements (e.g., "1-2 cups" → "1.5 cups")
+ * Also handles "± ¼ cup" patterns
+ */
+function cleanRangeMeasurements(ingredientStr: string): string {
+  // Remove optional additions like "± ¼ cup"
+  let cleaned = ingredientStr.replace(/\s*[±+]\s*[\d\s\/.-]+\s*[a-zA-Z.]+.*?(?=\)|$)/gi, '');
+
+  // Remove parenthetical notes
+  cleaned = cleaned.replace(/\s*\([^)]*\)/g, '');
+
+  // Convert ranges to average: "1-2 cups" → "1.5 cups"
+  const rangePattern = /^([\d.]+)\s*[-–]\s*([\d.]+)(\s+[a-zA-Z.]+\s+.+)$/i;
+  const rangeMatch = cleaned.match(rangePattern);
+
+  if (rangeMatch) {
+    const [, num1, num2, rest] = rangeMatch;
+    const avg = (parseFloat(num1) + parseFloat(num2)) / 2;
+    return `${formatNumber(avg)}${rest}`;
+  }
+
+  return cleaned.trim();
+}
+
+/**
+ * Normalize fractions to a consistent format
+ */
+function normalizeFractions(ingredientStr: string): string {
+  // Convert vulgar fractions to standard format
+  const vulgarFractions: Record<string, string> = {
+    '¼': '1/4',
+    '½': '1/2',
+    '¾': '3/4',
+    '⅓': '1/3',
+    '⅔': '2/3',
+    '⅛': '1/8',
+    '⅜': '3/8',
+    '⅝': '5/8',
+    '⅞': '7/8',
+  };
+
+  let result = ingredientStr;
+  for (const [vulgar, standard] of Object.entries(vulgarFractions)) {
+    result = result.replace(new RegExp(vulgar, 'g'), standard);
+  }
+
+  return result;
+}
+
+/**
+ * Clean and normalize an ingredient string
+ */
+export function cleanIngredient(ingredientStr: string): string {
+  let cleaned = ingredientStr.trim();
+
+  // Step 1: Normalize fractions
+  cleaned = normalizeFractions(cleaned);
+
+  // Step 2: Clean dual measurements
+  cleaned = cleanDualMeasurements(cleaned);
+
+  // Step 3: Clean ranges and optional measurements
+  cleaned = cleanRangeMeasurements(cleaned);
+
+  // Step 4: Remove "Optional Toppings:" type labels
+  cleaned = cleaned.replace(/^(optional\s+)?[\w\s]+:\s*/gi, '');
+
+  // Step 5: Clean up extra whitespace
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+  return cleaned;
+}
+
+/**
  * Convert all ingredients in a recipe
  */
 export function convertRecipeIngredients(ingredients: string[]): string[] {
-  return ingredients.map(convertIngredient);
+  return ingredients
+    .map(cleanIngredient)
+    .filter(ing => ing.length > 0) // Remove empty strings
+    .map(convertIngredient);
+}
+
+/**
+ * Clean and normalize an instruction string
+ * Normalizes fractions and cleans up formatting
+ */
+export function cleanInstruction(instructionStr: string): string {
+  let cleaned = instructionStr.trim();
+
+  // Normalize fractions
+  cleaned = normalizeFractions(cleaned);
+
+  // Clean up extra whitespace
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+  return cleaned;
+}
+
+/**
+ * Convert measurements in instructions to metric
+ */
+export function convertInstructionMeasurements(instructionStr: string): string {
+  let result = instructionStr;
+
+  // First, clean up dual measurements in instructions (similar to ingredients)
+  // Pattern: "118 ml /120ml" or "59 ml/60ml"
+  const dualMeasurementPattern = /([\d\s\/.-]+)\s*(ml|l|g|kg|cups?|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|pounds?|lbs?)\s*\/\s*([\d\s\/.-]+)\s*(ml|l|g|kg|cups?|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|pounds?|lbs?)/gi;
+
+  result = result.replace(dualMeasurementPattern, (match, qty1, unit1, qty2, unit2) => {
+    const lowerUnit1 = unit1.toLowerCase().replace(/\./g, '');
+    const lowerUnit2 = unit2.toLowerCase().replace(/\./g, '');
+
+    // Prefer weight over volume, or metric over imperial
+    const metricUnits = ['ml', 'l', 'g', 'kg'];
+    const isMetric1 = metricUnits.includes(lowerUnit1);
+    const isMetric2 = metricUnits.includes(lowerUnit2);
+
+    if (isMetric2) {
+      // Use the second measurement (metric)
+      return `${qty2.trim()} ${unit2.trim()}`;
+    } else if (isMetric1) {
+      // Use the first measurement (metric)
+      return `${qty1.trim()} ${unit1.trim()}`;
+    } else {
+      // Both non-metric, use second
+      return `${qty2.trim()} ${unit2.trim()}`;
+    }
+  });
+
+  // Pattern to find measurements in instructions
+  // Matches things like "2 cups", "1/2 cup", "350°F", "8 oz"
+  // Also handles edge cases like "about59 ml" by adding optional word boundary
+  const measurementPattern = /(\b(?:about|scant)?\s*)([\d\s\/.-]+)\s*(cups?|tablespoons?|tbsp|teaspoons?|tsp|ounces?|oz|pounds?|lbs?|°F|fahrenheit)/gi;
+
+  result = result.replace(measurementPattern, (match, prefix, quantity, unit) => {
+    const lowerUnit = unit.toLowerCase().replace(/\./g, '');
+
+    // Handle temperature
+    if (lowerUnit === '°f' || lowerUnit === 'fahrenheit') {
+      const fahrenheit = parseFloat(quantity);
+      if (!isNaN(fahrenheit)) {
+        const celsius = Math.round((fahrenheit - 32) * 5 / 9);
+        return `${prefix}${celsius}°C`;
+      }
+    }
+
+    // Handle volume/weight - try to convert
+    const parsed = parseIngredient(`${quantity} ${unit} placeholder`);
+    if (parsed.quantity && parsed.unit) {
+      const converted = convertIngredientToMetric(parsed);
+      if (converted.converted) {
+        // Extract just the measurement part (not the ingredient name)
+        const measurement = converted.converted.replace(' placeholder', '');
+        return `${prefix}${measurement}`;
+      }
+    }
+
+    return match;
+  });
+
+  // Fix spacing issues where measurements got concatenated
+  // e.g., "In118 ml" → "In 118 ml"
+  result = result.replace(/([a-zA-Z])(\d+\s*(?:ml|l|g|kg))/g, '$1 $2');
+
+  // Fix double spaces
+  result = result.replace(/\s+/g, ' ');
+
+  return result;
+}
+
+/**
+ * Clean all instructions in a recipe
+ */
+export function cleanRecipeInstructions(instructions: string[], convertToMetric: boolean = false): string[] {
+  return instructions
+    .map(cleanInstruction)
+    .map(inst => convertToMetric ? convertInstructionMeasurements(inst) : inst)
+    .filter(inst => inst.length > 0);
 }
 
 /**
