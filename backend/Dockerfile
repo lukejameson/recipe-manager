@@ -22,14 +22,22 @@ RUN npm install -g pnpm@10.13.1
 ENV PYTHON=/usr/bin/python3
 ENV SQLITE_SKIP_BINARIES=1
 
-# Install dependencies
+# Install dependencies with verbose logging
 RUN pnpm install --frozen-lockfile
+
+# Force rebuild better-sqlite3 from source with verbose output
+RUN cd /app && \
+    pnpm exec node-gyp clean && \
+    pnpm rebuild better-sqlite3 --verbose
 
 # Copy source code
 COPY . .
 
 # Build TypeScript
 RUN pnpm build
+
+# Verify better-sqlite3 was built correctly
+RUN ls -la /app/node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3/build/ || echo "Build directory not found"
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data
