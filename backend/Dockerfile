@@ -15,19 +15,16 @@ RUN apt-get update && apt-get install -y \
 # Copy package files
 COPY package.json pnpm-lock.yaml* ./
 
-# Install pnpm
-RUN npm install -g pnpm@10.13.1
+# Install pnpm and node-gyp globally
+RUN npm install -g pnpm@10.13.1 node-gyp
 
 # Set environment variables for better-sqlite3 compilation
 ENV PYTHON=/usr/bin/python3
 ENV SQLITE_SKIP_BINARIES=1
 
-# Install dependencies with verbose logging
-RUN pnpm install --frozen-lockfile
-
-# Force rebuild better-sqlite3 from source with verbose output
-RUN cd /app && \
-    pnpm exec node-gyp clean && \
+# Install dependencies and enable build scripts
+RUN pnpm config set enable-pre-post-scripts true && \
+    pnpm install --frozen-lockfile && \
     pnpm rebuild better-sqlite3 --verbose
 
 # Copy source code
