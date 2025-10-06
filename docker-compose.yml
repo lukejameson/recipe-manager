@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -11,8 +9,8 @@ services:
       - DATABASE_URL=/app/data/recipes.db
       - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
       - PORT=3001
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=changeme123
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     volumes:
       - recipe-data:/app/data
     restart: unless-stopped
@@ -32,3 +30,8 @@ services:
 
 volumes:
   recipe-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/ssd_cache/docker-apps/recipe-manager

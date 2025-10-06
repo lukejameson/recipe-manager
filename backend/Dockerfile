@@ -2,6 +2,9 @@ FROM node:22-alpine
 
 WORKDIR /app
 
+# Install build dependencies required for native modules like better-sqlite3
+RUN apk add --no-cache python3 make g++
+
 # Copy package files
 COPY package.json pnpm-lock.yaml* ./
 
