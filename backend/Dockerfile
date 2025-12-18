@@ -21,6 +21,9 @@ COPY . .
 # Build TypeScript
 RUN npm run build
 
+# Copy migrations to dist folder (they're not compiled by tsc)
+RUN cp -r src/db/migrations dist/db/
+
 # Create data directory and set permissions
 RUN mkdir -p /app/data
 
@@ -34,4 +37,5 @@ USER nodejs
 
 EXPOSE 3001
 
-CMD ["npm", "start"]
+# Run migrations then start server
+CMD ["sh", "-c", "node dist/db/migrate.js && node dist/server.js"]
