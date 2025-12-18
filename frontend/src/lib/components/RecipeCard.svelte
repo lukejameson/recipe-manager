@@ -452,4 +452,62 @@
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
   }
+
+  /* Mobile optimizations */
+  @media (max-width: 640px) {
+    .recipe-card {
+      border-radius: var(--radius-lg);
+    }
+
+    .recipe-card:hover {
+      transform: none;
+    }
+
+    .image {
+      height: 180px;
+    }
+
+    .image.placeholder {
+      font-size: 3rem;
+    }
+
+    .content {
+      padding: var(--spacing-4);
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+    }
+
+    .description {
+      display: none;
+    }
+
+    .meta {
+      gap: var(--spacing-3);
+      font-size: var(--text-xs);
+    }
+
+    .tags {
+      display: none;
+    }
+
+    .actions {
+      display: none;
+    }
+
+    .favorite-btn {
+      width: 40px;
+      height: 40px;
+      top: var(--spacing-3);
+      right: var(--spacing-3);
+    }
+
+    .difficulty-badge {
+      top: var(--spacing-3);
+      left: var(--spacing-3);
+      font-size: 0.625rem;
+      padding: 0.25rem 0.5rem;
+    }
+  }
 </style>

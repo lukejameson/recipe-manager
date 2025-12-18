@@ -122,16 +122,10 @@
   <div class="container">
     <div class="header">
       <h2>My Recipes</h2>
-      <div class="actions">
-        <a href="/recipe/new" class="btn-primary">
-          <span class="icon">➕</span>
-          <span>New Recipe</span>
-        </a>
-        <a href="/recipe/import" class="btn-secondary">
-          <span class="icon">📥</span>
-          <span>Import JSONLD</span>
-        </a>
-      </div>
+      <a href="/recipe/new" class="btn-primary mobile-fab">
+        <span class="icon">➕</span>
+        <span class="btn-text">New</span>
+      </a>
     </div>
 
     <div class="filters-section">
@@ -146,7 +140,7 @@
       </div>
 
       <div class="controls">
-        <div class="view-toggle">
+        <div class="view-toggle desktop-only">
           <button
             class="view-btn"
             class:active={viewMode === 'grid'}
@@ -174,39 +168,41 @@
         </div>
 
         <div class="sort-control">
-          <label for="sort-select">Sort by:</label>
           <select id="sort-select" bind:value={sortBy} onchange={handleSortChange}>
-            <option value="date-newest">Newest First</option>
-            <option value="date-oldest">Oldest First</option>
-            <option value="title-asc">Title (A-Z)</option>
-            <option value="title-desc">Title (Z-A)</option>
-            <option value="rating-high">Highest Rated</option>
-            <option value="rating-low">Lowest Rated</option>
+            <option value="date-newest">Newest</option>
+            <option value="date-oldest">Oldest</option>
+            <option value="title-asc">A-Z</option>
+            <option value="title-desc">Z-A</option>
+            <option value="rating-high">Top Rated</option>
             <option value="cooked-most">Most Cooked</option>
-            <option value="cooked-least">Least Cooked</option>
-            <option value="preptime-short">Shortest Prep Time</option>
-            <option value="preptime-long">Longest Prep Time</option>
-            <option value="cooktime-short">Shortest Cook Time</option>
-            <option value="cooktime-long">Longest Cook Time</option>
-            <option value="totaltime-short">Shortest Total Time</option>
-            <option value="totaltime-long">Longest Total Time</option>
           </select>
         </div>
 
-        <a href="/tags" class="btn-tags">
+        <a href="/tags" class="btn-tags desktop-only">
           <span class="icon">🏷️</span>
           <span>Manage Tags</span>
         </a>
       </div>
 
+      {#if selectedTags.length > 0}
+        <div class="active-filters">
+          <span class="filter-label">Filters:</span>
+          {#each selectedTags as tag}
+            <span class="active-tag">
+              {tag}
+              <button onclick={() => toggleTag(tag)} class="remove-tag">✕</button>
+            </span>
+          {/each}
+          <button onclick={clearFilters} class="clear-btn">Clear</button>
+        </div>
+      {/if}
+
       {#if allTags.length > 0}
-        <div class="tag-filter">
-          <div class="tag-filter-header">
-            <span>Filter by tags:</span>
-            {#if selectedTags.length > 0}
-              <button onclick={clearFilters} class="clear-btn">Clear All</button>
-            {/if}
-          </div>
+        <details class="tag-filter-collapsible">
+          <summary class="tag-filter-toggle">
+            <span>🏷️ Filter by tag</span>
+            <span class="tag-count-badge">{allTags.length}</span>
+          </summary>
           <div class="tag-chips">
             {#each allTags as tag (tag.id)}
               <button
@@ -218,19 +214,7 @@
               </button>
             {/each}
           </div>
-        </div>
-      {/if}
-
-      {#if selectedTags.length > 0}
-        <div class="active-filters">
-          <span class="filter-label">Active filters:</span>
-          {#each selectedTags as tag}
-            <span class="active-tag">
-              {tag}
-              <button onclick={() => toggleTag(tag)} class="remove-tag">✕</button>
-            </span>
-          {/each}
-        </div>
+        </details>
       {/if}
     </div>
 
@@ -264,41 +248,31 @@
 <style>
   main {
     flex: 1;
-    padding: var(--spacing-12) 0;
+    padding: var(--spacing-6) 0;
   }
 
   .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 var(--spacing-6);
+    padding: 0 var(--spacing-4);
   }
 
   .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-8);
-    flex-wrap: wrap;
-    gap: var(--spacing-4);
+    margin-bottom: var(--spacing-5);
   }
 
   h2 {
     margin: 0;
-    font-size: var(--text-3xl);
+    font-size: var(--text-2xl);
     color: var(--color-text);
-    font-weight: var(--font-extrabold);
-    letter-spacing: -0.025em;
+    font-weight: var(--font-bold);
   }
 
-  .actions {
-    display: flex;
-    gap: var(--spacing-3);
-    flex-wrap: wrap;
-  }
-
-  .btn-primary,
-  .btn-secondary {
-    padding: var(--spacing-3) var(--spacing-4);
+  .btn-primary {
+    padding: var(--spacing-2) var(--spacing-4);
     border-radius: var(--radius-lg);
     text-decoration: none;
     font-weight: var(--font-semibold);
@@ -307,123 +281,75 @@
     gap: var(--spacing-2);
     transition: var(--transition-normal);
     font-size: var(--text-sm);
-    border: 2px solid transparent;
-  }
-
-  .btn-primary {
     background: var(--color-primary);
     color: white;
-    border-color: var(--color-primary);
-    box-shadow: var(--shadow-sm);
+    border: none;
   }
 
   .btn-primary:hover {
     background: var(--color-primary-dark);
-    border-color: var(--color-primary-dark);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-lg);
-  }
-
-  .btn-secondary {
-    background: var(--color-surface);
-    color: var(--color-primary);
-    border-color: var(--color-border);
-    box-shadow: var(--shadow-xs);
-  }
-
-  .btn-secondary:hover {
-    background: var(--color-bg-subtle);
-    border-color: var(--color-primary);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
   }
 
   .filters-section {
-    margin-bottom: var(--spacing-8);
+    margin-bottom: var(--spacing-5);
   }
 
   .search-bar {
     display: flex;
-    gap: var(--spacing-3);
-    margin-bottom: var(--spacing-6);
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-4);
   }
 
   .search-bar input {
     flex: 1;
-    padding: var(--spacing-3) var(--spacing-4);
-    border: 2px solid var(--color-border);
+    padding: var(--spacing-3);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     font-size: var(--text-base);
     background: var(--color-surface);
-    transition: var(--transition-normal);
-    color: var(--color-text);
-    font-weight: var(--font-normal);
   }
 
   .search-bar input:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
   }
 
   .btn-search {
-    padding: var(--spacing-3) var(--spacing-6);
+    padding: var(--spacing-3) var(--spacing-4);
     background: var(--color-primary);
     color: white;
-    border: 2px solid var(--color-primary);
+    border: none;
     border-radius: var(--radius-lg);
     cursor: pointer;
     font-size: var(--text-sm);
     font-weight: var(--font-semibold);
-    transition: var(--transition-normal);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .btn-search:hover {
-    background: var(--color-primary-dark);
-    border-color: var(--color-primary-dark);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-lg);
   }
 
   .controls {
     display: flex;
-    gap: var(--spacing-4);
+    gap: var(--spacing-3);
     align-items: center;
-    margin-bottom: var(--spacing-6);
-    flex-wrap: wrap;
+    margin-bottom: var(--spacing-4);
   }
 
   .view-toggle {
     display: flex;
-    gap: 0;
-    border: 2px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     overflow: hidden;
-    box-shadow: var(--shadow-xs);
   }
 
   .view-btn {
-    padding: var(--spacing-2-5) var(--spacing-4);
+    padding: var(--spacing-2) var(--spacing-3);
     background: var(--color-surface);
     border: none;
     border-right: 1px solid var(--color-border);
     cursor: pointer;
-    transition: var(--transition-normal);
-    min-height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     color: var(--color-text-light);
   }
 
   .view-btn:last-child {
     border-right: none;
-  }
-
-  .view-btn:hover {
-    background: var(--color-bg-subtle);
-    color: var(--color-text);
   }
 
   .view-btn.active {
@@ -432,156 +358,133 @@
   }
 
   .view-icon {
-    font-size: 1.25rem;
-    display: block;
+    font-size: 1rem;
   }
 
   .sort-control {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-3);
     flex: 1;
   }
 
-  .sort-control label {
-    font-weight: var(--font-medium);
-    color: var(--color-text);
-    font-size: var(--text-sm);
-  }
-
   .sort-control select {
-    padding: var(--spacing-2-5) var(--spacing-3);
-    border: 2px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    width: 100%;
+    padding: var(--spacing-2) var(--spacing-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     font-size: var(--text-sm);
     background: var(--color-surface);
-    cursor: pointer;
-    transition: var(--transition-normal);
     color: var(--color-text);
-    font-weight: var(--font-normal);
-  }
-
-  .sort-control select:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
   }
 
   .btn-tags {
-    padding: var(--spacing-2-5) var(--spacing-3);
+    padding: var(--spacing-2) var(--spacing-3);
     background: var(--color-surface);
     color: var(--color-primary);
-    border: 2px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    text-decoration: none;
-    font-weight: var(--font-medium);
-    transition: var(--transition-normal);
-    white-space: nowrap;
-    font-size: var(--text-sm);
-    box-shadow: var(--shadow-xs);
-  }
-
-  .btn-tags:hover {
-    background: var(--color-bg-subtle);
-    border-color: var(--color-primary);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
-  }
-
-  .tag-filter {
-    background: var(--color-surface);
-    padding: var(--spacing-sm);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .tag-filter-header {
-    display: flex;
-    justify-content: space-between;
+    text-decoration: none;
+    font-size: var(--text-sm);
+    display: inline-flex;
     align-items: center;
-    margin-bottom: var(--spacing-sm);
-    font-weight: 500;
-    color: var(--color-text);
-    font-size: 0.875rem;
+    gap: var(--spacing-2);
   }
 
-  .clear-btn {
-    padding: 0.25rem var(--spacing-sm);
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: var(--radius-sm);
+  /* Collapsible tag filter */
+  .tag-filter-collapsible {
+    margin-bottom: var(--spacing-4);
+  }
+
+  .tag-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 600;
-    transition: all 0.2s;
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    color: var(--color-text);
+    list-style: none;
   }
 
-  .clear-btn:hover {
-    background: var(--color-secondary);
+  .tag-filter-toggle::-webkit-details-marker {
+    display: none;
+  }
+
+  .tag-count-badge {
+    background: var(--color-bg-subtle);
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+  }
+
+  .tag-filter-collapsible[open] .tag-filter-toggle {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: none;
   }
 
   .tag-chips {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-2);
+    padding: var(--spacing-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
   }
 
   .tag-chip {
-    padding: 0.25rem 0.5rem;
+    padding: var(--spacing-2) var(--spacing-3);
     background: var(--color-bg-subtle);
-    border: 1.5px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
     cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 500;
-    transition: all 0.2s;
+    font-size: var(--text-xs);
+    font-weight: var(--font-medium);
     color: var(--color-text);
   }
 
-  .tag-chip:hover {
-    border-color: var(--color-primary);
-    background: var(--color-surface);
-  }
-
   .tag-chip.active {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+    background: var(--color-primary);
     color: white;
     border-color: var(--color-primary);
   }
 
   .tag-count {
     opacity: 0.7;
-    font-size: 0.688rem;
   }
 
   .active-filters {
     display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-2);
     flex-wrap: wrap;
-    padding: var(--spacing-sm);
+    padding: var(--spacing-3);
     background: #e0f2fe;
     border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-4);
   }
 
   .filter-label {
-    font-weight: 600;
+    font-weight: var(--font-semibold);
     color: #0369a1;
-    font-size: 0.813rem;
+    font-size: var(--text-sm);
   }
 
   .active-tag {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem 0.5rem;
+    gap: var(--spacing-1);
+    padding: var(--spacing-1) var(--spacing-2);
     background: white;
     border: 1px solid #0284c7;
     border-radius: var(--radius-sm);
     color: #0369a1;
-    font-size: 0.75rem;
-    font-weight: 500;
+    font-size: var(--text-xs);
   }
 
   .remove-tag {
@@ -589,13 +492,24 @@
     border: none;
     cursor: pointer;
     color: #0369a1;
-    font-size: 0.875rem;
     padding: 0;
     line-height: 1;
   }
 
-  .remove-tag:hover {
-    color: #dc2626;
+  .clear-btn {
+    padding: var(--spacing-1) var(--spacing-2);
+    background: #0284c7;
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--text-xs);
+    font-weight: var(--font-semibold);
+    margin-left: auto;
+  }
+
+  .desktop-only {
+    display: flex;
   }
 
   .error {
@@ -658,155 +572,60 @@
     }
   }
 
+  /* Mobile styles */
   @media (max-width: 640px) {
     main {
-      padding: var(--spacing-8) 0;
-    }
-
-    .container {
-      padding: 0 var(--spacing-4);
+      padding: var(--spacing-4) 0;
     }
 
     .header {
-      margin-bottom: var(--spacing-6);
-      gap: var(--spacing-4);
-    }
-
-    h2 {
-      font-size: var(--text-2xl);
-      font-weight: var(--font-extrabold);
-    }
-
-    .actions {
-      flex-direction: column;
-      width: 100%;
-      gap: var(--spacing-3);
-    }
-
-    .btn-primary,
-    .btn-secondary {
-      width: 100%;
-      text-align: center;
-      justify-content: center;
-      padding: var(--spacing-4);
-      font-size: var(--text-base);
-      min-height: 52px;
-      gap: var(--spacing-2);
-    }
-
-    .filters-section {
-      margin-bottom: var(--spacing-8);
-    }
-
-    .search-bar {
-      margin-bottom: var(--spacing-md);
-    }
-
-    .search-bar input {
-      font-size: var(--text-base);
-      padding: var(--spacing-4);
-      min-height: 48px;
-    }
-
-    .btn-search {
-      padding: var(--spacing-4) var(--spacing-6);
-      font-size: var(--text-base);
-      min-height: 48px;
-    }
-
-    .controls {
-      flex-direction: column;
-      align-items: stretch;
-      margin-bottom: var(--spacing-6);
-      gap: var(--spacing-3);
-    }
-
-    .sort-control {
-      width: 100%;
-      gap: var(--spacing-3);
-    }
-
-    .sort-control label {
-      font-size: var(--text-base);
-      flex-shrink: 0;
-    }
-
-    .sort-control select {
-      flex: 1;
-      font-size: var(--text-sm);
-      padding: var(--spacing-3) var(--spacing-4);
-      min-height: 44px;
-    }
-
-    .btn-tags {
-      font-size: var(--text-base);
-      padding: var(--spacing-4) var(--spacing-6);
-      min-height: 52px;
-      text-align: center;
-      justify-content: center;
-      gap: var(--spacing-2);
-    }
-
-    .tag-filter {
-      padding: var(--spacing-4);
-    }
-
-    .tag-filter-header {
-      font-size: var(--text-base);
       margin-bottom: var(--spacing-4);
     }
 
-    .clear-btn {
-      font-size: var(--text-sm);
-      padding: var(--spacing-2) var(--spacing-4);
-      min-height: 40px;
+    h2 {
+      font-size: var(--text-xl);
     }
 
-    .tag-chips {
-      gap: var(--spacing-sm);
+    .btn-primary .btn-text {
+      display: none;
+    }
+
+    .btn-primary {
+      padding: var(--spacing-3);
+      border-radius: var(--radius-full);
+    }
+
+    .search-bar input {
+      padding: var(--spacing-3);
+      font-size: 16px; /* Prevents zoom on iOS */
+    }
+
+    .btn-search {
+      padding: var(--spacing-3);
+    }
+
+    .desktop-only {
+      display: none !important;
+    }
+
+    .sort-control select {
+      padding: var(--spacing-3);
+      font-size: 16px;
     }
 
     .tag-chip {
-      font-size: var(--text-sm);
-      padding: var(--spacing-3) var(--spacing-4);
+      padding: var(--spacing-2) var(--spacing-3);
       min-height: 44px;
-    }
-
-    .tag-count {
-      font-size: 0.813rem;
-    }
-
-    .active-filters {
-      padding: var(--spacing-md);
-      gap: var(--spacing-sm);
-    }
-
-    .filter-label {
-      font-size: 0.938rem;
-    }
-
-    .active-tag {
-      font-size: var(--text-sm);
-      padding: var(--spacing-2) var(--spacing-4);
-      min-height: 40px;
+      display: flex;
+      align-items: center;
     }
 
     .recipe-grid {
       grid-template-columns: 1fr !important;
-      gap: var(--spacing-lg);
-    }
-
-    .view-toggle {
-      order: -1;
-      width: 100%;
-    }
-
-    .view-btn {
-      flex: 1;
+      gap: var(--spacing-4);
     }
   }
 
-  /* Icon styling for buttons */
   .icon {
     font-style: normal;
     line-height: 1;

@@ -884,44 +884,141 @@
   }
 
   @media (max-width: 640px) {
-    .recipe-detail {
-      padding: var(--spacing-6);
+    main {
+      padding: var(--spacing-4) 0;
     }
 
-    h1 {
-      font-size: var(--text-3xl);
-    }
-
-    .meta {
-      grid-template-columns: 1fr;
+    .container {
+      padding: 0 var(--spacing-4);
     }
 
     .recipe-header {
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--spacing-4);
+      margin-bottom: var(--spacing-4);
     }
 
     .actions {
-      flex-direction: column;
-      gap: var(--spacing-3);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--spacing-2);
     }
 
-    .btn-edit,
-    .btn-delete,
-    .btn-favorite,
-    .btn-cooking {
-      width: 100%;
-      padding: var(--spacing-4) var(--spacing-6);
+    .actions button,
+    .actions .btn-edit,
+    .actions .btn-delete,
+    .actions .btn-favorite,
+    .actions .btn-cooking {
+      padding: var(--spacing-3);
+      font-size: var(--text-sm);
+      min-height: 48px;
+      justify-content: center;
+    }
+
+    /* Hide text labels on mobile, show only icons */
+    .actions button span:not(.icon),
+    .actions .btn-edit span:not(.icon),
+    .actions .btn-delete span:not(.icon),
+    .actions .btn-favorite span:not(.icon),
+    .actions .btn-cooking span:not(.icon) {
+      display: none;
+    }
+
+    .recipe-detail {
+      padding: var(--spacing-4);
+      border-radius: var(--radius-lg);
+    }
+
+    .recipe-image {
+      border-radius: var(--radius-lg);
+      max-height: 250px;
+      margin-bottom: var(--spacing-4);
+    }
+
+    h1 {
+      font-size: var(--text-2xl);
+      margin-bottom: var(--spacing-3);
+    }
+
+    .description {
       font-size: var(--text-base);
-      min-height: 52px;
+      margin-bottom: var(--spacing-4);
+    }
+
+    .meta {
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--spacing-3);
+      padding: var(--spacing-4);
+      margin-bottom: var(--spacing-4);
+    }
+
+    .meta-item .label {
+      font-size: var(--text-xs);
+    }
+
+    .meta-item .value {
+      font-size: var(--text-sm);
+    }
+
+    .tags {
+      margin-bottom: var(--spacing-4);
+    }
+
+    section {
+      margin-bottom: var(--spacing-5);
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      margin-bottom: var(--spacing-3);
+    }
+
+    .ingredients li,
+    .instructions li {
+      font-size: var(--text-sm);
+      margin-bottom: var(--spacing-2);
+    }
+
+    .scaling-section,
+    .rating-section {
+      padding: var(--spacing-4);
+      margin-top: var(--spacing-4);
+    }
+
+    .scaling-section h3,
+    .rating-header h3 {
+      font-size: var(--text-base);
+    }
+
+    /* Cooking mode mobile */
+    .cooking-mode {
+      padding: var(--spacing-4);
+    }
+
+    .cooking-header {
+      flex-direction: column;
+      gap: var(--spacing-3);
+      margin-bottom: var(--spacing-4);
+    }
+
+    .cooking-header h2 {
+      font-size: var(--text-lg);
+    }
+
+    .btn-mark-cooked {
+      width: 100%;
+      padding: var(--spacing-3);
+      min-height: 48px;
       justify-content: center;
     }
 
     .cooking-step {
       flex-direction: column;
-      padding: var(--spacing-6);
-      gap: var(--spacing-4);
+      padding: var(--spacing-4);
+      gap: var(--spacing-3);
+      margin-bottom: var(--spacing-4);
+    }
+
+    .step-number {
+      font-size: 2rem;
     }
 
     .step-text {
@@ -929,26 +1026,22 @@
     }
 
     .cooking-navigation {
-      flex-direction: column;
-      gap: var(--spacing-3);
+      gap: var(--spacing-2);
+      margin-bottom: var(--spacing-4);
     }
 
     .btn-nav {
-      padding: var(--spacing-4);
-      font-size: var(--text-lg);
-      min-height: 52px;
-    }
-
-    .btn-mark-cooked {
-      padding: var(--spacing-4) var(--spacing-6);
+      padding: var(--spacing-3);
       font-size: var(--text-base);
       min-height: 48px;
     }
 
-    .btn-back {
+    .cooking-ingredients {
+      padding: var(--spacing-4);
+    }
+
+    .cooking-ingredients h3 {
       font-size: var(--text-base);
-      padding: var(--spacing-3) 0;
-      margin-bottom: var(--spacing-2);
     }
   }
 </style>
