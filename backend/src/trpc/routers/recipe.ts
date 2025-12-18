@@ -7,6 +7,64 @@ import { eq, like, or, inArray, sql } from 'drizzle-orm';
 import { parseRecipeJsonLd } from '../../utils/jsonld-parser.js';
 import { convertRecipeIngredients, cleanRecipeInstructions } from '../../utils/unit-converter.js';
 
+/**
+ * Validate URL to prevent SSRF attacks
+ * Only allows HTTPS URLs to public internet addresses
+ */
+function isAllowedUrl(urlString: string): { allowed: boolean; reason?: string } {
+  try {
+    const url = new URL(urlString);
+
+    // Only allow HTTPS
+    if (url.protocol !== 'https:') {
+      return { allowed: false, reason: 'Only HTTPS URLs are allowed' };
+    }
+
+    const hostname = url.hostname.toLowerCase();
+
+    // Block localhost and loopback
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return { allowed: false, reason: 'Localhost URLs are not allowed' };
+    }
+
+    // Block private IP ranges
+    const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4Match) {
+      const [, a, b] = ipv4Match.map(Number);
+      // 10.x.x.x
+      if (a === 10) return { allowed: false, reason: 'Private IP addresses are not allowed' };
+      // 172.16.x.x - 172.31.x.x
+      if (a === 172 && b >= 16 && b <= 31) return { allowed: false, reason: 'Private IP addresses are not allowed' };
+      // 192.168.x.x
+      if (a === 192 && b === 168) return { allowed: false, reason: 'Private IP addresses are not allowed' };
+      // 169.254.x.x (link-local, includes AWS metadata)
+      if (a === 169 && b === 254) return { allowed: false, reason: 'Link-local addresses are not allowed' };
+      // 0.x.x.x
+      if (a === 0) return { allowed: false, reason: 'Invalid IP address' };
+    }
+
+    // Block cloud metadata endpoints
+    const blockedHosts = [
+      'metadata.google.internal',
+      'metadata.gke.internal',
+      '169.254.169.254', // AWS/GCP/Azure metadata
+    ];
+    if (blockedHosts.includes(hostname)) {
+      return { allowed: false, reason: 'Cloud metadata endpoints are not allowed' };
+    }
+
+    // Block internal TLDs
+    const blockedTlds = ['.local', '.internal', '.localhost', '.intranet'];
+    if (blockedTlds.some(tld => hostname.endsWith(tld))) {
+      return { allowed: false, reason: 'Internal domain names are not allowed' };
+    }
+
+    return { allowed: true };
+  } catch {
+    return { allowed: false, reason: 'Invalid URL format' };
+  }
+}
+
 const t = initTRPC.context<Context>().create();
 
 // Middleware to check authentication
@@ -573,8 +631,25 @@ export const recipeRouter = t.router({
     )
     .mutation(async ({ input }) => {
       try {
-        // Fetch the page
-        const response = await fetch(input.url);
+        // Validate URL to prevent SSRF attacks
+        const urlCheck = isAllowedUrl(input.url);
+        if (!urlCheck.allowed) {
+          throw new Error(urlCheck.reason || 'URL not allowed');
+        }
+
+        // Fetch the page with timeout and redirect limits
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        const response = await fetch(input.url, {
+          signal: controller.signal,
+          redirect: 'follow',
+          headers: {
+            'User-Agent': 'RecipeManager/1.0 (Recipe Import Bot)',
+          },
+        });
+
+        clearTimeout(timeout);
 
         if (!response.ok) {
           throw new Error(`Failed to fetch page: ${response.statusText}`);

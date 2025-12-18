@@ -3,30 +3,48 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    ports:
-      - "${EXTERNAL_BACKEND_PORT:-3001}:3001"
     environment:
       - DATABASE_URL=/app/data/recipes.db
-      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - PORT=3001
-      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme123}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:?ADMIN_USERNAME is required}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:?ALLOWED_ORIGINS is required}
+      - NODE_ENV=production
     volumes:
       - recipe-data:/app/data
     restart: unless-stopped
+    networks:
+      - traefik-public
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.recipe-api.rule=Host(`${DOMAIN}`) && PathPrefix(`/trpc`, `/health`)"
+      - "traefik.http.routers.recipe-api.entrypoints=websecure"
+      - "traefik.http.routers.recipe-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.recipe-api.loadbalancer.server.port=3001"
+      - "traefik.docker.network=traefik-public"
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    ports:
-      - "${EXTERNAL_FRONTEND_PORT:-3000}:3000"
     environment:
-      - ORIGIN=http://localhost:${EXTERNAL_FRONTEND_PORT:-3000}
+      - ORIGIN=https://${DOMAIN}
       - BODY_SIZE_LIMIT=10485760
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      - traefik-public
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.recipe-frontend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.recipe-frontend.entrypoints=websecure"
+      - "traefik.http.routers.recipe-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.recipe-frontend.loadbalancer.server.port=3000"
+      - "traefik.docker.network=traefik-public"
 
 volumes:
   recipe-data:
@@ -34,4 +52,10 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${FOLDER_LOCATION:-/mnt/ssd_cache/docker-apps/recipe-manager}
+      device: ${FOLDER_LOCATION:?FOLDER_LOCATION is required}
+
+networks:
+  traefik-public:
+    external: true
+  internal:
+    driver: bridge

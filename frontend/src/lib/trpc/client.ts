@@ -1,7 +1,8 @@
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import type { AppRouter } from '../../../../backend/src/trpc/router';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Use relative URL in production (same domain via Traefik), absolute URL in development
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 /**
  * Create tRPC client with authentication

@@ -8,9 +8,13 @@ const t = initTRPC.context<Context>().create();
 // Fixed user ID for single-user mode
 const ADMIN_USER_ID = 'admin-user';
 
-// Get credentials from environment variables
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme123';
+// Admin credentials are required - fail fast if not provided
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
+  throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD environment variables are required');
+}
 
 export const authRouter = t.router({
   /**

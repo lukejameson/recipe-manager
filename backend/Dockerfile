@@ -21,8 +21,16 @@ COPY . .
 # Build TypeScript
 RUN npm run build
 
-# Create data directory
+# Create data directory and set permissions
 RUN mkdir -p /app/data
+
+# Create non-root user for security
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 --gid nodejs nodejs && \
+    chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
 
 EXPOSE 3001
 

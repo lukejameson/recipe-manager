@@ -1,7 +1,11 @@
 import bcrypt from 'bcryptjs';
 import * as jose from 'jose';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+// JWT secret is required - fail fast if not provided
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
 const secret = new TextEncoder().encode(JWT_SECRET);
 
 /**
@@ -26,7 +30,7 @@ export async function generateToken(userId: string): Promise<string> {
   const token = await new jose.SignJWT({ userId })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('7d')
+    .setExpirationTime('4h')
     .sign(secret);
 
   return token;
