@@ -27,7 +27,7 @@ services:
       - internal
 
 networks:
-  traefik-public:
+  web:
     external: false
     driver: bridge
   internal:
