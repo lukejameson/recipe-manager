@@ -96,14 +96,14 @@
 <style>
   .recipe-card {
     background: var(--color-surface);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
     overflow: hidden;
-    box-shadow: var(--shadow-md);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition-slow);
     position: relative;
     display: flex;
     flex-direction: column;
-    border: 2px solid var(--color-border);
+    border: 1px solid var(--color-border-light);
   }
 
   /* List View */
@@ -234,26 +234,27 @@
 
   .favorite-btn {
     position: absolute;
-    top: var(--spacing-md);
-    right: var(--spacing-md);
+    top: var(--spacing-4);
+    right: var(--spacing-4);
     background: rgba(255, 255, 255, 0.95);
-    border: 2px solid var(--color-border);
-    border-radius: 50%;
-    width: 48px;
-    height: 48px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: var(--text-xl);
     cursor: pointer;
     z-index: 10;
-    transition: all 0.2s;
-    box-shadow: var(--shadow-md);
+    transition: var(--transition-normal);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(8px);
   }
 
   .favorite-btn:hover {
-    transform: scale(1.1);
-    box-shadow: var(--shadow-lg);
+    transform: scale(1.05);
+    box-shadow: var(--shadow-md);
   }
 
   .favorite-btn.is-favorite {
@@ -299,9 +300,9 @@
   }
 
   .recipe-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-xl);
-    border-color: var(--color-primary-light);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--color-border);
   }
 
   .image {
@@ -331,23 +332,23 @@
   }
 
   .content {
-    padding: var(--spacing-lg);
+    padding: var(--spacing-6);
   }
 
   .title-row {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
+    gap: var(--spacing-3);
+    margin-bottom: var(--spacing-3);
   }
 
   h3 {
     margin: 0;
-    font-size: 1.375rem;
+    font-size: var(--text-xl);
     color: var(--color-text);
-    font-weight: 700;
-    line-height: 1.3;
+    font-weight: var(--font-semibold);
+    line-height: var(--leading-tight);
     flex: 1;
   }
 
@@ -362,86 +363,86 @@
   }
 
   .description {
-    color: var(--color-text-light);
-    margin: 0 0 var(--spacing-md);
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--spacing-4);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    font-size: 0.9375rem;
-    line-height: 1.5;
+    font-size: var(--text-sm);
+    line-height: var(--leading-relaxed);
   }
 
   .meta {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-md);
-    font-size: 0.875rem;
+    gap: var(--spacing-4);
+    font-size: var(--text-xs);
     color: var(--color-text-light);
-    margin-bottom: var(--spacing-md);
-    font-weight: 500;
+    margin-bottom: var(--spacing-4);
+    font-weight: var(--font-medium);
   }
 
   .meta span {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--spacing-1);
   }
 
   .tags {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-xs);
-    margin-bottom: var(--spacing-md);
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-4);
   }
 
   .tag {
-    background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-secondary) 100%);
-    color: white;
-    padding: 0.375rem 0.75rem;
-    border-radius: var(--radius-xl);
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    box-shadow: var(--shadow-sm);
+    background: var(--color-bg-subtle);
+    color: var(--color-text);
+    padding: var(--spacing-1) var(--spacing-2-5);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: var(--font-medium);
+    border: 1px solid var(--color-border);
   }
 
   .actions {
     display: flex;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
-    border-top: 2px solid var(--color-border);
+    gap: var(--spacing-3);
+    padding: var(--spacing-4) var(--spacing-6) var(--spacing-6);
+    border-top: 1px solid var(--color-border-light);
     margin-top: auto;
   }
 
   .btn-edit,
   .btn-delete {
-    padding: var(--spacing-sm) var(--spacing-md);
-    border: none;
-    border-radius: var(--radius-md);
+    padding: var(--spacing-2-5) var(--spacing-4);
+    border: 1px solid transparent;
+    border-radius: var(--radius-lg);
     cursor: pointer;
-    font-size: 0.875rem;
-    font-weight: 600;
-    transition: all 0.2s;
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    transition: var(--transition-normal);
     flex: 1;
   }
 
   .btn-edit {
     background: var(--color-primary);
     color: white;
+    border-color: var(--color-primary);
   }
 
   .btn-edit:hover {
     background: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
     transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
   }
 
   .btn-delete {
-    background: var(--color-bg-subtle);
+    background: var(--color-surface);
     color: var(--color-error);
-    border: 2px solid var(--color-border);
+    border-color: var(--color-border);
   }
 
   .btn-delete:hover {
@@ -449,6 +450,6 @@
     color: white;
     border-color: var(--color-error);
     transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
   }
 </style>

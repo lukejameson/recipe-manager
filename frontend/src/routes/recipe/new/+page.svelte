@@ -26,18 +26,20 @@
 <style>
   main {
     flex: 1;
-    padding: 2rem 0;
+    padding: var(--spacing-12) 0;
   }
 
   .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 1rem;
+    padding: 0 var(--spacing-6);
   }
 
   h2 {
-    margin: 0 0 2rem;
-    font-size: 2rem;
-    color: #333;
+    margin: 0 0 var(--spacing-8);
+    font-size: var(--text-3xl);
+    color: var(--color-text);
+    font-weight: var(--font-extrabold);
+    letter-spacing: -0.025em;
   }
 </style>

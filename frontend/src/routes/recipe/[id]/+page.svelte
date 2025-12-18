@@ -122,13 +122,21 @@
         <a href="/" class="btn-back">← Back to Recipes</a>
         <div class="actions">
           <button onclick={handleToggleFavorite} class="btn-favorite" class:is-favorite={recipe.isFavorite}>
-            {recipe.isFavorite ? '★' : '☆'} Favorite
+            <span class="icon">{recipe.isFavorite ? '★' : '☆'}</span>
+            <span>Favorite</span>
           </button>
           <button onclick={toggleCookingMode} class="btn-cooking">
-            {cookingMode ? '📖 View Recipe' : '👨‍🍳 Cooking Mode'}
+            <span class="icon">{cookingMode ? '📖' : '👨‍🍳'}</span>
+            <span>{cookingMode ? 'View Recipe' : 'Cooking Mode'}</span>
           </button>
-          <button onclick={handleEdit} class="btn-edit">✏️ Edit</button>
-          <button onclick={handleDelete} class="btn-delete">🗑️ Delete</button>
+          <button onclick={handleEdit} class="btn-edit">
+            <span class="icon">✏️</span>
+            <span>Edit</span>
+          </button>
+          <button onclick={handleDelete} class="btn-delete">
+            <span class="icon">🗑️</span>
+            <span>Delete</span>
+          </button>
         </div>
       </div>
 
@@ -138,7 +146,8 @@
           <div class="cooking-header">
             <h2>Step {currentStep + 1} of {recipe.instructions.length}</h2>
             <button onclick={handleMarkAsCooked} class="btn-mark-cooked">
-              ✓ Mark as Cooked
+              <span class="icon">✓</span>
+              <span>Mark as Cooked</span>
             </button>
           </div>
 
@@ -149,10 +158,12 @@
 
           <div class="cooking-navigation">
             <button onclick={prevStep} disabled={currentStep === 0} class="btn-nav">
-              ← Previous
+              <span class="icon">←</span>
+              <span>Previous</span>
             </button>
             <button onclick={nextStep} disabled={currentStep === recipe.instructions.length - 1} class="btn-nav">
-              Next →
+              <span>Next</span>
+              <span class="icon">→</span>
             </button>
           </div>
 
@@ -331,13 +342,13 @@
 <style>
   main {
     flex: 1;
-    padding: 2rem 0;
+    padding: var(--spacing-12) 0;
   }
 
   .container {
     max-width: 900px;
     margin: 0 auto;
-    padding: 0 1rem;
+    padding: 0 var(--spacing-6);
   }
 
   .loading {
@@ -368,138 +379,162 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
+    margin-bottom: var(--spacing-8);
     flex-wrap: wrap;
-    gap: 1rem;
+    gap: var(--spacing-4);
   }
 
   .actions {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--spacing-3);
   }
 
   .btn-edit,
   .btn-delete {
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
-    font-weight: 500;
+    padding: var(--spacing-2-5) var(--spacing-4);
+    border-radius: var(--radius-lg);
+    font-weight: var(--font-medium);
     cursor: pointer;
-    border: none;
+    border: 2px solid transparent;
+    font-size: var(--text-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    transition: var(--transition-normal);
   }
 
   .btn-edit {
-    background: #4a9eff;
+    background: var(--color-primary);
     color: white;
+    border-color: var(--color-primary);
   }
 
   .btn-edit:hover {
-    background: #3a8eef;
+    background: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
 
   .btn-delete {
-    background: #fee;
-    color: #c33;
+    background: #fef2f2;
+    color: var(--color-error);
+    border-color: #fecaca;
   }
 
   .btn-delete:hover {
-    background: #fdd;
+    background: var(--color-error);
+    color: white;
+    border-color: var(--color-error);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
 
   .recipe-detail {
-    background: white;
-    padding: 2rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background: var(--color-surface);
+    padding: var(--spacing-8);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--color-border-light);
   }
 
   .recipe-image {
     width: 100%;
     max-height: 400px;
     object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 1.5rem;
+    border-radius: var(--radius-xl);
+    margin-bottom: var(--spacing-6);
   }
 
   h1 {
-    margin: 0 0 1rem;
-    font-size: 2.5rem;
-    color: #333;
+    margin: 0 0 var(--spacing-4);
+    font-size: var(--text-4xl);
+    color: var(--color-text);
+    font-weight: var(--font-extrabold);
+    letter-spacing: -0.025em;
   }
 
   .description {
-    font-size: 1.125rem;
-    line-height: 1.6;
-    color: #666;
-    margin-bottom: 1.5rem;
+    font-size: var(--text-lg);
+    line-height: var(--leading-relaxed);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--spacing-6);
   }
 
   .meta {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-    padding: 1.5rem;
-    background: #f5f5f5;
-    border-radius: 8px;
-    margin-bottom: 1.5rem;
+    gap: var(--spacing-4);
+    padding: var(--spacing-6);
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-6);
   }
 
   .meta-item {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--spacing-1);
   }
 
   .meta-item .label {
-    font-size: 0.875rem;
-    color: #666;
+    font-size: var(--text-sm);
+    color: var(--color-text-light);
+    font-weight: var(--font-medium);
   }
 
   .meta-item .value {
-    font-weight: 600;
-    color: #333;
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
+    font-size: var(--text-base);
   }
 
   .tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 2rem;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-8);
   }
 
   .tag {
-    background: #e8f4ff;
-    color: #4a9eff;
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
-    font-size: 0.875rem;
+    background: var(--color-bg-subtle);
+    color: var(--color-text);
+    padding: var(--spacing-1) var(--spacing-2-5);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: var(--font-medium);
+    border: 1px solid var(--color-border);
   }
 
   section {
-    margin-bottom: 2rem;
+    margin-bottom: var(--spacing-8);
   }
 
   h2 {
-    font-size: 1.5rem;
-    margin: 0 0 1rem;
-    color: #333;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid #e0e0e0;
+    font-size: var(--text-2xl);
+    margin: 0 0 var(--spacing-4);
+    color: var(--color-text);
+    padding-bottom: var(--spacing-2);
+    border-bottom: 1px solid var(--color-border);
+    font-weight: var(--font-semibold);
   }
 
   .ingredients ul,
   .instructions ol {
     margin: 0;
-    padding-left: 1.5rem;
+    padding-left: var(--spacing-6);
   }
 
   .ingredients li,
   .instructions li {
-    margin-bottom: 0.75rem;
-    line-height: 1.6;
+    margin-bottom: var(--spacing-3);
+    line-height: var(--leading-relaxed);
+    font-size: var(--text-base);
+    color: var(--color-text-secondary);
   }
 
   .instructions li {
-    padding-left: 0.5rem;
+    padding-left: var(--spacing-2);
   }
 
   .source {
@@ -533,13 +568,25 @@
   }
 
   .btn-mark-cooked {
-    padding: var(--spacing-sm) var(--spacing-lg);
+    padding: var(--spacing-2-5) var(--spacing-4);
     background: var(--color-success);
     color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    font-weight: 600;
+    border: 2px solid var(--color-success);
+    border-radius: var(--radius-lg);
+    font-weight: var(--font-medium);
     cursor: pointer;
+    font-size: var(--text-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    transition: var(--transition-normal);
+  }
+
+  .btn-mark-cooked:hover {
+    background: #059669;
+    border-color: #059669;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
 
   .cooking-step {
@@ -574,19 +621,35 @@
 
   .btn-nav {
     flex: 1;
-    padding: var(--spacing-lg);
+    padding: var(--spacing-4);
     background: var(--color-primary);
     color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: 1.125rem;
-    font-weight: 600;
+    border: 2px solid var(--color-primary);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    font-weight: var(--font-medium);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
+    transition: var(--transition-normal);
+  }
+
+  .btn-nav:hover:not(:disabled) {
+    background: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
 
   .btn-nav:disabled {
-    background: #ccc;
+    background: var(--color-border);
+    border-color: var(--color-border);
+    color: var(--color-text-light);
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
   }
 
   .cooking-ingredients {
@@ -607,14 +670,19 @@
   }
 
   .btn-favorite {
-    padding: var(--spacing-sm) var(--spacing-lg);
-    background: white;
+    padding: var(--spacing-2-5) var(--spacing-4);
+    background: var(--color-surface);
     color: var(--color-text);
     border: 2px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-weight: 600;
+    border-radius: var(--radius-lg);
+    font-weight: var(--font-medium);
     cursor: pointer;
-    transition: all 0.2s;
+    transition: var(--transition-normal);
+    font-size: var(--text-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    box-shadow: var(--shadow-xs);
   }
 
   .btn-favorite.is-favorite {
@@ -623,66 +691,99 @@
     border-color: var(--color-secondary);
   }
 
+  .btn-favorite:hover {
+    background: var(--color-bg-subtle);
+    border-color: var(--color-primary);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-favorite.is-favorite:hover {
+    background: #e85a2a;
+    border-color: #e85a2a;
+  }
+
   .btn-cooking {
-    padding: var(--spacing-sm) var(--spacing-lg);
+    padding: var(--spacing-2-5) var(--spacing-4);
     background: var(--color-accent);
     color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    font-weight: 600;
+    border: 2px solid var(--color-accent);
+    border-radius: var(--radius-lg);
+    font-weight: var(--font-medium);
     cursor: pointer;
+    font-size: var(--text-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    transition: var(--transition-normal);
+  }
+
+  .btn-cooking:hover {
+    background: #20a39e;
+    border-color: #20a39e;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
 
   .scaling-section {
     background: var(--color-bg-subtle);
-    padding: var(--spacing-lg);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-6);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-6);
+    border: 1px solid var(--color-border-light);
   }
 
   .scaling-section h3 {
     margin-top: 0;
-    font-size: 1.125rem;
+    margin-bottom: var(--spacing-3);
+    font-size: var(--text-lg);
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
   }
 
   .scaling-controls {
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
+    gap: var(--spacing-3);
   }
 
   .scaling-controls input {
     width: 80px;
-    padding: var(--spacing-sm);
+    padding: var(--spacing-2);
     border: 2px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    font-size: 1rem;
+    border-radius: var(--radius-md);
+    font-size: var(--text-base);
     text-align: center;
+    font-weight: var(--font-medium);
   }
 
   .scale-factor {
     color: var(--color-primary);
-    font-weight: 600;
+    font-weight: var(--font-semibold);
+    font-size: var(--text-sm);
   }
 
   .rating-section {
     background: var(--color-surface);
-    padding: var(--spacing-lg);
-    border-radius: var(--radius-md);
-    border: 2px solid var(--color-border);
-    margin-top: var(--spacing-lg);
+    padding: var(--spacing-6);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    margin-top: var(--spacing-6);
+    box-shadow: var(--shadow-xs);
   }
 
   .rating-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--spacing-4);
   }
 
   .rating-header h3 {
     margin: 0;
-    font-size: 1.125rem;
+    font-size: var(--text-lg);
+    font-weight: var(--font-semibold);
+    color: var(--color-text);
   }
 
   .btn-toggle {
@@ -697,17 +798,18 @@
 
   .star-rating {
     display: flex;
-    gap: var(--spacing-xs);
-    margin-bottom: var(--spacing-md);
+    gap: var(--spacing-1);
+    margin-bottom: var(--spacing-4);
   }
 
   .star-btn {
-    font-size: 2rem;
+    font-size: var(--text-2xl);
     background: none;
     border: none;
     cursor: pointer;
-    color: #ddd;
-    transition: all 0.2s;
+    color: var(--color-border);
+    transition: var(--transition-fast);
+    padding: var(--spacing-1);
   }
 
   .star-btn.active {
@@ -716,11 +818,14 @@
 
   .rating-form textarea {
     width: 100%;
-    padding: var(--spacing-md);
+    padding: var(--spacing-3);
     border: 2px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     font-family: inherit;
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--spacing-4);
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    resize: vertical;
   }
 
   .btn-save {
@@ -735,41 +840,56 @@
 
   .rating-display .stars {
     color: var(--color-secondary);
-    font-size: 1.5rem;
-    margin-bottom: var(--spacing-sm);
+    font-size: var(--text-xl);
+    margin-bottom: var(--spacing-3);
   }
 
   .notes {
-    color: var(--color-text-light);
+    color: var(--color-text-secondary);
     font-style: italic;
     margin: 0;
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    padding: var(--spacing-3);
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--color-primary);
   }
 
   .no-rating {
     color: var(--color-text-light);
     font-style: italic;
     margin: 0;
+    font-size: var(--text-sm);
   }
 
   .stats {
     background: var(--color-bg-subtle);
-    padding: var(--spacing-md);
-    border-radius: var(--radius-md);
-    margin-top: var(--spacing-lg);
+    padding: var(--spacing-4);
+    border-radius: var(--radius-lg);
+    margin-top: var(--spacing-6);
     color: var(--color-text-light);
+    border: 1px solid var(--color-border-light);
   }
 
   .stats p {
-    margin: 0.25rem 0;
+    margin: var(--spacing-1) 0;
+    font-size: var(--text-sm);
+  }
+
+  /* Icon styling for buttons */
+  .icon {
+    font-style: normal;
+    line-height: 1;
   }
 
   @media (max-width: 640px) {
     .recipe-detail {
-      padding: 1.5rem;
+      padding: var(--spacing-6);
     }
 
     h1 {
-      font-size: 2rem;
+      font-size: var(--text-3xl);
     }
 
     .meta {
@@ -779,10 +899,12 @@
     .recipe-header {
       flex-direction: column;
       align-items: stretch;
+      gap: var(--spacing-4);
     }
 
     .actions {
       flex-direction: column;
+      gap: var(--spacing-3);
     }
 
     .btn-edit,
@@ -790,14 +912,43 @@
     .btn-favorite,
     .btn-cooking {
       width: 100%;
+      padding: var(--spacing-4) var(--spacing-6);
+      font-size: var(--text-base);
+      min-height: 52px;
+      justify-content: center;
     }
 
     .cooking-step {
       flex-direction: column;
+      padding: var(--spacing-6);
+      gap: var(--spacing-4);
     }
 
     .step-text {
-      font-size: 1.25rem;
+      font-size: var(--text-lg);
+    }
+
+    .cooking-navigation {
+      flex-direction: column;
+      gap: var(--spacing-3);
+    }
+
+    .btn-nav {
+      padding: var(--spacing-4);
+      font-size: var(--text-lg);
+      min-height: 52px;
+    }
+
+    .btn-mark-cooked {
+      padding: var(--spacing-4) var(--spacing-6);
+      font-size: var(--text-base);
+      min-height: 48px;
+    }
+
+    .btn-back {
+      font-size: var(--text-base);
+      padding: var(--spacing-3) 0;
+      margin-bottom: var(--spacing-2);
     }
   }
 </style>

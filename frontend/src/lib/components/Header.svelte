@@ -65,58 +65,58 @@
 
 <style>
   header {
-    background: var(--color-surface);
-    border-bottom: 2px solid var(--color-border);
-    padding: 1rem 0;
+    background: rgba(255, 255, 255, 0.95);
+    border-bottom: 1px solid var(--color-border-light);
+    padding: var(--spacing-4) 0;
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: var(--shadow-md);
-    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(12px);
   }
 
   .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 var(--spacing-lg);
+    padding: 0 var(--spacing-6);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: var(--spacing-md);
+    gap: var(--spacing-4);
   }
 
   h1 {
     margin: 0;
-    font-size: 1.75rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: var(--text-2xl);
+    font-weight: var(--font-extrabold);
+    color: var(--color-text);
+    letter-spacing: -0.025em;
   }
 
   h1 a {
     text-decoration: none;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-2);
+    transition: var(--transition-fast);
   }
 
   nav {
     display: flex;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-1);
     align-items: center;
     flex-wrap: wrap;
   }
 
   nav a {
-    color: var(--color-text);
+    color: var(--color-text-secondary);
     text-decoration: none;
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-radius: var(--radius-md);
-    transition: all 0.2s;
-    font-weight: 500;
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-lg);
+    transition: var(--transition-fast);
+    font-weight: var(--font-medium);
     position: relative;
+    font-size: var(--text-sm);
   }
 
   nav a .icon,
@@ -127,43 +127,45 @@
   nav a::after {
     content: '';
     position: absolute;
-    bottom: 0;
+    bottom: -2px;
     left: 50%;
     width: 0;
     height: 2px;
     background: var(--color-primary);
-    transition: all 0.2s;
+    transition: var(--transition-fast);
     transform: translateX(-50%);
+    border-radius: var(--radius-full);
   }
 
   nav a:hover {
     background: var(--color-bg-subtle);
-    color: var(--color-primary);
+    color: var(--color-text);
   }
 
   nav a:hover::after {
-    width: 60%;
+    width: 80%;
   }
 
   nav a.active {
     color: var(--color-primary);
     background: var(--color-bg-subtle);
+    font-weight: var(--font-semibold);
   }
 
   nav a.active::after {
-    width: 60%;
+    width: 80%;
   }
 
   .logout-btn {
-    background: none;
-    border: 2px solid var(--color-border);
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-lg);
     cursor: pointer;
-    color: var(--color-text);
-    font-size: inherit;
-    font-weight: 500;
-    transition: all 0.2s;
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    transition: var(--transition-fast);
   }
 
   .logout-btn:hover {
@@ -171,7 +173,7 @@
     border-color: var(--color-error);
     color: white;
     transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
   }
 
   .mobile-menu-btn {
@@ -180,17 +182,17 @@
 
   @media (max-width: 640px) {
     header {
-      padding: var(--spacing-sm) 0;
+      padding: var(--spacing-3) 0;
     }
 
     .container {
       flex-direction: row;
-      padding: 0 var(--spacing-md);
-      gap: var(--spacing-md);
+      padding: 0 var(--spacing-4);
+      gap: var(--spacing-4);
     }
 
     h1 {
-      font-size: 1.25rem;
+      font-size: var(--text-xl);
       flex: 1;
     }
 
@@ -200,9 +202,11 @@
       justify-content: center;
       background: none;
       border: none;
-      padding: var(--spacing-xs);
+      padding: var(--spacing-2);
       cursor: pointer;
       z-index: 101;
+      min-height: 44px;
+      min-width: 44px;
     }
 
     .hamburger {
@@ -244,7 +248,7 @@
       background: var(--color-surface);
       box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
       transition: right 0.3s ease;
-      padding: 4rem var(--spacing-lg) var(--spacing-lg);
+      padding: var(--spacing-16) var(--spacing-6) var(--spacing-6);
       display: flex;
       flex-direction: column;
       gap: 0;
@@ -259,29 +263,37 @@
     nav a,
     nav button {
       width: 100%;
-      padding: var(--spacing-md);
+      padding: var(--spacing-4);
       text-align: left;
       display: flex;
       align-items: center;
-      gap: var(--spacing-md);
-      min-height: 52px;
-      border-radius: var(--radius-md);
-      margin-bottom: var(--spacing-xs);
+      gap: var(--spacing-4);
+      min-height: 56px;
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--spacing-2);
+      font-size: var(--text-base);
     }
 
     nav a .icon,
     nav button .icon {
       display: inline;
-      font-size: 1.25rem;
-      width: 28px;
+      font-size: var(--text-xl);
+      width: 32px;
       text-align: center;
+      line-height: 1;
     }
 
     .logout-btn {
       margin-top: auto;
-      border-top: 2px solid var(--color-border);
+      border-top: 1px solid var(--color-border);
       border-radius: 0;
-      padding-top: var(--spacing-lg);
+      padding-top: var(--spacing-6);
     }
+  }
+
+  /* Icon styling */
+  .icon {
+    font-style: normal;
+    line-height: 1;
   }
 </style>

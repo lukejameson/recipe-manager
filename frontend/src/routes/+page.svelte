@@ -123,8 +123,14 @@
     <div class="header">
       <h2>My Recipes</h2>
       <div class="actions">
-        <a href="/recipe/new" class="btn-primary">➕ New Recipe</a>
-        <a href="/recipe/import" class="btn-secondary">📥 Import JSONLD</a>
+        <a href="/recipe/new" class="btn-primary">
+          <span class="icon">➕</span>
+          <span>New Recipe</span>
+        </a>
+        <a href="/recipe/import" class="btn-secondary">
+          <span class="icon">📥</span>
+          <span>Import JSONLD</span>
+        </a>
       </div>
     </div>
 
@@ -187,7 +193,10 @@
           </select>
         </div>
 
-        <a href="/tags" class="btn-tags">🏷️ Manage Tags</a>
+        <a href="/tags" class="btn-tags">
+          <span class="icon">🏷️</span>
+          <span>Manage Tags</span>
+        </a>
       </div>
 
       {#if allTags.length > 0}
@@ -255,92 +264,100 @@
 <style>
   main {
     flex: 1;
-    padding: var(--spacing-2xl) 0;
+    padding: var(--spacing-12) 0;
   }
 
   .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 var(--spacing-lg);
+    padding: 0 var(--spacing-6);
   }
 
   .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-8);
     flex-wrap: wrap;
-    gap: var(--spacing-md);
+    gap: var(--spacing-4);
   }
 
   h2 {
     margin: 0;
-    font-size: 1.75rem;
+    font-size: var(--text-3xl);
     color: var(--color-text);
-    font-weight: 700;
-    letter-spacing: -0.3px;
+    font-weight: var(--font-extrabold);
+    letter-spacing: -0.025em;
   }
 
   .actions {
     display: flex;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-3);
     flex-wrap: wrap;
   }
 
   .btn-primary,
   .btn-secondary {
-    padding: var(--spacing-xs) var(--spacing-md);
-    border-radius: var(--radius-md);
+    padding: var(--spacing-3) var(--spacing-4);
+    border-radius: var(--radius-lg);
     text-decoration: none;
-    font-weight: 600;
+    font-weight: var(--font-semibold);
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    transition: all 0.2s;
-    font-size: 0.875rem;
+    gap: var(--spacing-2);
+    transition: var(--transition-normal);
+    font-size: var(--text-sm);
+    border: 2px solid transparent;
   }
 
   .btn-primary {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+    background: var(--color-primary);
     color: white;
-    border: none;
+    border-color: var(--color-primary);
     box-shadow: var(--shadow-sm);
   }
 
   .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    background: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-lg);
   }
 
   .btn-secondary {
-    background: transparent;
+    background: var(--color-surface);
     color: var(--color-primary);
-    border: 1.5px solid var(--color-primary);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-xs);
   }
 
   .btn-secondary:hover {
     background: var(--color-bg-subtle);
+    border-color: var(--color-primary);
     transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
 
   .filters-section {
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-8);
   }
 
   .search-bar {
     display: flex;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
+    gap: var(--spacing-3);
+    margin-bottom: var(--spacing-6);
   }
 
   .search-bar input {
     flex: 1;
-    padding: 0.5rem var(--spacing-md);
-    border: 1.5px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: 0.875rem;
+    padding: var(--spacing-3) var(--spacing-4);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
     background: var(--color-surface);
-    transition: all 0.2s;
+    transition: var(--transition-normal);
+    color: var(--color-text);
+    font-weight: var(--font-normal);
   }
 
   .search-bar input:focus {
@@ -350,28 +367,30 @@
   }
 
   .btn-search {
-    padding: 0.5rem var(--spacing-lg);
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+    padding: var(--spacing-3) var(--spacing-6);
+    background: var(--color-primary);
     color: white;
-    border: none;
-    border-radius: var(--radius-md);
+    border: 2px solid var(--color-primary);
+    border-radius: var(--radius-lg);
     cursor: pointer;
-    font-size: 0.875rem;
-    font-weight: 600;
-    transition: all 0.2s;
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    transition: var(--transition-normal);
     box-shadow: var(--shadow-sm);
   }
 
   .btn-search:hover {
+    background: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
     transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-lg);
   }
 
   .controls {
     display: flex;
-    gap: var(--spacing-md);
+    gap: var(--spacing-4);
     align-items: center;
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--spacing-6);
     flex-wrap: wrap;
   }
 
@@ -379,21 +398,23 @@
     display: flex;
     gap: 0;
     border: 2px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     overflow: hidden;
+    box-shadow: var(--shadow-xs);
   }
 
   .view-btn {
-    padding: var(--spacing-xs) var(--spacing-md);
+    padding: var(--spacing-2-5) var(--spacing-4);
     background: var(--color-surface);
     border: none;
     border-right: 1px solid var(--color-border);
     cursor: pointer;
-    transition: all 0.2s;
-    min-height: 38px;
+    transition: var(--transition-normal);
+    min-height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
+    color: var(--color-text-light);
   }
 
   .view-btn:last-child {
@@ -402,6 +423,7 @@
 
   .view-btn:hover {
     background: var(--color-bg-subtle);
+    color: var(--color-text);
   }
 
   .view-btn.active {
@@ -417,24 +439,26 @@
   .sort-control {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-3);
     flex: 1;
   }
 
   .sort-control label {
-    font-weight: 500;
+    font-weight: var(--font-medium);
     color: var(--color-text);
-    font-size: 0.875rem;
+    font-size: var(--text-sm);
   }
 
   .sort-control select {
-    padding: 0.375rem var(--spacing-sm);
-    border: 1.5px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: 0.813rem;
+    padding: var(--spacing-2-5) var(--spacing-3);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
     background: var(--color-surface);
     cursor: pointer;
-    transition: all 0.2s;
+    transition: var(--transition-normal);
+    color: var(--color-text);
+    font-weight: var(--font-normal);
   }
 
   .sort-control select:focus {
@@ -444,20 +468,24 @@
   }
 
   .btn-tags {
-    padding: 0.375rem var(--spacing-sm);
-    background: transparent;
+    padding: var(--spacing-2-5) var(--spacing-3);
+    background: var(--color-surface);
     color: var(--color-primary);
-    border: 1.5px solid var(--color-primary);
-    border-radius: var(--radius-md);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
     text-decoration: none;
-    font-weight: 600;
-    transition: all 0.2s;
+    font-weight: var(--font-medium);
+    transition: var(--transition-normal);
     white-space: nowrap;
-    font-size: 0.813rem;
+    font-size: var(--text-sm);
+    box-shadow: var(--shadow-xs);
   }
 
   .btn-tags:hover {
     background: var(--color-bg-subtle);
+    border-color: var(--color-primary);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
 
   .tag-filter {
@@ -582,46 +610,47 @@
 
   .loading {
     text-align: center;
-    padding: var(--spacing-2xl);
+    padding: var(--spacing-12);
     color: var(--color-text-light);
-    font-size: 1.125rem;
+    font-size: var(--text-lg);
   }
 
   .empty {
     text-align: center;
-    padding: var(--spacing-2xl);
-    color: var(--color-text-light);
+    padding: var(--spacing-12);
+    color: var(--color-text-secondary);
     background: var(--color-surface);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xs);
+    border: 1px solid var(--color-border-light);
   }
 
   .empty p {
-    margin-bottom: var(--spacing-lg);
-    font-size: 1.125rem;
+    margin-bottom: var(--spacing-6);
+    font-size: var(--text-lg);
   }
 
   .recipe-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: var(--spacing-xl);
-    animation: fadeIn 0.4s ease-out;
+    gap: var(--spacing-6);
+    animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .recipe-grid.view-list {
     grid-template-columns: 1fr;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-3);
   }
 
   .recipe-grid.view-compact {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: var(--spacing-md);
+    gap: var(--spacing-4);
   }
 
   @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
@@ -631,27 +660,27 @@
 
   @media (max-width: 640px) {
     main {
-      padding: var(--spacing-lg) 0;
+      padding: var(--spacing-8) 0;
     }
 
     .container {
-      padding: 0 var(--spacing-md);
+      padding: 0 var(--spacing-4);
     }
 
     .header {
-      margin-bottom: var(--spacing-lg);
-      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-6);
+      gap: var(--spacing-4);
     }
 
     h2 {
-      font-size: 1.5rem;
-      font-weight: 700;
+      font-size: var(--text-2xl);
+      font-weight: var(--font-extrabold);
     }
 
     .actions {
       flex-direction: column;
       width: 100%;
-      gap: var(--spacing-sm);
+      gap: var(--spacing-3);
     }
 
     .btn-primary,
@@ -659,13 +688,14 @@
       width: 100%;
       text-align: center;
       justify-content: center;
-      padding: var(--spacing-md);
-      font-size: 1rem;
-      min-height: 48px;
+      padding: var(--spacing-4);
+      font-size: var(--text-base);
+      min-height: 52px;
+      gap: var(--spacing-2);
     }
 
     .filters-section {
-      margin-bottom: var(--spacing-lg);
+      margin-bottom: var(--spacing-8);
     }
 
     .search-bar {
@@ -673,61 +703,63 @@
     }
 
     .search-bar input {
-      font-size: 1rem;
-      padding: var(--spacing-md);
+      font-size: var(--text-base);
+      padding: var(--spacing-4);
       min-height: 48px;
     }
 
     .btn-search {
-      padding: var(--spacing-md) var(--spacing-lg);
-      font-size: 1rem;
+      padding: var(--spacing-4) var(--spacing-6);
+      font-size: var(--text-base);
       min-height: 48px;
     }
 
     .controls {
       flex-direction: column;
       align-items: stretch;
-      margin-bottom: var(--spacing-md);
-      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-6);
+      gap: var(--spacing-3);
     }
 
     .sort-control {
       width: 100%;
-      gap: var(--spacing-sm);
+      gap: var(--spacing-3);
     }
 
     .sort-control label {
-      font-size: 0.938rem;
+      font-size: var(--text-base);
       flex-shrink: 0;
     }
 
     .sort-control select {
       flex: 1;
-      font-size: 0.938rem;
-      padding: var(--spacing-sm) var(--spacing-md);
+      font-size: var(--text-sm);
+      padding: var(--spacing-3) var(--spacing-4);
       min-height: 44px;
     }
 
     .btn-tags {
-      font-size: 0.938rem;
-      padding: var(--spacing-sm) var(--spacing-md);
-      min-height: 44px;
+      font-size: var(--text-base);
+      padding: var(--spacing-4) var(--spacing-6);
+      min-height: 52px;
       text-align: center;
+      justify-content: center;
+      gap: var(--spacing-2);
     }
 
     .tag-filter {
-      padding: var(--spacing-md);
+      padding: var(--spacing-4);
     }
 
     .tag-filter-header {
-      font-size: 0.938rem;
-      margin-bottom: var(--spacing-md);
+      font-size: var(--text-base);
+      margin-bottom: var(--spacing-4);
     }
 
     .clear-btn {
-      font-size: 0.875rem;
-      padding: var(--spacing-xs) var(--spacing-md);
-      min-height: 36px;
+      font-size: var(--text-sm);
+      padding: var(--spacing-2) var(--spacing-4);
+      min-height: 40px;
     }
 
     .tag-chips {
@@ -735,9 +767,9 @@
     }
 
     .tag-chip {
-      font-size: 0.875rem;
-      padding: var(--spacing-sm) var(--spacing-md);
-      min-height: 40px;
+      font-size: var(--text-sm);
+      padding: var(--spacing-3) var(--spacing-4);
+      min-height: 44px;
     }
 
     .tag-count {
@@ -754,9 +786,9 @@
     }
 
     .active-tag {
-      font-size: 0.875rem;
-      padding: var(--spacing-xs) var(--spacing-md);
-      min-height: 36px;
+      font-size: var(--text-sm);
+      padding: var(--spacing-2) var(--spacing-4);
+      min-height: 40px;
     }
 
     .recipe-grid {
@@ -772,5 +804,11 @@
     .view-btn {
       flex: 1;
     }
+  }
+
+  /* Icon styling for buttons */
+  .icon {
+    font-style: normal;
+    line-height: 1;
   }
 </style>
