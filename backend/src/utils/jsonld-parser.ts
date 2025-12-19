@@ -17,10 +17,18 @@ function parseDuration(duration: string): number | null {
  * Extract text from various JSONLD text formats
  */
 function extractText(value: any): string {
+  if (!value) return '';
   if (typeof value === 'string') return value;
-  if (value?.['@value']) return value['@value'];
-  if (value?.text) return value.text;
-  return String(value || '');
+  if (value['@value']) return value['@value'];
+  if (value.text) return extractText(value.text);
+  if (value.name) return extractText(value.name);
+  // For arrays, join them
+  if (Array.isArray(value)) {
+    return value.map(extractText).filter(Boolean).join(' ');
+  }
+  // Don't return [object Object]
+  if (typeof value === 'object') return '';
+  return String(value);
 }
 
 /**
@@ -37,30 +45,70 @@ function parseIngredients(recipeData: any): string[] {
 }
 
 /**
- * Parse instructions from various formats (HowToStep or plain text)
+ * Parse a single instruction item (HowToStep, HowToSection, or plain text)
+ */
+function parseInstructionItem(instruction: any): string[] {
+  if (!instruction) return [];
+
+  // Handle plain string
+  if (typeof instruction === 'string') {
+    return instruction.trim() ? [instruction.trim()] : [];
+  }
+
+  // Handle HowToSection - contains itemListElement with steps
+  if (instruction['@type'] === 'HowToSection') {
+    const sectionName = instruction.name ? `**${extractText(instruction.name)}**` : '';
+    const steps = instruction.itemListElement || [];
+    const parsedSteps = Array.isArray(steps)
+      ? steps.flatMap(parseInstructionItem)
+      : parseInstructionItem(steps);
+
+    // Optionally prepend section name
+    if (sectionName && parsedSteps.length > 0) {
+      return [sectionName, ...parsedSteps];
+    }
+    return parsedSteps;
+  }
+
+  // Handle HowToStep format
+  if (instruction['@type'] === 'HowToStep') {
+    const text = extractText(instruction.text || instruction.name || instruction);
+    return text.trim() ? [text.trim()] : [];
+  }
+
+  // Handle object with text property
+  if (instruction.text) {
+    const text = extractText(instruction.text);
+    return text.trim() ? [text.trim()] : [];
+  }
+
+  // Handle object with name property
+  if (instruction.name) {
+    const text = extractText(instruction.name);
+    return text.trim() ? [text.trim()] : [];
+  }
+
+  // Handle nested arrays
+  if (Array.isArray(instruction)) {
+    return instruction.flatMap(parseInstructionItem);
+  }
+
+  // Try to extract any text we can find
+  const text = extractText(instruction);
+  return text.trim() ? [text.trim()] : [];
+}
+
+/**
+ * Parse instructions from various formats (HowToStep, HowToSection, or plain text)
  */
 function parseInstructions(recipeData: any): string[] {
   const instructions = recipeData.recipeInstructions || [];
 
   if (Array.isArray(instructions)) {
-    return instructions
-      .map((instruction) => {
-        // Handle HowToStep format
-        if (instruction['@type'] === 'HowToStep') {
-          return extractText(instruction.text);
-        }
-        // Handle plain text
-        return extractText(instruction);
-      })
-      .filter(Boolean);
+    return instructions.flatMap(parseInstructionItem).filter(Boolean);
   }
 
-  // Single instruction
-  if (instructions['@type'] === 'HowToStep') {
-    return [extractText(instructions.text)].filter(Boolean);
-  }
-
-  return [extractText(instructions)].filter(Boolean);
+  return parseInstructionItem(instructions).filter(Boolean);
 }
 
 /**
