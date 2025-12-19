@@ -11,6 +11,7 @@
   let newName = $state('');
   let mergingTag = $state<{id: string, name: string} | null>(null);
   let targetTagId = $state('');
+  let cleaningUp = $state(false);
 
   onMount(() => {
     loadTags();
@@ -96,6 +97,33 @@
     }
   }
 
+  // Count orphaned tags (tags with 0 recipes)
+  const orphanedCount = $derived(tags.filter(t => t.recipeCount === 0).length);
+
+  async function handleCleanupOrphaned() {
+    if (orphanedCount === 0) {
+      alert('No orphaned tags to clean up!');
+      return;
+    }
+
+    if (!confirm(`Delete ${orphanedCount} orphaned tag${orphanedCount === 1 ? '' : 's'}? This cannot be undone.`)) {
+      return;
+    }
+
+    cleaningUp = true;
+    try {
+      const result = await trpc.tag.cleanupOrphaned.mutate();
+      if (result.deletedCount > 0) {
+        alert(`Deleted ${result.deletedCount} orphaned tag${result.deletedCount === 1 ? '' : 's'}: ${result.deletedTags.join(', ')}`);
+      }
+      await loadTags();
+    } catch (err: any) {
+      alert('Failed to clean up tags: ' + err.message);
+    } finally {
+      cleaningUp = false;
+    }
+  }
+
   function getTagColor(index: number): string {
     const colors = [
       'bg-blue-100 text-blue-800',
@@ -116,8 +144,20 @@
 <main>
   <div class="container">
     <div class="header">
-      <h2>🏷️ Browse Tags</h2>
-      <a href="/" class="btn-secondary">← Back to Recipes</a>
+      <h2>Browse Tags</h2>
+      <div class="header-actions">
+        {#if orphanedCount > 0}
+          <button
+            class="btn-cleanup"
+            onclick={handleCleanupOrphaned}
+            disabled={cleaningUp}
+            title="Remove tags that aren't linked to any recipes"
+          >
+            {cleaningUp ? 'Cleaning...' : `Clean up ${orphanedCount} unused`}
+          </button>
+        {/if}
+        <a href="/" class="btn-secondary">Back to Recipes</a>
+      </div>
     </div>
 
     <p class="description">
@@ -240,6 +280,38 @@
     border-color: var(--color-primary);
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: var(--spacing-3);
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .btn-cleanup {
+    padding: var(--spacing-3) var(--spacing-5);
+    border-radius: var(--radius-lg);
+    font-weight: var(--font-semibold);
+    background: var(--color-warning, #f59e0b);
+    color: white;
+    border: 2px solid var(--color-warning, #f59e0b);
+    transition: var(--transition-normal);
+    font-size: var(--text-sm);
+    box-shadow: var(--shadow-xs);
+    cursor: pointer;
+  }
+
+  .btn-cleanup:hover:not(:disabled) {
+    background: #d97706;
+    border-color: #d97706;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-cleanup:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .btn-primary {

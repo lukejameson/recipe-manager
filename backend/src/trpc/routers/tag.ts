@@ -148,6 +148,37 @@ export const tagRouter = t.router({
     }),
 
   /**
+   * Delete all orphaned tags (tags with no associated recipes)
+   */
+  cleanupOrphaned: protectedProcedure.mutation(async () => {
+    // Find tags with no recipes
+    const allTags = await db
+      .select({
+        id: tags.id,
+        name: tags.name,
+        recipeCount: sql<number>`count(${recipeTags.recipeId})`,
+      })
+      .from(tags)
+      .leftJoin(recipeTags, eq(tags.id, recipeTags.tagId))
+      .groupBy(tags.id);
+
+    const orphanedTags = allTags.filter((tag) => tag.recipeCount === 0);
+
+    if (orphanedTags.length === 0) {
+      return { deletedCount: 0, deletedTags: [] };
+    }
+
+    // Delete all orphaned tags
+    const orphanedIds = orphanedTags.map((t) => t.id);
+    await db.delete(tags).where(sql`${tags.id} IN (${sql.join(orphanedIds, sql`, `)})`);
+
+    return {
+      deletedCount: orphanedTags.length,
+      deletedTags: orphanedTags.map((t) => t.name),
+    };
+  }),
+
+  /**
    * Merge two tags (combine sourceTagId into targetTagId)
    */
   merge: protectedProcedure
