@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { trpc } from '$lib/trpc/client';
   import AddComponentModal from './AddComponentModal.svelte';
 
@@ -86,6 +86,42 @@
   let sugar = $state(recipe?.nutrition?.sugar || '');
   let sodium = $state(recipe?.nutrition?.sodium || '');
   let cholesterol = $state(recipe?.nutrition?.cholesterol || '');
+
+  // Sync form fields when recipe prop changes (for JSON-LD update feature)
+  $effect(() => {
+    // Access recipe to track it
+    const r = recipe;
+    if (!r) return;
+
+    // Use untrack to avoid circular updates when we set state
+    untrack(() => {
+      title = r.title || '';
+      description = r.description || '';
+      prepTime = r.prepTime || '';
+      cookTime = r.cookTime || '';
+      totalTime = r.totalTime || '';
+      servings = r.servings || '';
+      imageUrl = r.imageUrl || '';
+      sourceUrl = r.sourceUrl || '';
+      ingredients = r.ingredients?.join('\n') || '';
+      instructions = r.instructions?.join('\n') || '';
+      tags = r.tags?.map((t: any) => typeof t === 'string' ? t : t.name).join(', ') || '';
+
+      // Update nutrition fields
+      if (r.nutrition) {
+        showNutrition = true;
+        calories = r.nutrition.calories ?? '';
+        protein = r.nutrition.protein ?? '';
+        carbohydrates = r.nutrition.carbohydrates ?? '';
+        fat = r.nutrition.fat ?? '';
+        saturatedFat = r.nutrition.saturatedFat ?? '';
+        fiber = r.nutrition.fiber ?? '';
+        sugar = r.nutrition.sugar ?? '';
+        sodium = r.nutrition.sodium ?? '';
+        cholesterol = r.nutrition.cholesterol ?? '';
+      }
+    });
+  });
 
   async function handleSubmit() {
     error = '';
