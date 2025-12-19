@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatTime, formatServings } from '$lib/utils/format';
+  import { formatServings, formatTime } from '$lib/utils/format';
 
   interface Recipe {
     id: string;
@@ -15,7 +15,13 @@
     difficulty?: string | null;
   }
 
-  let { recipe, viewMode = 'grid', onEdit, onDelete, onToggleFavorite }: {
+  let {
+    recipe,
+    viewMode = 'grid',
+    onEdit,
+    onDelete,
+    onToggleFavorite,
+  }: {
     recipe: Recipe;
     viewMode?: 'grid' | 'list' | 'compact';
     onEdit?: () => void;
@@ -24,12 +30,19 @@
   } = $props();
 </script>
 
-<div class="recipe-card" class:view-list={viewMode === 'list'} class:view-compact={viewMode === 'compact'}>
+<div
+  class="recipe-card"
+  class:view-list={viewMode === 'list'}
+  class:view-compact={viewMode === 'compact'}
+>
   {#if onToggleFavorite}
     <button
       class="favorite-btn"
       class:is-favorite={recipe.isFavorite}
-      onclick={(e) => { e.preventDefault(); onToggleFavorite?.(); }}
+      onclick={e => {
+        e.preventDefault();
+        onToggleFavorite?.();
+      }}
       aria-label="Toggle favorite"
     >
       {recipe.isFavorite ? '★' : '☆'}
@@ -37,7 +50,8 @@
   {/if}
 
   {#if recipe.difficulty}
-    <span class="difficulty-badge {recipe.difficulty}">{recipe.difficulty}</span>
+    <span class="difficulty-badge {recipe.difficulty}">{recipe.difficulty}</span
+    >
   {/if}
 
   <a href="/recipe/{recipe.id}" class="card-link">
@@ -51,46 +65,37 @@
       <div class="title-row">
         <h3>{recipe.title}</h3>
         {#if recipe.rating}
-          <span class="rating">{'★'.repeat(recipe.rating)}{'☆'.repeat(5 - recipe.rating)}</span>
+          <span class="rating"
+            >{'★'.repeat(recipe.rating)}{'☆'.repeat(5 - recipe.rating)}</span
+          >
         {/if}
       </div>
 
-    {#if recipe.description}
-      <p class="description">{recipe.description}</p>
-    {/if}
+      {#if recipe.description}
+        <p class="description">{recipe.description}</p>
+      {/if}
 
-    <div class="meta">
-      {#if recipe.prepTime}
-        <span>⏱️ Prep: {formatTime(recipe.prepTime)}</span>
-      {/if}
-      {#if recipe.cookTime}
-        <span>🔥 Cook: {formatTime(recipe.cookTime)}</span>
-      {/if}
-      {#if recipe.servings}
-        <span>👥 {formatServings(recipe.servings)}</span>
-      {/if}
-    </div>
-
-    {#if recipe.tags?.length > 0}
-      <div class="tags">
-        {#each recipe.tags as tag}
-          <span class="tag">{tag.name}</span>
-        {/each}
+      <div class="meta">
+        {#if recipe.prepTime}
+          <span>⏱️ Prep: {formatTime(recipe.prepTime)}</span>
+        {/if}
+        {#if recipe.cookTime}
+          <span>🔥 Cook: {formatTime(recipe.cookTime)}</span>
+        {/if}
+        {#if recipe.servings}
+          <span>👥 {formatServings(recipe.servings)}</span>
+        {/if}
       </div>
-    {/if}
+
+      {#if recipe.tags?.length > 0}
+        <div class="tags">
+          {#each recipe.tags as tag}
+            <span class="tag">{tag.name}</span>
+          {/each}
+        </div>
+      {/if}
     </div>
   </a>
-
-  {#if onEdit || onDelete}
-    <div class="actions">
-      {#if onEdit}
-        <button onclick={onEdit} class="btn-edit">Edit</button>
-      {/if}
-      {#if onDelete}
-        <button onclick={onDelete} class="btn-delete">Delete</button>
-      {/if}
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -320,14 +325,18 @@
     left: 0;
     right: 0;
     height: 50%;
-    background: linear-gradient(to top, rgba(0,0,0,0.3), transparent);
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
   }
 
   .image.placeholder {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, var(--color-bg-subtle) 0%, var(--color-border) 100%);
+    background: linear-gradient(
+      135deg,
+      var(--color-bg-subtle) 0%,
+      var(--color-border) 100%
+    );
     font-size: 5rem;
   }
 

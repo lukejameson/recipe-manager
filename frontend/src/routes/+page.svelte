@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { trpc } from '$lib/trpc/client';
   import Header from '$lib/components/Header.svelte';
   import RecipeCard from '$lib/components/RecipeCard.svelte';
+  import { trpc } from '$lib/trpc/client';
+  import { onMount } from 'svelte';
 
   let recipes = $state<any[]>([]);
   let allTags = $state<any[]>([]);
@@ -67,7 +67,7 @@
 
     try {
       await trpc.recipe.delete.mutate({ id });
-      recipes = recipes.filter((r) => r.id !== id);
+      recipes = recipes.filter(r => r.id !== id);
     } catch (err: any) {
       alert('Failed to delete recipe: ' + err.message);
     }
@@ -123,7 +123,6 @@
     <div class="header">
       <h2>My Recipes</h2>
       <a href="/recipe/new" class="btn-primary mobile-fab">
-        <span class="icon">➕</span>
         <span class="btn-text">New</span>
       </a>
     </div>
@@ -134,7 +133,7 @@
           type="search"
           bind:value={searchTerm}
           placeholder="Search recipes..."
-          onkeydown={(e) => e.key === 'Enter' && handleSearch()}
+          onkeydown={e => e.key === 'Enter' && handleSearch()}
         />
         <button onclick={handleSearch} class="btn-search">Search</button>
       </div>
@@ -168,7 +167,11 @@
         </div>
 
         <div class="sort-control">
-          <select id="sort-select" bind:value={sortBy} onchange={handleSortChange}>
+          <select
+            id="sort-select"
+            bind:value={sortBy}
+            onchange={handleSortChange}
+          >
             <option value="date-newest">Newest</option>
             <option value="date-oldest">Oldest</option>
             <option value="title-asc">A-Z</option>
@@ -190,7 +193,9 @@
           {#each selectedTags as tag}
             <span class="active-tag">
               {tag}
-              <button onclick={() => toggleTag(tag)} class="remove-tag">✕</button>
+              <button onclick={() => toggleTag(tag)} class="remove-tag"
+                >✕</button
+              >
             </span>
           {/each}
           <button onclick={clearFilters} class="clear-btn">Clear</button>
@@ -206,7 +211,9 @@
           <div class="tag-chips">
             {#each allTags as tag (tag.id)}
               <button
-                class="tag-chip {selectedTags.includes(tag.name) ? 'active' : ''}"
+                class="tag-chip {selectedTags.includes(tag.name)
+                  ? 'active'
+                  : ''}"
                 onclick={() => toggleTag(tag.name)}
               >
                 {tag.name}
@@ -230,7 +237,11 @@
         <a href="/recipe/new" class="btn-primary">Create Recipe</a>
       </div>
     {:else}
-      <div class="recipe-grid" class:view-list={viewMode === 'list'} class:view-compact={viewMode === 'compact'}>
+      <div
+        class="recipe-grid"
+        class:view-list={viewMode === 'list'}
+        class:view-compact={viewMode === 'compact'}
+      >
         {#each recipes as recipe (recipe.id)}
           <RecipeCard
             {recipe}
