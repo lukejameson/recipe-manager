@@ -17,7 +17,18 @@
 <header>
   <div class="container">
     <h1>
-      <a href="/" onclick={closeMobileMenu}>🍳 Recipe Manager</a>
+      <a href="/" onclick={closeMobileMenu}>
+        <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+          <rect width="32" height="32" rx="6" fill="#ff6b35"/>
+          <path d="M16 6c-4.4 0-8 3.6-8 8v6c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-6c0-4.4-3.6-8-8-8z" fill="#fff"/>
+          <ellipse cx="16" cy="8" rx="6" ry="2" fill="#fff"/>
+          <circle cx="12" cy="13" r="1.5" fill="#ff6b35"/>
+          <circle cx="16" cy="15" r="1.5" fill="#ff6b35"/>
+          <circle cx="20" cy="13" r="1.5" fill="#ff6b35"/>
+          <path d="M10 24h12v2H10z" fill="#fff"/>
+        </svg>
+        Recipe Manager
+      </a>
     </h1>
 
     {#if authStore.isAuthenticated}
@@ -99,6 +110,12 @@
     align-items: center;
     gap: var(--spacing-2);
     transition: var(--transition-fast);
+  }
+
+  .logo {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
   }
 
   nav {
@@ -194,6 +211,11 @@
     h1 {
       font-size: var(--text-xl);
       flex: 1;
+    }
+
+    .logo {
+      width: 28px;
+      height: 28px;
     }
 
     .mobile-menu-btn {
