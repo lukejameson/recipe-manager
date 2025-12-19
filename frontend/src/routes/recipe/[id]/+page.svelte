@@ -17,6 +17,7 @@
   let showRatingForm = $state(false);
   let rating = $state(0);
   let notes = $state('');
+  let copied = $state(false);
 
   onMount(() => {
     loadRecipe();
@@ -106,6 +107,49 @@
   function handleEdit() {
     goto(`/recipe/${$page.params.id}/edit`);
   }
+
+  function recipeToJsonLd(recipe: any): string {
+    const jsonLd: Record<string, any> = {
+      "@context": "https://schema.org",
+      "@type": "Recipe",
+      "name": recipe.title,
+    };
+
+    if (recipe.description) jsonLd["description"] = recipe.description;
+    if (recipe.prepTime) jsonLd["prepTime"] = `PT${recipe.prepTime}M`;
+    if (recipe.cookTime) jsonLd["cookTime"] = `PT${recipe.cookTime}M`;
+    if (recipe.totalTime) jsonLd["totalTime"] = `PT${recipe.totalTime}M`;
+    if (recipe.servings) jsonLd["recipeYield"] = `${recipe.servings} servings`;
+    if (recipe.ingredients?.length) jsonLd["recipeIngredient"] = recipe.ingredients;
+    if (recipe.instructions?.length) {
+      jsonLd["recipeInstructions"] = recipe.instructions.map((step: string, i: number) => ({
+        "@type": "HowToStep",
+        "position": i + 1,
+        "text": step
+      }));
+    }
+    if (recipe.imageUrl) jsonLd["image"] = recipe.imageUrl;
+    if (recipe.sourceUrl) jsonLd["url"] = recipe.sourceUrl;
+    if (recipe.tags?.length) {
+      jsonLd["recipeCategory"] = recipe.tags.map((t: any) => t.name);
+      jsonLd["keywords"] = recipe.tags.map((t: any) => t.name).join(", ");
+    }
+    if (recipe.difficulty) jsonLd["difficulty"] = recipe.difficulty;
+
+    return JSON.stringify(jsonLd, null, 2);
+  }
+
+  async function copyAsJsonLd() {
+    if (!recipe) return;
+    const jsonLd = recipeToJsonLd(recipe);
+    try {
+      await navigator.clipboard.writeText(jsonLd);
+      copied = true;
+      setTimeout(() => { copied = false; }, 2000);
+    } catch (err) {
+      alert('Failed to copy to clipboard');
+    }
+  }
 </script>
 
 <Header />
@@ -136,6 +180,10 @@
           <button onclick={handleDelete} class="btn-delete">
             <span class="icon">🗑️</span>
             <span>Delete</span>
+          </button>
+          <button onclick={copyAsJsonLd} class="btn-export">
+            <span class="icon">{copied ? '✓' : '📋'}</span>
+            <span>{copied ? 'Copied!' : 'Export'}</span>
           </button>
         </div>
       </div>
@@ -390,7 +438,8 @@
   }
 
   .btn-edit,
-  .btn-delete {
+  .btn-delete,
+  .btn-export {
     padding: var(--spacing-2-5) var(--spacing-4);
     border-radius: var(--radius-lg);
     font-weight: var(--font-medium);
@@ -426,6 +475,20 @@
     background: var(--color-error);
     color: white;
     border-color: var(--color-error);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-export {
+    background: #f0f9ff;
+    color: #0369a1;
+    border-color: #bae6fd;
+  }
+
+  .btn-export:hover {
+    background: #0369a1;
+    color: white;
+    border-color: #0369a1;
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
   }
@@ -550,7 +613,7 @@
 
   .cooking-mode {
     background: var(--color-surface);
-    padding: var(--spacing-2xl);
+    padding: var(--spacing-8);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
   }
@@ -559,7 +622,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-6);
   }
 
   .cooking-header h2 {
@@ -591,11 +654,11 @@
 
   .cooking-step {
     background: var(--color-bg-subtle);
-    padding: var(--spacing-2xl);
+    padding: var(--spacing-8);
     border-radius: var(--radius-lg);
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-6);
     display: flex;
-    gap: var(--spacing-lg);
+    gap: var(--spacing-6);
     align-items: flex-start;
   }
 
@@ -615,8 +678,8 @@
 
   .cooking-navigation {
     display: flex;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-xl);
+    gap: var(--spacing-4);
+    margin-bottom: var(--spacing-6);
   }
 
   .btn-nav {
@@ -654,7 +717,7 @@
 
   .cooking-ingredients {
     background: white;
-    padding: var(--spacing-lg);
+    padding: var(--spacing-6);
     border-radius: var(--radius-md);
     border: 2px solid var(--color-border);
   }
@@ -666,7 +729,7 @@
 
   .cooking-ingredients ul {
     margin: 0;
-    padding-left: var(--spacing-lg);
+    padding-left: var(--spacing-6);
   }
 
   .btn-favorite {
@@ -787,7 +850,7 @@
   }
 
   .btn-toggle {
-    padding: var(--spacing-xs) var(--spacing-md);
+    padding: var(--spacing-1) var(--spacing-4);
     background: var(--color-primary);
     color: white;
     border: none;
@@ -829,7 +892,7 @@
   }
 
   .btn-save {
-    padding: var(--spacing-sm) var(--spacing-lg);
+    padding: var(--spacing-2) var(--spacing-6);
     background: var(--color-primary);
     color: white;
     border: none;
@@ -898,7 +961,7 @@
 
     .actions {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: var(--spacing-2);
     }
 
@@ -906,7 +969,8 @@
     .actions .btn-edit,
     .actions .btn-delete,
     .actions .btn-favorite,
-    .actions .btn-cooking {
+    .actions .btn-cooking,
+    .actions .btn-export {
       padding: var(--spacing-3);
       font-size: var(--text-sm);
       min-height: 48px;
@@ -918,7 +982,8 @@
     .actions .btn-edit span:not(.icon),
     .actions .btn-delete span:not(.icon),
     .actions .btn-favorite span:not(.icon),
-    .actions .btn-cooking span:not(.icon) {
+    .actions .btn-cooking span:not(.icon),
+    .actions .btn-export span:not(.icon) {
       display: none;
     }
 

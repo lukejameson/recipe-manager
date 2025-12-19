@@ -131,7 +131,7 @@
 
   .recipe-card.view-list .content {
     flex: 1;
-    padding: var(--spacing-md);
+    padding: var(--spacing-4);
   }
 
   .recipe-card.view-list .title-row {
@@ -144,14 +144,14 @@
 
   .recipe-card.view-list .description {
     font-size: 0.875rem;
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-2);
     -webkit-line-clamp: 1;
   }
 
   .recipe-card.view-list .meta {
     font-size: 0.813rem;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-2);
   }
 
   .recipe-card.view-list .tags {
@@ -167,29 +167,29 @@
     border-top: none;
     border-left: 2px solid var(--color-border);
     flex-direction: column;
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-2) var(--spacing-4);
     justify-content: center;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-1);
   }
 
   .recipe-card.view-list .btn-edit,
   .recipe-card.view-list .btn-delete {
     width: 100%;
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--spacing-2) var(--spacing-3);
     font-size: 0.813rem;
   }
 
   .recipe-card.view-list .favorite-btn {
     width: 36px;
     height: 36px;
-    top: var(--spacing-sm);
-    right: var(--spacing-sm);
+    top: var(--spacing-2);
+    right: var(--spacing-2);
     font-size: 1.25rem;
   }
 
   .recipe-card.view-list .difficulty-badge {
-    top: var(--spacing-sm);
-    left: var(--spacing-sm);
+    top: var(--spacing-2);
+    left: var(--spacing-2);
     font-size: 0.688rem;
     padding: 0.25rem 0.5rem;
   }
@@ -200,7 +200,7 @@
   }
 
   .recipe-card.view-compact .content {
-    padding: var(--spacing-md);
+    padding: var(--spacing-4);
   }
 
   .recipe-card.view-compact h3 {
@@ -214,7 +214,7 @@
 
   .recipe-card.view-compact .meta {
     font-size: 0.813rem;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-2);
   }
 
   .recipe-card.view-compact .tag {
@@ -223,12 +223,12 @@
   }
 
   .recipe-card.view-compact .actions {
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-2) var(--spacing-4);
   }
 
   .recipe-card.view-compact .btn-edit,
   .recipe-card.view-compact .btn-delete {
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: var(--spacing-2) var(--spacing-3);
     font-size: 0.813rem;
   }
 
@@ -265,8 +265,8 @@
 
   .difficulty-badge {
     position: absolute;
-    top: var(--spacing-md);
-    left: var(--spacing-md);
+    top: var(--spacing-4);
+    left: var(--spacing-4);
     padding: 0.375rem 0.75rem;
     border-radius: var(--radius-xl);
     font-size: 0.75rem;

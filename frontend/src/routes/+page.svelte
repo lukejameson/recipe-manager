@@ -515,9 +515,9 @@
   .error {
     background: #ffe5e5;
     color: var(--color-error);
-    padding: var(--spacing-lg);
+    padding: var(--spacing-4);
     border-radius: var(--radius-lg);
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-6);
     border-left: 4px solid var(--color-error);
     font-weight: 500;
   }

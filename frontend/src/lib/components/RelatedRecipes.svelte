@@ -65,8 +65,8 @@
 
 <style>
   .related-recipes {
-    margin-top: var(--spacing-3xl);
-    padding-top: var(--spacing-3xl);
+    margin-top: var(--spacing-12);
+    padding-top: var(--spacing-12);
     border-top: 2px solid var(--color-border);
   }
 
@@ -74,19 +74,19 @@
     font-size: 2rem;
     font-weight: 700;
     color: var(--color-text);
-    margin: 0 0 var(--spacing-sm) 0;
+    margin: 0 0 var(--spacing-2) 0;
   }
 
   .description {
     color: var(--color-text-light);
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-6);
     font-size: 1rem;
   }
 
   .recipe-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: var(--spacing-xl);
+    gap: var(--spacing-6);
     animation: fadeIn 0.6s ease-out;
   }
 
