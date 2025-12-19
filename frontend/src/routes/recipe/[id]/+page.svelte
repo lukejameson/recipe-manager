@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { trpc } from '$lib/trpc/client';
@@ -18,9 +18,41 @@
   let rating = $state(0);
   let notes = $state('');
   let copied = $state(false);
+  let wakeLock: WakeLockSentinel | null = null;
+
+  async function requestWakeLock() {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+      } catch (err) {
+        // Wake lock request failed (e.g., low battery)
+      }
+    }
+  }
+
+  async function releaseWakeLock() {
+    if (wakeLock) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  }
+
+  function handleVisibilityChange() {
+    if (document.visibilityState === 'visible' && cookingMode) {
+      requestWakeLock();
+    }
+  }
 
   onMount(() => {
     loadRecipe();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  });
+
+  onDestroy(() => {
+    releaseWakeLock();
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
   });
 
   async function loadRecipe() {
@@ -73,6 +105,11 @@
   function toggleCookingMode() {
     cookingMode = !cookingMode;
     currentStep = 0;
+    if (cookingMode) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
   }
 
   function nextStep() {
