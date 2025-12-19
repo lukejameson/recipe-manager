@@ -27,7 +27,17 @@
   }
 
   async function handleSubmit(data: any) {
-    await trpc.recipe.update.mutate({ id: $page.params.id, data });
+    const { components, ...recipeData } = data;
+
+    // Update the recipe
+    await trpc.recipe.update.mutate({ id: $page.params.id, data: recipeData });
+
+    // Update components
+    await trpc.recipe.setComponents.mutate({
+      recipeId: $page.params.id,
+      components: components || [],
+    });
+
     goto(`/recipe/${$page.params.id}`);
   }
 

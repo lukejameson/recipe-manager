@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
-import { recipes, tags, recipeTags } from '../../db/schema.js';
-import { eq, like, or, inArray, sql } from 'drizzle-orm';
+import { recipes, tags, recipeTags, recipeComponents, type NutritionInfo } from '../../db/schema.js';
+import { eq, like, or, inArray, sql, and } from 'drizzle-orm';
 import { parseRecipeJsonLd } from '../../utils/jsonld-parser.js';
 import { convertRecipeIngredients, cleanRecipeInstructions } from '../../utils/unit-converter.js';
 
@@ -84,6 +84,19 @@ const isAuthenticated = t.middleware(async ({ ctx, next }) => {
 
 const protectedProcedure = t.procedure.use(isAuthenticated);
 
+// Nutrition schema for validation
+const nutritionSchema = z.object({
+  calories: z.number().min(0).optional(),
+  protein: z.number().min(0).optional(),
+  carbohydrates: z.number().min(0).optional(),
+  fat: z.number().min(0).optional(),
+  saturatedFat: z.number().min(0).optional(),
+  fiber: z.number().min(0).optional(),
+  sugar: z.number().min(0).optional(),
+  sodium: z.number().min(0).optional(),
+  cholesterol: z.number().min(0).optional(),
+}).optional();
+
 // Validation schemas
 const recipeInputSchema = z.object({
   title: z.string().min(1).max(200),
@@ -101,6 +114,7 @@ const recipeInputSchema = z.object({
   rating: z.number().min(1).max(5).optional(),
   notes: z.string().optional(),
   difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+  nutrition: nutritionSchema,
 });
 
 /**
@@ -144,6 +158,189 @@ async function getRecipeTags(recipeId: string) {
     .where(eq(recipeTags.recipeId, recipeId));
 
   return recipesWithTags;
+}
+
+/**
+ * Get components for a recipe
+ */
+async function getRecipeComponents(recipeId: string) {
+  const components = await db
+    .select({
+      id: recipeComponents.id,
+      childRecipeId: recipeComponents.childRecipeId,
+      servingsNeeded: recipeComponents.servingsNeeded,
+      sortOrder: recipeComponents.sortOrder,
+      childRecipe: recipes,
+    })
+    .from(recipeComponents)
+    .innerJoin(recipes, eq(recipeComponents.childRecipeId, recipes.id))
+    .where(eq(recipeComponents.parentRecipeId, recipeId))
+    .orderBy(recipeComponents.sortOrder);
+
+  return components;
+}
+
+/**
+ * Check if adding a child recipe would create a circular reference
+ * This recursively checks if the potential child contains the parent as a descendant
+ */
+async function wouldCreateCircularReference(
+  parentId: string,
+  childId: string,
+  visited: Set<string> = new Set()
+): Promise<boolean> {
+  // Direct self-reference
+  if (parentId === childId) return true;
+
+  // Already visited this node (handles cycles in existing data)
+  if (visited.has(childId)) return false;
+  visited.add(childId);
+
+  // Get all children of the potential child recipe
+  const childComponents = await db
+    .select({ childRecipeId: recipeComponents.childRecipeId })
+    .from(recipeComponents)
+    .where(eq(recipeComponents.parentRecipeId, childId));
+
+  for (const component of childComponents) {
+    // If any descendant of the child is the parent, it would be circular
+    if (component.childRecipeId === parentId) return true;
+
+    // Recursively check deeper levels
+    if (await wouldCreateCircularReference(parentId, component.childRecipeId, visited)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Recursively get full component hierarchy for a recipe
+ */
+export type ComponentWithHierarchy = {
+  id: string;
+  childRecipeId: string;
+  servingsNeeded: number;
+  sortOrder: number;
+  childRecipe: typeof recipes.$inferSelect & {
+    tags?: { id: string; name: string; createdAt: Date }[];
+    components?: ComponentWithHierarchy[];
+  };
+};
+
+async function getRecipeHierarchy(
+  recipeId: string,
+  visited: Set<string> = new Set()
+): Promise<ComponentWithHierarchy[]> {
+  // Prevent infinite loops in case of circular references
+  if (visited.has(recipeId)) return [];
+  visited.add(recipeId);
+
+  const components = await getRecipeComponents(recipeId);
+
+  const hierarchicalComponents: ComponentWithHierarchy[] = await Promise.all(
+    components.map(async (comp) => {
+      const childTags = await getRecipeTags(comp.childRecipeId);
+      const nestedComponents = await getRecipeHierarchy(comp.childRecipeId, new Set(visited));
+
+      return {
+        id: comp.id,
+        childRecipeId: comp.childRecipeId,
+        servingsNeeded: comp.servingsNeeded,
+        sortOrder: comp.sortOrder,
+        childRecipe: {
+          ...comp.childRecipe,
+          tags: childTags,
+          components: nestedComponents.length > 0 ? nestedComponents : undefined,
+        },
+      };
+    })
+  );
+
+  return hierarchicalComponents;
+}
+
+/**
+ * Calculate aggregated nutrition from components
+ */
+function aggregateNutrition(
+  components: ComponentWithHierarchy[],
+  ownNutrition?: NutritionInfo | null
+): NutritionInfo | undefined {
+  const result: NutritionInfo = {};
+
+  // Helper to add scaled nutrition
+  const addScaledNutrition = (
+    nutrition: NutritionInfo | null | undefined,
+    childServings: number | null | undefined,
+    servingsNeeded: number
+  ) => {
+    if (!nutrition || !childServings) return;
+    const scale = servingsNeeded / childServings;
+
+    if (nutrition.calories !== undefined) {
+      result.calories = (result.calories || 0) + nutrition.calories * scale;
+    }
+    if (nutrition.protein !== undefined) {
+      result.protein = (result.protein || 0) + nutrition.protein * scale;
+    }
+    if (nutrition.carbohydrates !== undefined) {
+      result.carbohydrates = (result.carbohydrates || 0) + nutrition.carbohydrates * scale;
+    }
+    if (nutrition.fat !== undefined) {
+      result.fat = (result.fat || 0) + nutrition.fat * scale;
+    }
+    if (nutrition.saturatedFat !== undefined) {
+      result.saturatedFat = (result.saturatedFat || 0) + nutrition.saturatedFat * scale;
+    }
+    if (nutrition.fiber !== undefined) {
+      result.fiber = (result.fiber || 0) + nutrition.fiber * scale;
+    }
+    if (nutrition.sugar !== undefined) {
+      result.sugar = (result.sugar || 0) + nutrition.sugar * scale;
+    }
+    if (nutrition.sodium !== undefined) {
+      result.sodium = (result.sodium || 0) + nutrition.sodium * scale;
+    }
+    if (nutrition.cholesterol !== undefined) {
+      result.cholesterol = (result.cholesterol || 0) + nutrition.cholesterol * scale;
+    }
+  };
+
+  // Add nutrition from own recipe
+  if (ownNutrition) {
+    Object.assign(result, ownNutrition);
+  }
+
+  // Recursively add nutrition from components
+  const processComponents = (comps: ComponentWithHierarchy[]) => {
+    for (const comp of comps) {
+      // Add this component's nutrition scaled by servings needed
+      addScaledNutrition(
+        comp.childRecipe.nutrition,
+        comp.childRecipe.servings,
+        comp.servingsNeeded
+      );
+
+      // If the child has its own components, those are already included in its nutrition
+      // so we don't recursively add them again (they're part of the child's total)
+    }
+  };
+
+  processComponents(components);
+
+  // Return undefined if no nutrition data
+  if (Object.keys(result).length === 0) return undefined;
+
+  // Round values to 1 decimal place
+  for (const key of Object.keys(result) as (keyof NutritionInfo)[]) {
+    if (result[key] !== undefined) {
+      result[key] = Math.round(result[key]! * 10) / 10;
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -748,5 +945,290 @@ export const recipeRouter = t.router({
           message: 'Failed to import recipe from JSONLD',
         });
       }
+    }),
+
+  // ========== Component Management Endpoints ==========
+
+  /**
+   * Get components for a recipe (flat list, one level)
+   */
+  getComponents: protectedProcedure
+    .input(z.object({ recipeId: z.string() }))
+    .query(async ({ input }) => {
+      const components = await getRecipeComponents(input.recipeId);
+
+      // Get tags for each child recipe
+      const componentsWithTags = await Promise.all(
+        components.map(async (comp) => ({
+          ...comp,
+          childRecipe: {
+            ...comp.childRecipe,
+            tags: await getRecipeTags(comp.childRecipeId),
+          },
+        }))
+      );
+
+      return componentsWithTags;
+    }),
+
+  /**
+   * Get full component hierarchy (recursively nested)
+   */
+  getHierarchy: protectedProcedure
+    .input(z.object({ recipeId: z.string() }))
+    .query(async ({ input }) => {
+      return getRecipeHierarchy(input.recipeId);
+    }),
+
+  /**
+   * Get aggregated nutrition for a compound recipe
+   */
+  getAggregatedNutrition: protectedProcedure
+    .input(z.object({ recipeId: z.string() }))
+    .query(async ({ input }) => {
+      const [recipe] = await db
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, input.recipeId))
+        .limit(1);
+
+      if (!recipe) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Recipe not found',
+        });
+      }
+
+      const hierarchy = await getRecipeHierarchy(input.recipeId);
+
+      if (hierarchy.length === 0) {
+        // Not a compound recipe, return own nutrition
+        return recipe.nutrition;
+      }
+
+      return aggregateNutrition(hierarchy, recipe.nutrition);
+    }),
+
+  /**
+   * Add a component (child recipe) to a parent recipe
+   */
+  addComponent: protectedProcedure
+    .input(
+      z.object({
+        parentRecipeId: z.string(),
+        childRecipeId: z.string(),
+        servingsNeeded: z.number().min(0.1).default(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      // Check parent recipe exists
+      const [parent] = await db
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, input.parentRecipeId))
+        .limit(1);
+
+      if (!parent) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Parent recipe not found',
+        });
+      }
+
+      // Check child recipe exists
+      const [child] = await db
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, input.childRecipeId))
+        .limit(1);
+
+      if (!child) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Child recipe not found',
+        });
+      }
+
+      // Check for circular reference
+      if (await wouldCreateCircularReference(input.parentRecipeId, input.childRecipeId)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Cannot add this recipe: it would create a circular reference',
+        });
+      }
+
+      // Check if already exists
+      const [existing] = await db
+        .select()
+        .from(recipeComponents)
+        .where(
+          and(
+            eq(recipeComponents.parentRecipeId, input.parentRecipeId),
+            eq(recipeComponents.childRecipeId, input.childRecipeId)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'This recipe is already a component',
+        });
+      }
+
+      // Get current max sort order
+      const existingComponents = await db
+        .select({ sortOrder: recipeComponents.sortOrder })
+        .from(recipeComponents)
+        .where(eq(recipeComponents.parentRecipeId, input.parentRecipeId))
+        .orderBy(sql`${recipeComponents.sortOrder} DESC`)
+        .limit(1);
+
+      const nextSortOrder = existingComponents.length > 0
+        ? existingComponents[0].sortOrder + 1
+        : 0;
+
+      // Insert component
+      const [newComponent] = await db
+        .insert(recipeComponents)
+        .values({
+          parentRecipeId: input.parentRecipeId,
+          childRecipeId: input.childRecipeId,
+          servingsNeeded: input.servingsNeeded,
+          sortOrder: nextSortOrder,
+        })
+        .returning();
+
+      return {
+        ...newComponent,
+        childRecipe: child,
+      };
+    }),
+
+  /**
+   * Update a component (change servings or sort order)
+   */
+  updateComponent: protectedProcedure
+    .input(
+      z.object({
+        componentId: z.string(),
+        servingsNeeded: z.number().min(0.1).optional(),
+        sortOrder: z.number().min(0).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { componentId, ...updateData } = input;
+
+      // Filter out undefined values
+      const updates: Record<string, any> = {};
+      if (updateData.servingsNeeded !== undefined) {
+        updates.servingsNeeded = updateData.servingsNeeded;
+      }
+      if (updateData.sortOrder !== undefined) {
+        updates.sortOrder = updateData.sortOrder;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'No updates provided',
+        });
+      }
+
+      const [updated] = await db
+        .update(recipeComponents)
+        .set(updates)
+        .where(eq(recipeComponents.id, componentId))
+        .returning();
+
+      if (!updated) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Component not found',
+        });
+      }
+
+      return updated;
+    }),
+
+  /**
+   * Remove a component from a recipe
+   */
+  removeComponent: protectedProcedure
+    .input(z.object({ componentId: z.string() }))
+    .mutation(async ({ input }) => {
+      const [deleted] = await db
+        .delete(recipeComponents)
+        .where(eq(recipeComponents.id, input.componentId))
+        .returning();
+
+      if (!deleted) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Component not found',
+        });
+      }
+
+      return { success: true };
+    }),
+
+  /**
+   * Bulk update components for a recipe (used when saving from recipe form)
+   */
+  setComponents: protectedProcedure
+    .input(
+      z.object({
+        recipeId: z.string(),
+        components: z.array(
+          z.object({
+            childRecipeId: z.string(),
+            servingsNeeded: z.number().min(0.1),
+          })
+        ),
+      })
+    )
+    .mutation(async ({ input }) => {
+      // Check recipe exists
+      const [recipe] = await db
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, input.recipeId))
+        .limit(1);
+
+      if (!recipe) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Recipe not found',
+        });
+      }
+
+      // Check for circular references
+      for (const comp of input.components) {
+        if (await wouldCreateCircularReference(input.recipeId, comp.childRecipeId)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot add recipe: it would create a circular reference`,
+          });
+        }
+      }
+
+      // Delete all existing components
+      await db
+        .delete(recipeComponents)
+        .where(eq(recipeComponents.parentRecipeId, input.recipeId));
+
+      // Insert new components
+      if (input.components.length > 0) {
+        await db.insert(recipeComponents).values(
+          input.components.map((comp, index) => ({
+            parentRecipeId: input.recipeId,
+            childRecipeId: comp.childRecipeId,
+            servingsNeeded: comp.servingsNeeded,
+            sortOrder: index,
+          }))
+        );
+      }
+
+      return { success: true };
     }),
 });

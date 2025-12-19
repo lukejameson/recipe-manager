@@ -11,6 +11,19 @@ export const users = sqliteTable('users', {
     .default(sql`(unixepoch())`),
 });
 
+// Nutrition type for storing per-serving nutritional information
+export type NutritionInfo = {
+  calories?: number;       // kcal
+  protein?: number;        // grams
+  carbohydrates?: number;  // grams
+  fat?: number;            // grams
+  saturatedFat?: number;   // grams
+  fiber?: number;          // grams
+  sugar?: number;          // grams
+  sodium?: number;         // milligrams
+  cholesterol?: number;    // milligrams
+};
+
 // Recipes table
 export const recipes = sqliteTable('recipes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -30,6 +43,8 @@ export const recipes = sqliteTable('recipes', {
   difficulty: text('difficulty'), // easy, medium, hard
   timesCooked: integer('times_cooked').notNull().default(0),
   lastCookedAt: integer('last_cooked_at', { mode: 'timestamp' }),
+  // Nutrition information (per serving)
+  nutrition: text('nutrition', { mode: 'json' }).$type<NutritionInfo>(),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`),
@@ -80,6 +95,23 @@ export const collectionRecipes = sqliteTable('collection_recipes', {
     .default(sql`(unixepoch())`),
 });
 
+// Recipe components - for compound/composite recipes
+// Links parent recipes to child recipes with serving multipliers
+export const recipeComponents = sqliteTable('recipe_components', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  parentRecipeId: text('parent_recipe_id')
+    .notNull()
+    .references(() => recipes.id, { onDelete: 'cascade' }),
+  childRecipeId: text('child_recipe_id')
+    .notNull()
+    .references(() => recipes.id, { onDelete: 'cascade' }),
+  servingsNeeded: integer('servings_needed').notNull().default(1),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
 // Shopping list items
 export const shoppingListItems = sqliteTable('shopping_list_items', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -114,3 +146,6 @@ export type InsertCollectionRecipe = typeof collectionRecipes.$inferInsert;
 
 export type ShoppingListItem = typeof shoppingListItems.$inferSelect;
 export type InsertShoppingListItem = typeof shoppingListItems.$inferInsert;
+
+export type RecipeComponent = typeof recipeComponents.$inferSelect;
+export type InsertRecipeComponent = typeof recipeComponents.$inferInsert;

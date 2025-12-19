@@ -5,6 +5,7 @@
   import { trpc } from '$lib/trpc/client';
   import Header from '$lib/components/Header.svelte';
   import RelatedRecipes from '$lib/components/RelatedRecipes.svelte';
+  import RecipeComponentView from '$lib/components/RecipeComponentView.svelte';
   import { formatTime, formatServings } from '$lib/utils/format';
   import { scaleRecipe } from '$lib/utils/recipe-scaling';
 
@@ -19,6 +20,10 @@
   let notes = $state('');
   let copied = $state(false);
   let wakeLock: WakeLockSentinel | null = null;
+
+  // Components for compound recipes
+  let components = $state<any[]>([]);
+  let aggregatedNutrition = $state<any>(null);
 
   async function requestWakeLock() {
     if ('wakeLock' in navigator) {
@@ -63,6 +68,17 @@
       scaledServings = recipe.servings;
       rating = recipe.rating || 0;
       notes = recipe.notes || '';
+
+      // Load components for compound recipes
+      const hierarchy = await trpc.recipe.getHierarchy.query({ recipeId: $page.params.id });
+      components = hierarchy;
+
+      // Load aggregated nutrition if has components
+      if (components.length > 0) {
+        aggregatedNutrition = await trpc.recipe.getAggregatedNutrition.query({ recipeId: $page.params.id });
+      } else {
+        aggregatedNutrition = null;
+      }
     } catch (err: any) {
       error = err.message || 'Failed to load recipe';
     } finally {
@@ -172,6 +188,23 @@
       jsonLd["keywords"] = recipe.tags.map((t: any) => t.name).join(", ");
     }
     if (recipe.difficulty) jsonLd["difficulty"] = recipe.difficulty;
+
+    // Add nutrition information
+    if (recipe.nutrition && Object.keys(recipe.nutrition).length > 0) {
+      const nutritionLd: Record<string, any> = {
+        "@type": "NutritionInformation"
+      };
+      if (recipe.nutrition.calories !== undefined) nutritionLd["calories"] = `${recipe.nutrition.calories} calories`;
+      if (recipe.nutrition.protein !== undefined) nutritionLd["proteinContent"] = `${recipe.nutrition.protein} g`;
+      if (recipe.nutrition.carbohydrates !== undefined) nutritionLd["carbohydrateContent"] = `${recipe.nutrition.carbohydrates} g`;
+      if (recipe.nutrition.fat !== undefined) nutritionLd["fatContent"] = `${recipe.nutrition.fat} g`;
+      if (recipe.nutrition.saturatedFat !== undefined) nutritionLd["saturatedFatContent"] = `${recipe.nutrition.saturatedFat} g`;
+      if (recipe.nutrition.fiber !== undefined) nutritionLd["fiberContent"] = `${recipe.nutrition.fiber} g`;
+      if (recipe.nutrition.sugar !== undefined) nutritionLd["sugarContent"] = `${recipe.nutrition.sugar} g`;
+      if (recipe.nutrition.sodium !== undefined) nutritionLd["sodiumContent"] = `${recipe.nutrition.sodium} mg`;
+      if (recipe.nutrition.cholesterol !== undefined) nutritionLd["cholesterolContent"] = `${recipe.nutrition.cholesterol} mg`;
+      jsonLd["nutrition"] = nutritionLd;
+    }
 
     return JSON.stringify(jsonLd, null, 2);
   }
@@ -334,6 +367,147 @@
               {recipe.sourceUrl}
             </a>
           </div>
+        {/if}
+
+        <!-- Components (for compound recipes) -->
+        {#if components.length > 0}
+          <section class="components-section">
+            <h2>Components</h2>
+            <p class="components-description">
+              This is a compound recipe made up of the following sub-recipes. Click to expand each component.
+            </p>
+            <div class="components-list">
+              {#each components as component}
+                <RecipeComponentView {component} />
+              {/each}
+            </div>
+          </section>
+        {/if}
+
+        <!-- Nutrition Information -->
+        {#if aggregatedNutrition && Object.keys(aggregatedNutrition).length > 0}
+          <!-- Aggregated nutrition for compound recipes -->
+          <section class="nutrition-section">
+            <h2>Total Nutrition (per serving)</h2>
+            <p class="nutrition-note">Aggregated from all components</p>
+            <div class="nutrition-grid">
+              {#if aggregatedNutrition.calories !== undefined}
+                <div class="nutrition-item aggregated">
+                  <span class="nutrition-value">{Math.round(aggregatedNutrition.calories)}</span>
+                  <span class="nutrition-label">Calories</span>
+                </div>
+              {/if}
+              {#if aggregatedNutrition.protein !== undefined}
+                <div class="nutrition-item aggregated">
+                  <span class="nutrition-value">{aggregatedNutrition.protein}g</span>
+                  <span class="nutrition-label">Protein</span>
+                </div>
+              {/if}
+              {#if aggregatedNutrition.carbohydrates !== undefined}
+                <div class="nutrition-item aggregated">
+                  <span class="nutrition-value">{aggregatedNutrition.carbohydrates}g</span>
+                  <span class="nutrition-label">Carbs</span>
+                </div>
+              {/if}
+              {#if aggregatedNutrition.fat !== undefined}
+                <div class="nutrition-item aggregated">
+                  <span class="nutrition-value">{aggregatedNutrition.fat}g</span>
+                  <span class="nutrition-label">Fat</span>
+                </div>
+              {/if}
+              {#if aggregatedNutrition.saturatedFat !== undefined}
+                <div class="nutrition-item aggregated">
+                  <span class="nutrition-value">{aggregatedNutrition.saturatedFat}g</span>
+                  <span class="nutrition-label">Sat. Fat</span>
+                </div>
+              {/if}
+              {#if aggregatedNutrition.fiber !== undefined}
+                <div class="nutrition-item aggregated">
+                  <span class="nutrition-value">{aggregatedNutrition.fiber}g</span>
+                  <span class="nutrition-label">Fiber</span>
+                </div>
+              {/if}
+              {#if aggregatedNutrition.sugar !== undefined}
+                <div class="nutrition-item aggregated">
+                  <span class="nutrition-value">{aggregatedNutrition.sugar}g</span>
+                  <span class="nutrition-label">Sugar</span>
+                </div>
+              {/if}
+              {#if aggregatedNutrition.sodium !== undefined}
+                <div class="nutrition-item aggregated">
+                  <span class="nutrition-value">{aggregatedNutrition.sodium}mg</span>
+                  <span class="nutrition-label">Sodium</span>
+                </div>
+              {/if}
+              {#if aggregatedNutrition.cholesterol !== undefined}
+                <div class="nutrition-item aggregated">
+                  <span class="nutrition-value">{aggregatedNutrition.cholesterol}mg</span>
+                  <span class="nutrition-label">Cholesterol</span>
+                </div>
+              {/if}
+            </div>
+          </section>
+        {:else if recipe.nutrition && Object.keys(recipe.nutrition).length > 0}
+          <!-- Regular nutrition for non-compound recipes -->
+          <section class="nutrition-section">
+            <h2>Nutrition (per serving)</h2>
+            <div class="nutrition-grid">
+              {#if recipe.nutrition.calories !== undefined}
+                <div class="nutrition-item">
+                  <span class="nutrition-value">{recipe.nutrition.calories}</span>
+                  <span class="nutrition-label">Calories</span>
+                </div>
+              {/if}
+              {#if recipe.nutrition.protein !== undefined}
+                <div class="nutrition-item">
+                  <span class="nutrition-value">{recipe.nutrition.protein}g</span>
+                  <span class="nutrition-label">Protein</span>
+                </div>
+              {/if}
+              {#if recipe.nutrition.carbohydrates !== undefined}
+                <div class="nutrition-item">
+                  <span class="nutrition-value">{recipe.nutrition.carbohydrates}g</span>
+                  <span class="nutrition-label">Carbs</span>
+                </div>
+              {/if}
+              {#if recipe.nutrition.fat !== undefined}
+                <div class="nutrition-item">
+                  <span class="nutrition-value">{recipe.nutrition.fat}g</span>
+                  <span class="nutrition-label">Fat</span>
+                </div>
+              {/if}
+              {#if recipe.nutrition.saturatedFat !== undefined}
+                <div class="nutrition-item">
+                  <span class="nutrition-value">{recipe.nutrition.saturatedFat}g</span>
+                  <span class="nutrition-label">Sat. Fat</span>
+                </div>
+              {/if}
+              {#if recipe.nutrition.fiber !== undefined}
+                <div class="nutrition-item">
+                  <span class="nutrition-value">{recipe.nutrition.fiber}g</span>
+                  <span class="nutrition-label">Fiber</span>
+                </div>
+              {/if}
+              {#if recipe.nutrition.sugar !== undefined}
+                <div class="nutrition-item">
+                  <span class="nutrition-value">{recipe.nutrition.sugar}g</span>
+                  <span class="nutrition-label">Sugar</span>
+                </div>
+              {/if}
+              {#if recipe.nutrition.sodium !== undefined}
+                <div class="nutrition-item">
+                  <span class="nutrition-value">{recipe.nutrition.sodium}mg</span>
+                  <span class="nutrition-label">Sodium</span>
+                </div>
+              {/if}
+              {#if recipe.nutrition.cholesterol !== undefined}
+                <div class="nutrition-item">
+                  <span class="nutrition-value">{recipe.nutrition.cholesterol}mg</span>
+                  <span class="nutrition-label">Cholesterol</span>
+                </div>
+              {/if}
+            </div>
+          </section>
         {/if}
 
         <!-- Recipe Scaling -->
@@ -975,6 +1149,75 @@
   .stats p {
     margin: var(--spacing-1) 0;
     font-size: var(--text-sm);
+  }
+
+  /* Nutrition section styles */
+  .nutrition-section {
+    margin-bottom: var(--spacing-8);
+  }
+
+  .nutrition-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: var(--spacing-3);
+    padding: var(--spacing-4);
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border-light);
+  }
+
+  .nutrition-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--spacing-3);
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    text-align: center;
+  }
+
+  .nutrition-value {
+    font-size: var(--text-xl);
+    font-weight: var(--font-bold);
+    color: var(--color-primary);
+    line-height: 1.2;
+  }
+
+  .nutrition-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: var(--spacing-1);
+  }
+
+  .nutrition-note {
+    font-size: var(--text-sm);
+    color: var(--color-text-light);
+    margin-bottom: var(--spacing-3);
+    font-style: italic;
+  }
+
+  .nutrition-item.aggregated {
+    background: rgba(255, 107, 53, 0.05);
+    border: 1px solid rgba(255, 107, 53, 0.2);
+  }
+
+  /* Components section styles */
+  .components-section {
+    margin-bottom: var(--spacing-8);
+  }
+
+  .components-description {
+    font-size: var(--text-sm);
+    color: var(--color-text-light);
+    margin-bottom: var(--spacing-4);
+  }
+
+  .components-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
   }
 
   /* Icon styling for buttons */

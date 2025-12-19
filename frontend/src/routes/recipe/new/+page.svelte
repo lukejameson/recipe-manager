@@ -5,7 +5,19 @@
   import RecipeForm from '$lib/components/RecipeForm.svelte';
 
   async function handleSubmit(data: any) {
-    await trpc.recipe.create.mutate(data);
+    const { components, ...recipeData } = data;
+
+    // Create the recipe
+    const newRecipe = await trpc.recipe.create.mutate(recipeData);
+
+    // Set components if any
+    if (components && components.length > 0) {
+      await trpc.recipe.setComponents.mutate({
+        recipeId: newRecipe.id,
+        components,
+      });
+    }
+
     goto('/');
   }
 

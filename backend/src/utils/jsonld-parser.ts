@@ -77,6 +77,96 @@ function extractImageUrl(image: any): string | undefined {
 }
 
 /**
+ * Parse nutrition value from various formats (e.g., "200 calories", "15 g", "100mg")
+ */
+function parseNutritionValue(value: any): number | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  // Handle NutritionInformation objects
+  if (typeof value === 'object' && value['@type'] === 'NutritionInformation') {
+    return undefined; // This is the parent object, not a value
+  }
+
+  const text = extractText(value);
+  if (!text) return undefined;
+
+  // Extract numeric value from strings like "200 calories", "15 g", "100mg"
+  const match = text.match(/^([\d.]+)/);
+  if (match) {
+    const num = parseFloat(match[1]);
+    return isNaN(num) ? undefined : num;
+  }
+
+  return undefined;
+}
+
+/**
+ * Parse nutrition information from Schema.org NutritionInformation
+ */
+function parseNutrition(recipeData: any): {
+  calories?: number;
+  protein?: number;
+  carbohydrates?: number;
+  fat?: number;
+  saturatedFat?: number;
+  fiber?: number;
+  sugar?: number;
+  sodium?: number;
+  cholesterol?: number;
+} | undefined {
+  const nutrition = recipeData.nutrition;
+  if (!nutrition) return undefined;
+
+  // Handle if nutrition is a string (sometimes it's just a description)
+  if (typeof nutrition === 'string') return undefined;
+
+  const result: {
+    calories?: number;
+    protein?: number;
+    carbohydrates?: number;
+    fat?: number;
+    saturatedFat?: number;
+    fiber?: number;
+    sugar?: number;
+    sodium?: number;
+    cholesterol?: number;
+  } = {};
+
+  // Parse each nutrition field
+  const calories = parseNutritionValue(nutrition.calories);
+  if (calories !== undefined) result.calories = calories;
+
+  const protein = parseNutritionValue(nutrition.proteinContent);
+  if (protein !== undefined) result.protein = protein;
+
+  const carbs = parseNutritionValue(nutrition.carbohydrateContent);
+  if (carbs !== undefined) result.carbohydrates = carbs;
+
+  const fat = parseNutritionValue(nutrition.fatContent);
+  if (fat !== undefined) result.fat = fat;
+
+  const saturatedFat = parseNutritionValue(nutrition.saturatedFatContent);
+  if (saturatedFat !== undefined) result.saturatedFat = saturatedFat;
+
+  const fiber = parseNutritionValue(nutrition.fiberContent);
+  if (fiber !== undefined) result.fiber = fiber;
+
+  const sugar = parseNutritionValue(nutrition.sugarContent);
+  if (sugar !== undefined) result.sugar = sugar;
+
+  const sodium = parseNutritionValue(nutrition.sodiumContent);
+  if (sodium !== undefined) result.sodium = sodium;
+
+  const cholesterol = parseNutritionValue(nutrition.cholesterolContent);
+  if (cholesterol !== undefined) result.cholesterol = cholesterol;
+
+  // Return undefined if no nutrition values were found
+  if (Object.keys(result).length === 0) return undefined;
+
+  return result;
+}
+
+/**
  * Parse Schema.org/Recipe JSONLD and convert to RecipeInput format
  */
 export function parseRecipeJsonLd(jsonldString: string): {
@@ -91,6 +181,17 @@ export function parseRecipeJsonLd(jsonldString: string): {
   imageUrl?: string;
   sourceUrl?: string;
   tags: string[];
+  nutrition?: {
+    calories?: number;
+    protein?: number;
+    carbohydrates?: number;
+    fat?: number;
+    saturatedFat?: number;
+    fiber?: number;
+    sugar?: number;
+    sodium?: number;
+    cholesterol?: number;
+  };
 } {
   try {
     const data = JSON.parse(jsonldString);
@@ -166,6 +267,9 @@ export function parseRecipeJsonLd(jsonldString: string): {
       }
     }
 
+    // Parse nutrition information
+    const nutrition = parseNutrition(recipeData);
+
     return {
       title,
       description,
@@ -178,6 +282,7 @@ export function parseRecipeJsonLd(jsonldString: string): {
       imageUrl,
       sourceUrl,
       tags: [...new Set(tags)], // Remove duplicates
+      nutrition,
     };
   } catch (error) {
     if (error instanceof Error) {
