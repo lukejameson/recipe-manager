@@ -123,7 +123,8 @@
     <div class="header">
       <h2>My Recipes</h2>
       <a href="/recipe/new" class="btn-primary mobile-fab">
-        <span class="btn-text">New</span>
+        <span class="icon">➕</span>
+        <span>New Recipe</span>
       </a>
     </div>
 
