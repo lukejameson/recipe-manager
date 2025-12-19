@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
-import { tags, recipeTags } from '../../db/schema.js';
+import { tags, recipeTags, recipes } from '../../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
 
 const t = initTRPC.context<Context>().create();
@@ -25,6 +25,79 @@ const isAuthenticated = t.middleware(async ({ ctx, next }) => {
 const protectedProcedure = t.procedure.use(isAuthenticated);
 
 export const tagRouter = t.router({
+  /**
+   * List tags with 2+ recipes as auto-collections
+   */
+  listAsCollections: protectedProcedure
+    .input(
+      z.object({
+        minRecipes: z.number().min(1).default(2),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      const minRecipes = input?.minRecipes ?? 2;
+
+      const tagsWithCounts = await db
+        .select({
+          id: tags.id,
+          name: tags.name,
+          createdAt: tags.createdAt,
+          recipeCount: sql<number>`count(${recipeTags.recipeId})`.as('recipe_count'),
+        })
+        .from(tags)
+        .leftJoin(recipeTags, eq(tags.id, recipeTags.tagId))
+        .groupBy(tags.id)
+        .having(sql`count(${recipeTags.recipeId}) >= ${minRecipes}`)
+        .orderBy(sql`count(${recipeTags.recipeId}) DESC`);
+
+      return tagsWithCounts.map(tag => ({
+        id: `tag:${tag.id}`,
+        tagId: tag.id,
+        name: tag.name,
+        description: `Auto-collection for recipes tagged "${tag.name}"`,
+        recipeCount: tag.recipeCount,
+        isAutoCollection: true,
+        createdAt: tag.createdAt,
+      }));
+    }),
+
+  /**
+   * Get recipes for a specific tag (for auto-collection view)
+   */
+  getRecipes: protectedProcedure
+    .input(z.object({ tagId: z.string() }))
+    .query(async ({ input }) => {
+      const [tag] = await db
+        .select()
+        .from(tags)
+        .where(eq(tags.id, input.tagId))
+        .limit(1);
+
+      if (!tag) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tag not found',
+        });
+      }
+
+      const tagRecipes = await db
+        .select({
+          recipe: recipes,
+        })
+        .from(recipeTags)
+        .innerJoin(recipes, eq(recipeTags.recipeId, recipes.id))
+        .where(eq(recipeTags.tagId, input.tagId));
+
+      return {
+        id: `tag:${tag.id}`,
+        tagId: tag.id,
+        name: tag.name,
+        description: `Auto-collection for recipes tagged "${tag.name}"`,
+        isAutoCollection: true,
+        recipes: tagRecipes.map(tr => tr.recipe),
+      };
+    }),
+
   /**
    * List all tags with recipe counts
    */

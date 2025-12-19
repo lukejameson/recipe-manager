@@ -5,6 +5,7 @@
   import Header from '$lib/components/Header.svelte';
 
   let collections = $state<any[]>([]);
+  let autoCollections = $state<any[]>([]);
   let loading = $state(true);
   let error = $state('');
   let showCreateForm = $state(false);
@@ -22,7 +23,12 @@
     loading = true;
     error = '';
     try {
-      collections = await trpc.collection.list.query();
+      const [userCollections, tagCollections] = await Promise.all([
+        trpc.collection.list.query(),
+        trpc.tag.listAsCollections.query(),
+      ]);
+      collections = userCollections;
+      autoCollections = tagCollections;
     } catch (err: any) {
       error = err.message || 'Failed to load collections';
     } finally {
@@ -86,8 +92,14 @@
     }
   }
 
-  function viewCollection(id: string) {
-    goto(`/collections/${id}`);
+  function viewCollection(id: string, isAutoCollection = false) {
+    if (isAutoCollection) {
+      // Extract tagId from the id format "tag:uuid"
+      const tagId = id.replace('tag:', '');
+      goto(`/collections/tag/${tagId}`);
+    } else {
+      goto(`/collections/${id}`);
+    }
   }
 </script>
 
@@ -148,54 +160,105 @@
         </div>
       {/if}
 
-      {#if collections.length === 0}
+      {#if collections.length === 0 && autoCollections.length === 0}
         <div class="empty-state">
-          <p>📚 No collections yet</p>
-          <p class="empty-subtitle">Create collections to organize your recipes</p>
+          <p>No collections yet</p>
+          <p class="empty-subtitle">Create collections to organize your recipes, or add tags to recipes to auto-generate collections</p>
           <button onclick={startCreate} class="btn-create-large">
             Create Your First Collection
           </button>
         </div>
       {:else}
-        <div class="collections-grid">
-          {#each collections as collection}
-            <div class="collection-card">
-              <div class="collection-header">
-                <h3>{collection.name}</h3>
-                <div class="recipe-count">
-                  {collection.recipeCount} {collection.recipeCount === 1 ? 'recipe' : 'recipes'}
+        {#if collections.length > 0}
+          <div class="section">
+            <h2 class="section-title">My Collections</h2>
+            <div class="collections-grid">
+              {#each collections as collection}
+                <div class="collection-card">
+                  <div class="collection-header">
+                    <h3>{collection.name}</h3>
+                    <div class="recipe-count">
+                      {collection.recipeCount} {collection.recipeCount === 1 ? 'recipe' : 'recipes'}
+                    </div>
+                  </div>
+
+                  <div class="description-wrapper">
+                    {#if collection.description}
+                      <p class="description">{collection.description}</p>
+                    {/if}
+                  </div>
+
+                  <div class="collection-actions">
+                    <button
+                      onclick={() => viewCollection(collection.id)}
+                      class="btn-view"
+                    >
+                      View Collection
+                    </button>
+                    <button
+                      onclick={() => startEdit(collection)}
+                      class="btn-icon"
+                      title="Edit"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onclick={() => handleDelete(collection.id, collection.name)}
+                      class="btn-icon"
+                      title="Delete"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
-              </div>
-
-              {#if collection.description}
-                <p class="description">{collection.description}</p>
-              {/if}
-
-              <div class="collection-actions">
-                <button
-                  onclick={() => viewCollection(collection.id)}
-                  class="btn-view"
-                >
-                  View Collection →
-                </button>
-                <button
-                  onclick={() => startEdit(collection)}
-                  class="btn-icon"
-                  title="Edit"
-                >
-                  ✏️
-                </button>
-                <button
-                  onclick={() => handleDelete(collection.id, collection.name)}
-                  class="btn-icon"
-                  title="Delete"
-                >
-                  🗑️
-                </button>
-              </div>
+              {/each}
             </div>
-          {/each}
-        </div>
+          </div>
+        {/if}
+
+        {#if autoCollections.length > 0}
+          <div class="section">
+            <h2 class="section-title">
+              <span class="auto-badge">Auto</span>
+              Tag Collections
+            </h2>
+            <p class="section-subtitle">Automatically created from recipe tags with 2+ recipes</p>
+            <div class="collections-grid">
+              {#each autoCollections as collection}
+                <div class="collection-card auto-collection">
+                  <div class="collection-header">
+                    <h3>{collection.name}</h3>
+                    <div class="recipe-count">
+                      {collection.recipeCount} {collection.recipeCount === 1 ? 'recipe' : 'recipes'}
+                    </div>
+                  </div>
+
+                  <div class="description-wrapper">
+                    <p class="description">{collection.description}</p>
+                  </div>
+
+                  <div class="collection-actions">
+                    <button
+                      onclick={() => viewCollection(collection.id, true)}
+                      class="btn-view"
+                    >
+                      View Collection
+                    </button>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        {#if collections.length === 0}
+          <div class="empty-inline">
+            <p>No custom collections yet.</p>
+            <button onclick={startCreate} class="btn-create-inline">
+              + Create Collection
+            </button>
+          </div>
+        {/if}
       {/if}
     {/if}
   </div>
@@ -307,6 +370,7 @@
     border-radius: var(--radius-md);
     font-family: inherit;
     font-size: 1rem;
+    box-sizing: border-box;
   }
 
   .form-group input:focus,
@@ -385,6 +449,8 @@
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
   }
 
   .collection-card:hover {
@@ -417,16 +483,21 @@
     margin-left: 0.5rem;
   }
 
+  .description-wrapper {
+    flex: 1;
+  }
+
   .description {
     color: var(--color-text-light);
     line-height: 1.5;
-    margin-bottom: 1rem;
+    margin: 0;
   }
 
   .collection-actions {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    margin-top: auto;
   }
 
   .btn-view {
@@ -451,6 +522,65 @@
 
   .btn-icon:hover {
     background: var(--color-border);
+  }
+
+  .section {
+    margin-bottom: 2.5rem;
+  }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.5rem;
+    font-size: 1.25rem;
+    color: var(--color-text);
+  }
+
+  .section-subtitle {
+    margin: 0 0 1rem;
+    color: var(--color-text-light);
+    font-size: 0.875rem;
+  }
+
+  .auto-badge {
+    background: var(--color-primary);
+    color: white;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .auto-collection {
+    border-left: 3px solid var(--color-primary);
+  }
+
+  .empty-inline {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-md);
+    margin-top: 1.5rem;
+  }
+
+  .empty-inline p {
+    margin: 0;
+    color: var(--color-text-light);
+  }
+
+  .btn-create-inline {
+    padding: 0.5rem 1rem;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
   }
 
   @media (max-width: 640px) {
