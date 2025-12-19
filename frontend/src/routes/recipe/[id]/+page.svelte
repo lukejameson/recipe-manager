@@ -25,6 +25,46 @@
   let components = $state<any[]>([]);
   let aggregatedNutrition = $state<any>(null);
 
+  // AI nutrition calculation
+  let calculatingNutrition = $state(false);
+  let nutritionError = $state('');
+
+  async function handleCalculateNutrition() {
+    if (!recipe) return;
+
+    calculatingNutrition = true;
+    nutritionError = '';
+
+    try {
+      const nutrition = await trpc.ai.calculateNutrition.mutate({
+        ingredients: recipe.ingredients,
+        servings: recipe.servings || 1,
+        title: recipe.title,
+      });
+
+      // Round all nutrition values to nearest whole number
+      const roundedNutrition: Record<string, number> = {};
+      for (const [key, value] of Object.entries(nutrition)) {
+        if (value != null) {
+          roundedNutrition[key] = Math.round(value);
+        }
+      }
+
+      // Update the recipe with the new nutrition
+      await trpc.recipe.update.mutate({
+        id: recipe.id,
+        data: { nutrition: roundedNutrition },
+      });
+
+      // Reload to show new nutrition
+      await loadRecipe();
+    } catch (err: any) {
+      nutritionError = err.message || 'Failed to calculate nutrition';
+    } finally {
+      calculatingNutrition = false;
+    }
+  }
+
   async function requestWakeLock() {
     if ('wakeLock' in navigator) {
       try {
@@ -507,6 +547,28 @@
                 </div>
               {/if}
             </div>
+          </section>
+        {:else}
+          <!-- No nutrition data - show AI calculate option -->
+          <section class="nutrition-section no-nutrition">
+            <h2>Nutrition</h2>
+            <p class="no-nutrition-text">No nutrition information available.</p>
+            <button
+              class="btn-ai-calculate"
+              onclick={handleCalculateNutrition}
+              disabled={calculatingNutrition}
+            >
+              {#if calculatingNutrition}
+                <span class="spinner"></span>
+                Calculating...
+              {:else}
+                <span class="ai-icon">AI</span>
+                Calculate with AI
+              {/if}
+            </button>
+            {#if nutritionError}
+              <p class="nutrition-error">{nutritionError}</p>
+            {/if}
           </section>
         {/if}
 
@@ -1201,6 +1263,73 @@
   .nutrition-item.aggregated {
     background: rgba(255, 107, 53, 0.05);
     border: 1px solid rgba(255, 107, 53, 0.2);
+  }
+
+  .no-nutrition {
+    text-align: center;
+    padding: var(--spacing-6);
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-lg);
+  }
+
+  .no-nutrition-text {
+    color: var(--color-text-light);
+    margin-bottom: var(--spacing-4);
+  }
+
+  .btn-ai-calculate {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-3) var(--spacing-5);
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+    border-radius: var(--radius-lg);
+    font-weight: var(--font-semibold);
+    font-size: var(--text-base);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-ai-calculate:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .btn-ai-calculate:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .ai-icon {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: var(--font-bold);
+  }
+
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .nutrition-error {
+    color: var(--color-error);
+    font-size: var(--text-sm);
+    margin-top: var(--spacing-3);
   }
 
   /* Components section styles */

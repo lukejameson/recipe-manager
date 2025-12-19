@@ -125,6 +125,16 @@ export const shoppingListItems = sqliteTable('shopping_list_items', {
     .default(sql`(unixepoch())`),
 });
 
+// App settings (single-row table for configuration)
+export const settings = sqliteTable('settings', {
+  id: text('id').primaryKey().default('app-settings'),
+  anthropicApiKey: text('anthropic_api_key'), // Encrypted
+  anthropicModel: text('anthropic_model').default('claude-3-5-sonnet-20241022'),
+  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
 // Type exports for use in application
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -149,3 +159,6 @@ export type InsertShoppingListItem = typeof shoppingListItems.$inferInsert;
 
 export type RecipeComponent = typeof recipeComponents.$inferSelect;
 export type InsertRecipeComponent = typeof recipeComponents.$inferInsert;
+
+export type Settings = typeof settings.$inferSelect;
+export type InsertSettings = typeof settings.$inferInsert;

@@ -5,6 +5,8 @@ import { recipeRouter } from './routers/recipe.js';
 import { tagRouter } from './routers/tag.js';
 import { collectionRouter } from './routers/collection.js';
 import { shoppingListRouter } from './routers/shopping-list.js';
+import { settingsRouter } from './routers/settings.js';
+import { aiRouter } from './routers/ai.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -17,6 +19,8 @@ export const appRouter = t.router({
   tag: tagRouter,
   collection: collectionRouter,
   shoppingList: shoppingListRouter,
+  settings: settingsRouter,
+  ai: aiRouter,
 });
 
 export type AppRouter = typeof appRouter;

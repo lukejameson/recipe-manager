@@ -87,6 +87,52 @@
   let sodium = $state(recipe?.nutrition?.sodium || '');
   let cholesterol = $state(recipe?.nutrition?.cholesterol || '');
 
+  // AI nutrition calculation
+  let calculatingNutrition = $state(false);
+  let nutritionError = $state('');
+
+  async function handleCalculateNutrition() {
+    const ingredientList = ingredients
+      .split('\n')
+      .map((i) => i.trim())
+      .filter(Boolean);
+
+    if (ingredientList.length === 0) {
+      nutritionError = 'Please add ingredients first';
+      return;
+    }
+
+    const servingsNum = parseInt(servings) || 1;
+
+    calculatingNutrition = true;
+    nutritionError = '';
+
+    try {
+      const nutrition = await trpc.ai.calculateNutrition.mutate({
+        ingredients: ingredientList,
+        servings: servingsNum,
+        title: title.trim() || undefined,
+      });
+
+      // Fill in the nutrition fields (rounded to nearest whole number)
+      calories = nutrition.calories != null ? Math.round(nutrition.calories).toString() : '';
+      protein = nutrition.protein != null ? Math.round(nutrition.protein).toString() : '';
+      carbohydrates = nutrition.carbohydrates != null ? Math.round(nutrition.carbohydrates).toString() : '';
+      fat = nutrition.fat != null ? Math.round(nutrition.fat).toString() : '';
+      saturatedFat = nutrition.saturatedFat != null ? Math.round(nutrition.saturatedFat).toString() : '';
+      fiber = nutrition.fiber != null ? Math.round(nutrition.fiber).toString() : '';
+      sugar = nutrition.sugar != null ? Math.round(nutrition.sugar).toString() : '';
+      sodium = nutrition.sodium != null ? Math.round(nutrition.sodium).toString() : '';
+      cholesterol = nutrition.cholesterol != null ? Math.round(nutrition.cholesterol).toString() : '';
+
+      showNutrition = true;
+    } catch (err: any) {
+      nutritionError = err.message || 'Failed to calculate nutrition';
+    } finally {
+      calculatingNutrition = false;
+    }
+  }
+
   // Sync form fields when recipe prop changes (for JSON-LD update feature)
   $effect(() => {
     // Access recipe to track it
@@ -297,6 +343,26 @@
 
     {#if showNutrition}
       <div class="nutrition-fields">
+        <div class="ai-calculate-section">
+          <button
+            type="button"
+            class="btn-ai-calculate"
+            onclick={handleCalculateNutrition}
+            disabled={calculatingNutrition}
+          >
+            {#if calculatingNutrition}
+              <span class="spinner"></span>
+              Calculating...
+            {:else}
+              <span class="ai-icon">AI</span>
+              Calculate with AI
+            {/if}
+          </button>
+          {#if nutritionError}
+            <span class="nutrition-error">{nutritionError}</span>
+          {/if}
+        </div>
+
         <div class="nutrition-row">
           <div class="form-group">
             <label for="calories">Calories (kcal)</label>
@@ -570,6 +636,69 @@
   .nutrition-fields {
     padding: var(--spacing-4);
     background: var(--color-surface);
+  }
+
+  .ai-calculate-section {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-4);
+    margin-bottom: var(--spacing-4);
+    padding-bottom: var(--spacing-4);
+    border-bottom: 1px solid var(--color-border-light);
+  }
+
+  .btn-ai-calculate {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-4);
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+    border-radius: var(--radius-lg);
+    font-weight: var(--font-semibold);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-ai-calculate:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-ai-calculate:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .ai-icon {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
+    font-weight: var(--font-bold);
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .nutrition-error {
+    color: var(--color-error);
+    font-size: var(--text-sm);
   }
 
   .nutrition-row {

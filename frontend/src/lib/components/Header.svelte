@@ -65,6 +65,10 @@
           <span class="icon">🛒</span>
           <span class="label">Shopping List</span>
         </a>
+        <a href="/settings" class:active={$page.url.pathname === '/settings'} onclick={closeMobileMenu}>
+          <span class="icon">⚙️</span>
+          <span class="label">Settings</span>
+        </a>
         <button onclick={() => { authStore.logout(); closeMobileMenu(); }} class="logout-btn">
           <span class="icon">🚪</span>
           <span class="label">Logout</span>
