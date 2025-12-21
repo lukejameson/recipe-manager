@@ -8,6 +8,11 @@
   import RecipeComponentView from '$lib/components/RecipeComponentView.svelte';
   import { formatTime, formatServings } from '$lib/utils/format';
   import { scaleRecipe } from '$lib/utils/recipe-scaling';
+  import AIButton from '$lib/components/ai/AIButton.svelte';
+  import SubstitutionModal from '$lib/components/ai/SubstitutionModal.svelte';
+  import ImprovementModal from '$lib/components/ai/ImprovementModal.svelte';
+  import AdaptRecipeModal from '$lib/components/ai/AdaptRecipeModal.svelte';
+  import TechniqueTooltip from '$lib/components/ai/TechniqueTooltip.svelte';
 
   let recipe = $state<any>(null);
   let loading = $state(true);
@@ -28,6 +33,15 @@
   // AI nutrition calculation
   let calculatingNutrition = $state(false);
   let nutritionError = $state('');
+
+  // AI features state
+  let showSubstitutionModal = $state(false);
+  let selectedIngredient = $state('');
+  let showImprovementModal = $state(false);
+  let showAdaptModal = $state(false);
+  let showTechniqueTooltip = $state(false);
+  let selectedTechnique = $state<{ term: string; definition: string; steps?: string[]; tips?: string[] } | null>(null);
+  let loadingTechnique = $state(false);
 
   async function handleCalculateNutrition() {
     if (!recipe) return;
@@ -260,6 +274,64 @@
       alert('Failed to copy to clipboard');
     }
   }
+
+  // AI feature handlers
+  function openSubstitutionModal(ingredient: string) {
+    selectedIngredient = ingredient;
+    showSubstitutionModal = true;
+  }
+
+  async function handleExplainTechnique(term: string, context?: string) {
+    loadingTechnique = true;
+    try {
+      const result = await trpc.ai.explainTechnique.mutate({ term, context });
+      selectedTechnique = result;
+      showTechniqueTooltip = true;
+    } catch (err: any) {
+      alert('Failed to explain technique: ' + err.message);
+    } finally {
+      loadingTechnique = false;
+    }
+  }
+
+  async function handleSaveAdaptedAsCopy(adapted: any) {
+    try {
+      const newRecipe = await trpc.recipe.create.mutate({
+        title: adapted.title,
+        description: recipe.description,
+        ingredients: adapted.ingredients,
+        instructions: adapted.instructions,
+        prepTime: recipe.prepTime,
+        cookTime: recipe.cookTime,
+        totalTime: recipe.totalTime,
+        servings: recipe.servings,
+        imageUrl: recipe.imageUrl,
+        sourceUrl: recipe.sourceUrl,
+        tags: recipe.tags?.map((t: any) => t.name) || [],
+      });
+      showAdaptModal = false;
+      goto(`/recipe/${newRecipe.id}`);
+    } catch (err: any) {
+      alert('Failed to save adapted recipe: ' + err.message);
+    }
+  }
+
+  async function handleUpdateWithAdapted(adapted: any) {
+    try {
+      await trpc.recipe.update.mutate({
+        id: recipe.id,
+        data: {
+          title: adapted.title,
+          ingredients: adapted.ingredients,
+          instructions: adapted.instructions,
+        },
+      });
+      showAdaptModal = false;
+      await loadRecipe();
+    } catch (err: any) {
+      alert('Failed to update recipe: ' + err.message);
+    }
+  }
 </script>
 
 <Header />
@@ -296,6 +368,22 @@
             <span>{copied ? 'Copied!' : 'Export'}</span>
           </button>
         </div>
+      </div>
+
+      <!-- AI Actions (subtle, secondary row) -->
+      <div class="ai-actions">
+        <AIButton
+          onclick={() => showImprovementModal = true}
+          label="Improve"
+          size="sm"
+          variant="subtle"
+        />
+        <AIButton
+          onclick={() => showAdaptModal = true}
+          label="Adapt"
+          size="sm"
+          variant="subtle"
+        />
       </div>
 
       {#if cookingMode}
@@ -385,8 +473,17 @@
         <section class="ingredients">
           <h2>Ingredients</h2>
           <ul>
-            {#each scaledIngredients as ingredient}
-              <li>{ingredient}</li>
+            {#each scaledIngredients as ingredient, i}
+              <li class="ingredient-item">
+                <span class="ingredient-text">{ingredient}</span>
+                <button
+                  class="btn-substitute"
+                  onclick={() => openSubstitutionModal(recipe.ingredients[i])}
+                  title="Find substitutes"
+                >
+                  <span class="sub-icon">↔</span>
+                </button>
+              </li>
             {/each}
           </ul>
         </section>
@@ -660,6 +757,50 @@
   </div>
 </main>
 
+<!-- AI Feature Modals -->
+{#if showSubstitutionModal && selectedIngredient}
+  <SubstitutionModal
+    ingredient={selectedIngredient}
+    recipeTitle={recipe?.title}
+    onClose={() => showSubstitutionModal = false}
+  />
+{/if}
+
+{#if showImprovementModal && recipe}
+  <ImprovementModal
+    recipe={{
+      title: recipe.title,
+      description: recipe.description,
+      ingredients: recipe.ingredients,
+      instructions: recipe.instructions,
+      prepTime: recipe.prepTime,
+      cookTime: recipe.cookTime,
+    }}
+    onClose={() => showImprovementModal = false}
+  />
+{/if}
+
+{#if showAdaptModal && recipe}
+  <AdaptRecipeModal
+    recipe={{
+      id: recipe.id,
+      title: recipe.title,
+      ingredients: recipe.ingredients,
+      instructions: recipe.instructions,
+    }}
+    onClose={() => showAdaptModal = false}
+    onSaveAsCopy={handleSaveAdaptedAsCopy}
+    onUpdateOriginal={handleUpdateWithAdapted}
+  />
+{/if}
+
+{#if showTechniqueTooltip && selectedTechnique}
+  <TechniqueTooltip
+    explanation={selectedTechnique}
+    onClose={() => { showTechniqueTooltip = false; selectedTechnique = null; }}
+  />
+{/if}
+
 <style>
   main {
     flex: 1;
@@ -700,7 +841,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-8);
+    margin-bottom: var(--spacing-4);
     flex-wrap: wrap;
     gap: var(--spacing-4);
   }
@@ -708,6 +849,12 @@
   .actions {
     display: flex;
     gap: var(--spacing-3);
+  }
+
+  .ai-actions {
+    display: flex;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-6);
   }
 
   .btn-edit,
@@ -867,6 +1014,42 @@
     line-height: var(--leading-relaxed);
     font-size: var(--text-base);
     color: var(--color-text-secondary);
+  }
+
+  .ingredient-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+  }
+
+  .ingredient-text {
+    flex: 1;
+  }
+
+  .btn-substitute {
+    opacity: 0;
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.125rem 0.375rem;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    color: var(--color-text-light);
+    font-size: var(--text-xs);
+  }
+
+  .ingredient-item:hover .btn-substitute {
+    opacity: 1;
+  }
+
+  .btn-substitute:hover {
+    background: var(--color-bg-subtle);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .sub-icon {
+    font-size: 0.75rem;
   }
 
   .instructions li {
@@ -1449,6 +1632,10 @@
     .instructions li {
       font-size: var(--text-sm);
       margin-bottom: var(--spacing-2);
+    }
+
+    .btn-substitute {
+      opacity: 0.6;
     }
 
     .scaling-section,

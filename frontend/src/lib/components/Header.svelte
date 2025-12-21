@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { authStore } from '$lib/stores/auth.svelte';
   import { page } from '$app/stores';
+  import { authStore } from '$lib/stores/auth.svelte';
 
-  let { } = $props();
+  let {} = $props();
   let mobileMenuOpen = $state(false);
 
   function toggleMobileMenu() {
@@ -18,21 +18,32 @@
   <div class="container">
     <h1>
       <a href="/" onclick={closeMobileMenu}>
-        <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-          <rect width="32" height="32" rx="6" fill="#ff6b35"/>
-          <path d="M16 6c-4.4 0-8 3.6-8 8v6c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-6c0-4.4-3.6-8-8-8z" fill="#fff"/>
-          <ellipse cx="16" cy="8" rx="6" ry="2" fill="#fff"/>
-          <circle cx="12" cy="13" r="1.5" fill="#ff6b35"/>
-          <circle cx="16" cy="15" r="1.5" fill="#ff6b35"/>
-          <circle cx="20" cy="13" r="1.5" fill="#ff6b35"/>
-          <path d="M10 24h12v2H10z" fill="#fff"/>
+        <svg
+          class="logo"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 32 32"
+        >
+          <rect width="32" height="32" rx="6" fill="#ff6b35" />
+          <path
+            d="M16 6c-4.4 0-8 3.6-8 8v6c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-6c0-4.4-3.6-8-8-8z"
+            fill="#fff"
+          />
+          <ellipse cx="16" cy="8" rx="6" ry="2" fill="#fff" />
+          <circle cx="12" cy="13" r="1.5" fill="#ff6b35" />
+          <circle cx="16" cy="15" r="1.5" fill="#ff6b35" />
+          <circle cx="20" cy="13" r="1.5" fill="#ff6b35" />
+          <path d="M10 24h12v2H10z" fill="#fff" />
         </svg>
         Recipe Manager
       </a>
     </h1>
 
     {#if authStore.isAuthenticated}
-      <button class="mobile-menu-btn" onclick={toggleMobileMenu} aria-label="Toggle menu">
+      <button
+        class="mobile-menu-btn"
+        onclick={toggleMobileMenu}
+        aria-label="Toggle menu"
+      >
         <span class="hamburger" class:open={mobileMenuOpen}>
           <span></span>
           <span></span>
@@ -41,35 +52,63 @@
       </button>
 
       <nav class:mobile-open={mobileMenuOpen}>
-        <a href="/" class:active={$page.url.pathname === '/'} onclick={closeMobileMenu}>
+        <a
+          href="/"
+          class:active={$page.url.pathname === '/'}
+          onclick={closeMobileMenu}
+        >
           <span class="icon">📋</span>
           <span class="label">Recipes</span>
         </a>
-        <a href="/recipe/new" class:active={$page.url.pathname === '/recipe/new'} onclick={closeMobileMenu}>
-          <span class="icon">➕</span>
-          <span class="label">New Recipe</span>
-        </a>
-        <a href="/recipe/import" class:active={$page.url.pathname === '/recipe/import'} onclick={closeMobileMenu}>
+        <a
+          href="/recipe/import"
+          class:active={$page.url.pathname === '/recipe/import'}
+          onclick={closeMobileMenu}
+        >
           <span class="icon">📥</span>
           <span class="label">Import</span>
         </a>
-        <a href="/tags" class:active={$page.url.pathname === '/tags'} onclick={closeMobileMenu}>
+        <a
+          href="/tags"
+          class:active={$page.url.pathname === '/tags'}
+          onclick={closeMobileMenu}
+        >
           <span class="icon">🏷️</span>
           <span class="label">Tags</span>
         </a>
-        <a href="/collections" class:active={$page.url.pathname.startsWith('/collections')} onclick={closeMobileMenu}>
+        <a
+          href="/collections"
+          class:active={$page.url.pathname.startsWith('/collections')}
+          onclick={closeMobileMenu}
+        >
           <span class="icon">📁</span>
           <span class="label">Collections</span>
         </a>
-        <a href="/shopping-list" class:active={$page.url.pathname === '/shopping-list'} onclick={closeMobileMenu}>
-          <span class="icon">🛒</span>
-          <span class="label">Shopping List</span>
+        <a
+          href="/pantry-match"
+          class:active={$page.url.pathname === '/pantry-match'}
+          onclick={closeMobileMenu}
+          class="ai-link"
+        >
+          <span class="icon">🥘</span>
+          <span class="label">What Can I Make?</span>
+          <span class="ai-tag">AI</span>
         </a>
-        <a href="/settings" class:active={$page.url.pathname === '/settings'} onclick={closeMobileMenu}>
+        <a
+          href="/settings"
+          class:active={$page.url.pathname === '/settings'}
+          onclick={closeMobileMenu}
+        >
           <span class="icon">⚙️</span>
           <span class="label">Settings</span>
         </a>
-        <button onclick={() => { authStore.logout(); closeMobileMenu(); }} class="logout-btn">
+        <button
+          onclick={() => {
+            authStore.logout();
+            closeMobileMenu();
+          }}
+          class="logout-btn"
+        >
           <span class="icon">🚪</span>
           <span class="label">Logout</span>
         </button>
@@ -321,5 +360,31 @@
   .icon {
     font-style: normal;
     line-height: 1;
+  }
+
+  /* AI tag for AI-powered features */
+  .ai-tag {
+    background: var(--color-border);
+    color: var(--color-text-light);
+    padding: 0.0625rem 0.25rem;
+    border-radius: var(--radius-xs);
+    font-size: 0.5rem;
+    font-weight: 700;
+    letter-spacing: 0.025em;
+    margin-left: var(--spacing-1);
+    vertical-align: middle;
+  }
+
+  .ai-link:hover .ai-tag,
+  .ai-link.active .ai-tag {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  @media (max-width: 640px) {
+    .ai-tag {
+      font-size: 0.625rem;
+      padding: 0.125rem 0.375rem;
+    }
   }
 </style>

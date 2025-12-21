@@ -2,6 +2,8 @@
   import { onMount, untrack } from 'svelte';
   import { trpc } from '$lib/trpc/client';
   import AddComponentModal from './AddComponentModal.svelte';
+  import AIButton from './ai/AIButton.svelte';
+  import TagSuggestionsPanel from './ai/TagSuggestionsPanel.svelte';
 
   let {
     recipe = null,
@@ -91,6 +93,11 @@
   let calculatingNutrition = $state(false);
   let nutritionError = $state('');
 
+  // AI tag suggestions
+  let loadingTagSuggestions = $state(false);
+  let tagSuggestions = $state<Array<{ tag: string; confidence: number; reason: string }>>([]);
+  let tagSuggestionsError = $state('');
+
   async function handleCalculateNutrition() {
     const ingredientList = ingredients
       .split('\n')
@@ -131,6 +138,63 @@
     } finally {
       calculatingNutrition = false;
     }
+  }
+
+  async function handleSuggestTags() {
+    const ingredientList = ingredients
+      .split('\n')
+      .map((i) => i.trim())
+      .filter(Boolean);
+
+    const instructionList = instructions
+      .split('\n')
+      .map((i) => i.trim())
+      .filter(Boolean);
+
+    if (!title.trim() && ingredientList.length === 0) {
+      tagSuggestionsError = 'Add a title or ingredients first';
+      return;
+    }
+
+    loadingTagSuggestions = true;
+    tagSuggestionsError = '';
+
+    try {
+      // Get existing tags from the system for consistency
+      const existingTags = await trpc.tag.list.query();
+      const existingTagNames = existingTags.map((t: any) => t.name);
+
+      const result = await trpc.ai.suggestTags.mutate({
+        recipe: {
+          title: title.trim() || 'Untitled',
+          description: description.trim() || undefined,
+          ingredients: ingredientList,
+          instructions: instructionList,
+        },
+        existingTags: existingTagNames,
+      });
+
+      tagSuggestions = result;
+    } catch (err: any) {
+      tagSuggestionsError = err.message || 'Failed to suggest tags';
+    } finally {
+      loadingTagSuggestions = false;
+    }
+  }
+
+  function handleSelectSuggestedTag(tag: string) {
+    const currentTags = tags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    if (!currentTags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+      tags = [...currentTags, tag].join(', ');
+    }
+  }
+
+  function dismissTagSuggestions() {
+    tagSuggestions = [];
   }
 
   // Sync form fields when recipe prop changes (for JSON-LD update feature)
@@ -312,13 +376,34 @@
   </div>
 
   <div class="form-group">
-    <label for="tags">Tags (comma-separated)</label>
+    <div class="label-with-action">
+      <label for="tags">Tags (comma-separated)</label>
+      <AIButton
+        onclick={handleSuggestTags}
+        loading={loadingTagSuggestions}
+        label="Suggest Tags"
+        loadingLabel="Suggesting..."
+        size="sm"
+        variant="subtle"
+      />
+    </div>
     <input
       id="tags"
       type="text"
       bind:value={tags}
       placeholder="dessert, chocolate, cookies"
     />
+    {#if tagSuggestionsError}
+      <span class="field-error">{tagSuggestionsError}</span>
+    {/if}
+    {#if tagSuggestions.length > 0}
+      <TagSuggestionsPanel
+        suggestions={tagSuggestions}
+        selectedTags={tags.split(',').map((t) => t.trim()).filter(Boolean)}
+        onSelect={handleSelectSuggestedTag}
+        onDismiss={dismissTagSuggestions}
+      />
+    {/if}
   </div>
 
   <div class="form-group">
@@ -528,6 +613,24 @@
     margin-bottom: var(--spacing-2);
     color: var(--color-text);
     font-size: var(--text-sm);
+  }
+
+  .label-with-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-2);
+  }
+
+  .label-with-action label {
+    margin-bottom: 0;
+  }
+
+  .field-error {
+    display: block;
+    color: var(--color-error);
+    font-size: var(--text-sm);
+    margin-top: var(--spacing-1);
   }
 
   input,
