@@ -214,8 +214,10 @@
   // Trigger iOS Siri Shortcut for native timer
   function startSiriTimer(seconds: number) {
     const minutes = Math.ceil(seconds / 60);
-    // This calls a Shortcut named "Recipe Timer" with the minutes as input
-    const shortcutUrl = `shortcuts://run-shortcut?name=${encodeURIComponent('Recipe Timer')}&input=text&text=${minutes}`;
+    // Get current URL to return to after shortcut completes
+    const returnUrl = encodeURIComponent(window.location.href);
+    // Use x-callback-url to return to the app after setting timer
+    const shortcutUrl = `shortcuts://x-callback-url/run-shortcut?name=${encodeURIComponent('Recipe Timer')}&input=text&text=${minutes}&x-success=${returnUrl}`;
     window.location.href = shortcutUrl;
   }
 
