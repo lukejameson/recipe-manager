@@ -27,10 +27,12 @@
   let wakeLock: WakeLockSentinel | null = null;
 
   // Timer state
-  let timerSeconds = $state(0);
+  let timerEndTime = $state<number | null>(null); // Timestamp when timer should end
   let timerRunning = $state(false);
   let timerInterval: ReturnType<typeof setInterval> | null = null;
   let timerInitialSeconds = $state(0);
+  let timerDisplaySeconds = $state(0); // For display only
+  let timerPausedRemaining = $state(0); // Seconds remaining when paused
   let notificationPermission = $state<NotificationPermission>('default');
 
   // Components for compound recipes
@@ -104,29 +106,44 @@
   }
 
   function handleVisibilityChange() {
-    if (document.visibilityState === 'visible' && cookingMode) {
-      requestWakeLock();
+    if (document.visibilityState === 'visible') {
+      if (cookingMode) {
+        requestWakeLock();
+      }
+      // Recalculate timer when returning to app (handles screen lock)
+      if (timerRunning && timerEndTime) {
+        updateTimerDisplay();
+      }
     }
   }
 
-  // Timer functions
+  // Timer functions - uses end time so it survives screen lock
+  function updateTimerDisplay() {
+    if (timerEndTime && timerRunning) {
+      const remaining = Math.max(0, Math.ceil((timerEndTime - Date.now()) / 1000));
+      timerDisplaySeconds = remaining;
+      if (remaining === 0) {
+        timerComplete();
+      }
+    }
+  }
+
   function startTimer(seconds: number) {
     stopTimer();
     timerInitialSeconds = seconds;
-    timerSeconds = seconds;
+    timerEndTime = Date.now() + seconds * 1000;
+    timerDisplaySeconds = seconds;
     timerRunning = true;
-    timerInterval = setInterval(() => {
-      if (timerSeconds > 0) {
-        timerSeconds--;
-        if (timerSeconds === 0) {
-          timerComplete();
-        }
-      }
-    }, 1000);
+    timerInterval = setInterval(updateTimerDisplay, 250); // Update 4x per second for smoother display
   }
 
   function pauseTimer() {
+    if (timerRunning && timerEndTime) {
+      timerPausedRemaining = Math.max(0, Math.ceil((timerEndTime - Date.now()) / 1000));
+      timerDisplaySeconds = timerPausedRemaining;
+    }
     timerRunning = false;
+    timerEndTime = null;
     if (timerInterval) {
       clearInterval(timerInterval);
       timerInterval = null;
@@ -134,23 +151,20 @@
   }
 
   function resumeTimer() {
-    if (timerSeconds > 0 && !timerRunning) {
+    if (timerPausedRemaining > 0 && !timerRunning) {
+      timerEndTime = Date.now() + timerPausedRemaining * 1000;
+      timerDisplaySeconds = timerPausedRemaining;
       timerRunning = true;
-      timerInterval = setInterval(() => {
-        if (timerSeconds > 0) {
-          timerSeconds--;
-          if (timerSeconds === 0) {
-            timerComplete();
-          }
-        }
-      }, 1000);
+      timerInterval = setInterval(updateTimerDisplay, 250);
     }
   }
 
   function stopTimer() {
     timerRunning = false;
-    timerSeconds = 0;
+    timerEndTime = null;
+    timerDisplaySeconds = 0;
     timerInitialSeconds = 0;
+    timerPausedRemaining = 0;
     if (timerInterval) {
       clearInterval(timerInterval);
       timerInterval = null;
@@ -159,13 +173,21 @@
 
   function resetTimer() {
     pauseTimer();
-    timerSeconds = timerInitialSeconds;
+    timerPausedRemaining = timerInitialSeconds;
+    timerDisplaySeconds = timerInitialSeconds;
   }
 
   function timerComplete() {
-    pauseTimer();
-    // Send notification
-    if (notificationPermission === 'granted') {
+    const wasRunning = timerRunning;
+    timerRunning = false;
+    timerEndTime = null;
+    timerDisplaySeconds = 0;
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    // Only notify if timer was actually running (not already completed)
+    if (wasRunning && notificationPermission === 'granted') {
       new Notification('Timer Complete!', {
         body: `Step ${currentStep + 1} timer has finished`,
         icon: '/favicon.png',
@@ -174,10 +196,12 @@
       });
     }
     // Also play a sound if possible
-    try {
-      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onraxu8HGy83Nzs7OzMrHwby3sq2on5iRi4WBfXp4d3d4eXt9gIOHi4+Tm5+kqa2xtLe5u73AwsXHysvMzc3Nzc3My8rJx8XDwL68ubWyrauopaKfnJmXlZSUlJSVl5manZ+ho6aoq62vsLGys7O0tLS0tLSzs7KxsK+urKuqqainp6enpqampqampqanp6eoqaqrrK2ur7CxsbKys7O0tLS0tLS0tLS0s7Ozs7OzsrKysbGwsK+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr66urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6t');
-      audio.play().catch(() => {});
-    } catch {}
+    if (wasRunning) {
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onraxu8HGy83Nzs7OzMrHwby3sq2on5iRi4WBfXp4d3d4eXt9gIOHi4+Tm5+kqa2xtLe5u73AwsXHysvMzc3Nzc3My8rJx8XDwL68ubWyrauopaKfnJmXlZSUlJSVl5manZ+ho6aoq62vsLGys7O0tLS0tLSzs7KxsK+urKuqqainp6enpqampqampqanp6eoqaqrrK2ur7CxsbKys7O0tLS0tLS0tLS0s7Ozs7OzsrKysbGwsK+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr66urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6t');
+        audio.play().catch(() => {});
+      } catch {}
+    }
   }
 
   async function requestNotificationPermission() {
@@ -185,6 +209,14 @@
       const permission = await Notification.requestPermission();
       notificationPermission = permission;
     }
+  }
+
+  // Trigger iOS Siri Shortcut for native timer
+  function startSiriTimer(seconds: number) {
+    const minutes = Math.ceil(seconds / 60);
+    // This calls a Shortcut named "Recipe Timer" with the minutes as input
+    const shortcutUrl = `shortcuts://run-shortcut?name=${encodeURIComponent('Recipe Timer')}&input=text&text=${minutes}`;
+    window.location.href = shortcutUrl;
   }
 
   // Get duration for current step
@@ -512,25 +544,25 @@
           </div>
 
           <!-- Timer Section -->
-          {#if currentStepDuration || timerSeconds > 0}
+          {#if currentStepDuration || timerDisplaySeconds > 0 || timerPausedRemaining > 0}
             <div class="timer-section">
-              {#if timerSeconds > 0 || timerRunning}
+              {#if timerDisplaySeconds > 0 || timerRunning || timerPausedRemaining > 0}
                 <!-- Active Timer Display -->
-                <div class="timer-display" class:timer-complete={timerSeconds === 0 && timerInitialSeconds > 0}>
-                  <div class="timer-time">{formatTimerDisplay(timerSeconds)}</div>
+                <div class="timer-display" class:timer-complete={timerDisplaySeconds === 0 && timerInitialSeconds > 0 && !timerRunning && timerPausedRemaining === 0}>
+                  <div class="timer-time">{formatTimerDisplay(timerDisplaySeconds || timerPausedRemaining)}</div>
                   <div class="timer-controls">
                     {#if timerRunning}
                       <button onclick={pauseTimer} class="btn-timer">
                         <span class="timer-icon">⏸</span>
                         Pause
                       </button>
-                    {:else if timerSeconds > 0}
+                    {:else if timerDisplaySeconds > 0 || timerPausedRemaining > 0}
                       <button onclick={resumeTimer} class="btn-timer btn-timer-primary">
                         <span class="timer-icon">▶</span>
                         Resume
                       </button>
                     {/if}
-                    <button onclick={resetTimer} class="btn-timer" disabled={timerSeconds === timerInitialSeconds}>
+                    <button onclick={resetTimer} class="btn-timer" disabled={timerPausedRemaining === timerInitialSeconds && !timerRunning}>
                       <span class="timer-icon">↺</span>
                       Reset
                     </button>
@@ -539,27 +571,31 @@
                       Stop
                     </button>
                   </div>
-                  {#if timerSeconds === 0 && timerInitialSeconds > 0}
+                  {#if timerDisplaySeconds === 0 && timerInitialSeconds > 0 && !timerRunning && timerPausedRemaining === 0}
                     <div class="timer-complete-message">Timer complete!</div>
                   {/if}
                 </div>
               {:else if currentStepDuration}
                 <!-- Start Timer Button -->
                 <div class="timer-start">
-                  <button
-                    onclick={() => startTimer(currentStepDuration)}
-                    class="btn-start-timer"
-                  >
-                    <span class="timer-icon">⏱</span>
-                    Start {formatTimerDisplay(currentStepDuration)} Timer
-                  </button>
-                  {#if notificationPermission === 'default'}
-                    <button onclick={requestNotificationPermission} class="btn-notify">
-                      Enable notifications
+                  <div class="timer-buttons">
+                    <button
+                      onclick={() => startTimer(currentStepDuration)}
+                      class="btn-start-timer"
+                    >
+                      <span class="timer-icon">⏱</span>
+                      Start {formatTimerDisplay(currentStepDuration)} Timer
                     </button>
-                  {:else if notificationPermission === 'denied'}
-                    <p class="notify-hint">Enable notifications in browser settings to get alerts</p>
-                  {/if}
+                    <button
+                      onclick={() => startSiriTimer(currentStepDuration)}
+                      class="btn-siri-timer"
+                      title="Set native iOS timer via Siri Shortcut"
+                    >
+                      <span class="timer-icon">🍎</span>
+                      iOS Timer
+                    </button>
+                  </div>
+                  <p class="timer-hint">iOS Timer sets a native alarm that works when screen is locked</p>
                 </div>
               {/if}
             </div>
@@ -1826,6 +1862,19 @@
     gap: var(--spacing-3);
   }
 
+  .timer-buttons {
+    display: flex;
+    gap: var(--spacing-3);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .timer-hint {
+    font-size: var(--text-sm);
+    color: var(--color-text-light);
+    margin: 0;
+  }
+
   .btn-start-timer {
     display: inline-flex;
     align-items: center;
@@ -1848,6 +1897,32 @@
   }
 
   .btn-start-timer:active {
+    transform: translateY(0);
+  }
+
+  .btn-siri-timer {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-4) var(--spacing-6);
+    background: linear-gradient(135deg, #1a1a1a, #333);
+    color: white;
+    border: none;
+    border-radius: var(--radius-xl);
+    font-weight: var(--font-bold);
+    font-size: var(--text-lg);
+    cursor: pointer;
+    transition: var(--transition-normal);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-siri-timer:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    background: linear-gradient(135deg, #333, #444);
+  }
+
+  .btn-siri-timer:active {
     transform: translateY(0);
   }
 
@@ -2058,8 +2133,17 @@
     .btn-start-timer {
       padding: var(--spacing-3) var(--spacing-6);
       font-size: var(--text-lg);
-      width: 100%;
+      flex: 1;
       justify-content: center;
+    }
+
+    .btn-siri-timer {
+      padding: var(--spacing-3) var(--spacing-4);
+      font-size: var(--text-base);
+    }
+
+    .timer-buttons {
+      width: 100%;
     }
   }
 </style>
