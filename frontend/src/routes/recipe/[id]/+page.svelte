@@ -6,7 +6,7 @@
   import Header from '$lib/components/Header.svelte';
   import RelatedRecipes from '$lib/components/RelatedRecipes.svelte';
   import RecipeComponentView from '$lib/components/RecipeComponentView.svelte';
-  import { formatTime, formatServings } from '$lib/utils/format';
+  import { formatTime, formatServings, parseDurationFromText, formatTimerDisplay } from '$lib/utils/format';
   import { scaleRecipe } from '$lib/utils/recipe-scaling';
   import AIButton from '$lib/components/ai/AIButton.svelte';
   import SubstitutionModal from '$lib/components/ai/SubstitutionModal.svelte';
@@ -25,6 +25,13 @@
   let notes = $state('');
   let copied = $state(false);
   let wakeLock: WakeLockSentinel | null = null;
+
+  // Timer state
+  let timerSeconds = $state(0);
+  let timerRunning = $state(false);
+  let timerInterval: ReturnType<typeof setInterval> | null = null;
+  let timerInitialSeconds = $state(0);
+  let notificationPermission = $state<NotificationPermission>('default');
 
   // Components for compound recipes
   let components = $state<any[]>([]);
@@ -102,13 +109,103 @@
     }
   }
 
+  // Timer functions
+  function startTimer(seconds: number) {
+    stopTimer();
+    timerInitialSeconds = seconds;
+    timerSeconds = seconds;
+    timerRunning = true;
+    timerInterval = setInterval(() => {
+      if (timerSeconds > 0) {
+        timerSeconds--;
+        if (timerSeconds === 0) {
+          timerComplete();
+        }
+      }
+    }, 1000);
+  }
+
+  function pauseTimer() {
+    timerRunning = false;
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
+
+  function resumeTimer() {
+    if (timerSeconds > 0 && !timerRunning) {
+      timerRunning = true;
+      timerInterval = setInterval(() => {
+        if (timerSeconds > 0) {
+          timerSeconds--;
+          if (timerSeconds === 0) {
+            timerComplete();
+          }
+        }
+      }, 1000);
+    }
+  }
+
+  function stopTimer() {
+    timerRunning = false;
+    timerSeconds = 0;
+    timerInitialSeconds = 0;
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
+
+  function resetTimer() {
+    pauseTimer();
+    timerSeconds = timerInitialSeconds;
+  }
+
+  function timerComplete() {
+    pauseTimer();
+    // Send notification
+    if (notificationPermission === 'granted') {
+      new Notification('Timer Complete!', {
+        body: `Step ${currentStep + 1} timer has finished`,
+        icon: '/favicon.png',
+        tag: 'recipe-timer',
+        requireInteraction: true,
+      });
+    }
+    // Also play a sound if possible
+    try {
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onraxu8HGy83Nzs7OzMrHwby3sq2on5iRi4WBfXp4d3d4eXt9gIOHi4+Tm5+kqa2xtLe5u73AwsXHysvMzc3Nzc3My8rJx8XDwL68ubWyrauopaKfnJmXlZSUlJSVl5manZ+ho6aoq62vsLGys7O0tLS0tLSzs7KxsK+urKuqqainp6enpqampqampqanp6eoqaqrrK2ur7CxsbKys7O0tLS0tLS0tLS0s7Ozs7OzsrKysbGwsK+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr6+vr66urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6t');
+      audio.play().catch(() => {});
+    } catch {}
+  }
+
+  async function requestNotificationPermission() {
+    if ('Notification' in window) {
+      const permission = await Notification.requestPermission();
+      notificationPermission = permission;
+    }
+  }
+
+  // Get duration for current step
+  const currentStepDuration = $derived(
+    recipe?.instructions?.[currentStep]
+      ? parseDurationFromText(recipe.instructions[currentStep])
+      : null
+  );
+
   onMount(() => {
     loadRecipe();
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    // Check notification permission
+    if ('Notification' in window) {
+      notificationPermission = Notification.permission;
+    }
   });
 
   onDestroy(() => {
     releaseWakeLock();
+    stopTimer();
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
@@ -179,6 +276,7 @@
       requestWakeLock();
     } else {
       releaseWakeLock();
+      stopTimer();
     }
   }
 
@@ -412,6 +510,60 @@
             <div class="step-number">{currentStep + 1}</div>
             <p class="step-text">{recipe.instructions[currentStep]}</p>
           </div>
+
+          <!-- Timer Section -->
+          {#if currentStepDuration || timerSeconds > 0}
+            <div class="timer-section">
+              {#if timerSeconds > 0 || timerRunning}
+                <!-- Active Timer Display -->
+                <div class="timer-display" class:timer-complete={timerSeconds === 0 && timerInitialSeconds > 0}>
+                  <div class="timer-time">{formatTimerDisplay(timerSeconds)}</div>
+                  <div class="timer-controls">
+                    {#if timerRunning}
+                      <button onclick={pauseTimer} class="btn-timer">
+                        <span class="timer-icon">⏸</span>
+                        Pause
+                      </button>
+                    {:else if timerSeconds > 0}
+                      <button onclick={resumeTimer} class="btn-timer btn-timer-primary">
+                        <span class="timer-icon">▶</span>
+                        Resume
+                      </button>
+                    {/if}
+                    <button onclick={resetTimer} class="btn-timer" disabled={timerSeconds === timerInitialSeconds}>
+                      <span class="timer-icon">↺</span>
+                      Reset
+                    </button>
+                    <button onclick={stopTimer} class="btn-timer btn-timer-danger">
+                      <span class="timer-icon">✕</span>
+                      Stop
+                    </button>
+                  </div>
+                  {#if timerSeconds === 0 && timerInitialSeconds > 0}
+                    <div class="timer-complete-message">Timer complete!</div>
+                  {/if}
+                </div>
+              {:else if currentStepDuration}
+                <!-- Start Timer Button -->
+                <div class="timer-start">
+                  <button
+                    onclick={() => startTimer(currentStepDuration)}
+                    class="btn-start-timer"
+                  >
+                    <span class="timer-icon">⏱</span>
+                    Start {formatTimerDisplay(currentStepDuration)} Timer
+                  </button>
+                  {#if notificationPermission === 'default'}
+                    <button onclick={requestNotificationPermission} class="btn-notify">
+                      Enable notifications
+                    </button>
+                  {:else if notificationPermission === 'denied'}
+                    <p class="notify-hint">Enable notifications in browser settings to get alerts</p>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+          {/if}
 
           <div class="cooking-navigation">
             <button onclick={prevStep} disabled={currentStep === 0} class="btn-nav">
@@ -1547,6 +1699,181 @@
     line-height: 1;
   }
 
+  /* Timer styles */
+  .timer-section {
+    background: var(--color-surface);
+    border: 2px solid var(--color-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-6);
+    margin-bottom: var(--spacing-6);
+    text-align: center;
+  }
+
+  .timer-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-4);
+  }
+
+  .timer-display.timer-complete {
+    background: linear-gradient(135deg, #10b981, #059669);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-6);
+    margin: calc(-1 * var(--spacing-6));
+  }
+
+  .timer-time {
+    font-size: 4rem;
+    font-weight: 800;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    color: var(--color-primary);
+    line-height: 1;
+    letter-spacing: 0.05em;
+  }
+
+  .timer-complete .timer-time {
+    color: white;
+  }
+
+  .timer-controls {
+    display: flex;
+    gap: var(--spacing-3);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .btn-timer {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-3) var(--spacing-5);
+    background: var(--color-bg-subtle);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    font-weight: var(--font-semibold);
+    font-size: var(--text-base);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-timer:hover:not(:disabled) {
+    background: var(--color-surface);
+    border-color: var(--color-primary);
+    transform: translateY(-1px);
+  }
+
+  .btn-timer:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-timer-primary {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+
+  .btn-timer-primary:hover:not(:disabled) {
+    background: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+  }
+
+  .btn-timer-danger {
+    background: #fef2f2;
+    color: var(--color-error);
+    border-color: #fecaca;
+  }
+
+  .btn-timer-danger:hover:not(:disabled) {
+    background: var(--color-error);
+    color: white;
+    border-color: var(--color-error);
+  }
+
+  .timer-complete .btn-timer {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: white;
+  }
+
+  .timer-complete .btn-timer:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: white;
+  }
+
+  .timer-icon {
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .timer-complete-message {
+    font-size: var(--text-xl);
+    font-weight: var(--font-bold);
+    color: white;
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .timer-start {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-3);
+  }
+
+  .btn-start-timer {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    padding: var(--spacing-4) var(--spacing-8);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    color: white;
+    border: none;
+    border-radius: var(--radius-xl);
+    font-weight: var(--font-bold);
+    font-size: var(--text-xl);
+    cursor: pointer;
+    transition: var(--transition-normal);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-start-timer:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .btn-start-timer:active {
+    transform: translateY(0);
+  }
+
+  .btn-notify {
+    padding: var(--spacing-2) var(--spacing-4);
+    background: var(--color-bg-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-notify:hover {
+    background: var(--color-surface);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .notify-hint {
+    font-size: var(--text-sm);
+    color: var(--color-text-light);
+    margin: 0;
+  }
+
   @media (max-width: 640px) {
     main {
       padding: var(--spacing-4) 0;
@@ -1706,6 +2033,33 @@
 
     .cooking-ingredients h3 {
       font-size: var(--text-base);
+    }
+
+    /* Timer mobile styles */
+    .timer-section {
+      padding: var(--spacing-4);
+      margin-bottom: var(--spacing-4);
+    }
+
+    .timer-time {
+      font-size: 3rem;
+    }
+
+    .timer-controls {
+      gap: var(--spacing-2);
+    }
+
+    .btn-timer {
+      padding: var(--spacing-2) var(--spacing-3);
+      font-size: var(--text-sm);
+      min-height: 44px;
+    }
+
+    .btn-start-timer {
+      padding: var(--spacing-3) var(--spacing-6);
+      font-size: var(--text-lg);
+      width: 100%;
+      justify-content: center;
     }
   }
 </style>
