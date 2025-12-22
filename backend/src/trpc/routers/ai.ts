@@ -6,9 +6,10 @@ import { calculateNutrition } from '../../services/ai/nutrition.js';
 import { suggestTags } from '../../services/ai/auto-tagging.js';
 import { explainTechnique } from '../../services/ai/techniques.js';
 import { suggestSubstitutions } from '../../services/ai/substitution.js';
-import { suggestImprovements } from '../../services/ai/improvement.js';
+import { suggestImprovements, applyImprovements } from '../../services/ai/improvement.js';
 import { adaptRecipe, type AdaptationType } from '../../services/ai/adaptation.js';
 import { findMatchingRecipes } from '../../services/ai/pantry-match.js';
+import { chatAboutRecipes } from '../../services/ai/recipe-chat.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -195,6 +196,38 @@ export const aiRouter = t.router({
     }),
 
   /**
+   * Apply selected improvements to a recipe
+   */
+  applyImprovements: protectedProcedure
+    .input(
+      z.object({
+        recipe: z.object({
+          title: z.string(),
+          ingredients: z.array(z.string()),
+          instructions: z.array(z.string()),
+        }),
+        improvements: z.array(z.string()).min(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const initialized = await aiService.initialize();
+      if (!initialized) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'AI service not configured. Please add your Anthropic API key in Settings.',
+        });
+      }
+      try {
+        return await applyImprovements(input);
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to apply improvements',
+        });
+      }
+    }),
+
+  /**
    * Adapt a recipe for dietary requirements
    */
   adaptRecipe: protectedProcedure
@@ -265,6 +298,38 @@ export const aiRouter = t.router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error.message || 'Failed to find matching recipes',
+        });
+      }
+    }),
+
+  /**
+   * Chat about recipes - brainstorm ideas and generate new recipes
+   */
+  recipeChat: protectedProcedure
+    .input(
+      z.object({
+        messages: z.array(
+          z.object({
+            role: z.enum(['user', 'assistant']),
+            content: z.string(),
+          })
+        ).min(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const initialized = await aiService.initialize();
+      if (!initialized) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'AI service not configured. Please add your Anthropic API key in Settings.',
+        });
+      }
+      try {
+        return await chatAboutRecipes(input);
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to chat about recipes',
         });
       }
     }),

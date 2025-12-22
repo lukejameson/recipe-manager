@@ -332,6 +332,25 @@
       alert('Failed to update recipe: ' + err.message);
     }
   }
+
+  async function handleApplyImprovements(improved: { title: string; ingredients: string[]; instructions: string[] }) {
+    try {
+      await trpc.recipe.update.mutate({
+        id: recipe.id,
+        data: {
+          title: improved.title,
+          ingredients: improved.ingredients,
+          instructions: improved.instructions,
+          // Clear saved improvement ideas since they've been applied
+          improvementIdeas: undefined,
+        },
+      });
+      showImprovementModal = false;
+      await loadRecipe();
+    } catch (err: any) {
+      alert('Failed to apply improvements: ' + err.message);
+    }
+  }
 </script>
 
 <Header />
@@ -367,23 +386,15 @@
             <span class="icon">{copied ? '✓' : '📋'}</span>
             <span>{copied ? 'Copied!' : 'Export'}</span>
           </button>
+          <AIButton
+            onclick={() => showImprovementModal = true}
+            label="Improve"
+          />
+          <AIButton
+            onclick={() => showAdaptModal = true}
+            label="Adapt"
+          />
         </div>
-      </div>
-
-      <!-- AI Actions (subtle, secondary row) -->
-      <div class="ai-actions">
-        <AIButton
-          onclick={() => showImprovementModal = true}
-          label="Improve"
-          size="sm"
-          variant="subtle"
-        />
-        <AIButton
-          onclick={() => showAdaptModal = true}
-          label="Adapt"
-          size="sm"
-          variant="subtle"
-        />
       </div>
 
       {#if cookingMode}
@@ -769,6 +780,7 @@
 {#if showImprovementModal && recipe}
   <ImprovementModal
     recipe={{
+      id: recipe.id,
       title: recipe.title,
       description: recipe.description,
       ingredients: recipe.ingredients,
@@ -776,7 +788,10 @@
       prepTime: recipe.prepTime,
       cookTime: recipe.cookTime,
     }}
+    savedIdeas={recipe.improvementIdeas}
     onClose={() => showImprovementModal = false}
+    onSave={() => loadRecipe()}
+    onApply={handleApplyImprovements}
   />
 {/if}
 
@@ -849,12 +864,6 @@
   .actions {
     display: flex;
     gap: var(--spacing-3);
-  }
-
-  .ai-actions {
-    display: flex;
-    gap: var(--spacing-2);
-    margin-bottom: var(--spacing-6);
   }
 
   .btn-edit,
@@ -1552,31 +1561,25 @@
     }
 
     .actions {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      display: flex;
+      flex-wrap: wrap;
       gap: var(--spacing-2);
     }
 
     .actions button,
-    .actions .btn-edit,
-    .actions .btn-delete,
-    .actions .btn-favorite,
-    .actions .btn-cooking,
-    .actions .btn-export {
+    .actions :global(.ai-btn) {
       padding: var(--spacing-3);
       font-size: var(--text-sm);
       min-height: 48px;
       justify-content: center;
+      flex: 1 1 auto;
+      min-width: 60px;
     }
 
     /* Hide text labels on mobile, show only icons */
     .actions button span:not(.icon),
-    .actions .btn-edit span:not(.icon),
-    .actions .btn-delete span:not(.icon),
-    .actions .btn-favorite span:not(.icon),
-    .actions .btn-cooking span:not(.icon),
-    .actions .btn-export span:not(.icon) {
-      display: none;
+    .actions :global(.ai-btn .label) {
+      display: none !important;
     }
 
     .recipe-detail {

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
-import { recipes, tags, recipeTags, recipeComponents, type NutritionInfo } from '../../db/schema.js';
+import { recipes, tags, recipeTags, recipeComponents, type NutritionInfo, type ImprovementSuggestion } from '../../db/schema.js';
 import { eq, like, or, inArray, sql, and } from 'drizzle-orm';
 import { parseRecipeJsonLd } from '../../utils/jsonld-parser.js';
 import { convertRecipeIngredients, cleanRecipeInstructions } from '../../utils/unit-converter.js';
@@ -770,6 +770,43 @@ export const recipeRouter = t.router({
         .set({
           rating: input.rating,
           notes: input.notes,
+          updatedAt: new Date(),
+        })
+        .where(eq(recipes.id, input.id))
+        .returning();
+
+      if (!updated) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Recipe not found',
+        });
+      }
+
+      return updated;
+    }),
+
+  /**
+   * Save AI-generated improvement ideas for a recipe
+   */
+  saveImprovementIdeas: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        improvementIdeas: z.array(
+          z.object({
+            category: z.string(),
+            suggestion: z.string(),
+            explanation: z.string(),
+            priority: z.enum(['high', 'medium', 'low']),
+          })
+        ),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const [updated] = await db
+        .update(recipes)
+        .set({
+          improvementIdeas: input.improvementIdeas,
           updatedAt: new Date(),
         })
         .where(eq(recipes.id, input.id))

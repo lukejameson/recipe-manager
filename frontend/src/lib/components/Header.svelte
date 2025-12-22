@@ -95,6 +95,16 @@
           <span class="ai-tag">AI</span>
         </a>
         <a
+          href="/generate"
+          class:active={$page.url.pathname === '/generate'}
+          onclick={closeMobileMenu}
+          class="ai-link"
+        >
+          <span class="icon">💬</span>
+          <span class="label">Generate</span>
+          <span class="ai-tag">AI</span>
+        </a>
+        <a
           href="/settings"
           class:active={$page.url.pathname === '/settings'}
           onclick={closeMobileMenu}

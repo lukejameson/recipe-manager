@@ -115,3 +115,99 @@ ${recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
     throw error;
   }
 }
+
+export interface ApplyImprovementsInput {
+  recipe: {
+    title: string;
+    ingredients: string[];
+    instructions: string[];
+  };
+  improvements: string[];
+}
+
+export interface AppliedRecipe {
+  title: string;
+  ingredients: string[];
+  instructions: string[];
+  changes: string[];
+}
+
+const APPLY_IMPROVEMENTS_PROMPT = `You are a professional chef helping to modify a recipe based on specific improvements.
+
+Your task is to take the recipe and apply the requested improvements, modifying the ingredients and instructions as needed.
+
+Return ONLY valid JSON in this format:
+{
+  "title": "Recipe title (unchanged unless improvement specifically affects it)",
+  "ingredients": ["list of ingredients with modifications applied"],
+  "instructions": ["list of instructions with modifications applied"],
+  "changes": ["brief description of each change made"]
+}
+
+Guidelines:
+- Apply ONLY the requested improvements
+- Keep the recipe's essential character intact
+- Be specific in the changes array about what was modified
+- Maintain similar formatting for ingredients and instructions
+- If an improvement doesn't require a change to ingredients/instructions, note it in changes but leave the sections unchanged
+- Return ONLY the JSON object, no other text`;
+
+export async function applyImprovements(
+  input: ApplyImprovementsInput
+): Promise<AppliedRecipe> {
+  const { recipe, improvements } = input;
+
+  const userPrompt = `Apply these improvements to the recipe:
+
+RECIPE:
+Title: ${recipe.title}
+
+Ingredients:
+${recipe.ingredients.map((ing, i) => `${i + 1}. ${ing}`).join('\n')}
+
+Instructions:
+${recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}
+
+IMPROVEMENTS TO APPLY:
+${improvements.map((imp, i) => `${i + 1}. ${imp}`).join('\n')}
+
+Return the modified recipe as JSON.`;
+
+  const result = await aiService.complete({
+    systemPrompt: APPLY_IMPROVEMENTS_PROMPT,
+    userPrompt,
+    maxTokens: 2048,
+    temperature: 0.3,
+  });
+
+  try {
+    let jsonStr = result.content.trim();
+    if (jsonStr.startsWith('```')) {
+      jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+    }
+
+    const applied = JSON.parse(jsonStr);
+
+    if (
+      typeof applied.title !== 'string' ||
+      !Array.isArray(applied.ingredients) ||
+      !Array.isArray(applied.instructions)
+    ) {
+      throw new Error('Invalid response format');
+    }
+
+    return {
+      title: String(applied.title).slice(0, 200),
+      ingredients: applied.ingredients.map((i: any) => String(i).slice(0, 500)),
+      instructions: applied.instructions.map((i: any) => String(i).slice(0, 1000)),
+      changes: Array.isArray(applied.changes)
+        ? applied.changes.map((c: any) => String(c).slice(0, 200))
+        : [],
+    };
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error('Failed to parse applied recipe from AI response.');
+    }
+    throw error;
+  }
+}

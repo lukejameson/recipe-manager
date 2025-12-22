@@ -41,14 +41,12 @@
     matches = [];
 
     try {
-      // First, get all recipes (we'll filter/batch on backend)
+      // First, get all recipes
       const allRecipes = await trpc.recipe.list.query({
-        sortBy: 'updatedAt',
-        sortOrder: 'desc',
-        limit: 200, // Reasonable limit
+        sortBy: 'date-newest',
       });
 
-      if (allRecipes.recipes.length === 0) {
+      if (allRecipes.length === 0) {
         error = 'No recipes found in your collection';
         loading = false;
         hasSearched = true;
@@ -57,7 +55,7 @@
 
       // Pre-filter recipes by keyword matching (reduces AI API calls)
       const lowerIngredients = ingredients.map((i) => i.toLowerCase());
-      const candidateRecipes = allRecipes.recipes
+      const candidateRecipes = allRecipes
         .map((r: any) => ({
           id: r.id,
           title: r.title,
@@ -76,7 +74,7 @@
 
       if (candidateRecipes.length === 0) {
         // No keyword matches, try AI on a smaller sample
-        const sampleRecipes = allRecipes.recipes.slice(0, 30).map((r: any) => ({
+        const sampleRecipes = allRecipes.slice(0, 30).map((r: any) => ({
           id: r.id,
           title: r.title,
           ingredients: r.ingredients,

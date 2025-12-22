@@ -24,6 +24,14 @@ export type NutritionInfo = {
   cholesterol?: number;    // milligrams
 };
 
+// Improvement suggestion from AI
+export type ImprovementSuggestion = {
+  category: string;
+  suggestion: string;
+  explanation: string;
+  priority: 'high' | 'medium' | 'low';
+};
+
 // Recipes table
 export const recipes = sqliteTable('recipes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -45,6 +53,8 @@ export const recipes = sqliteTable('recipes', {
   lastCookedAt: integer('last_cooked_at', { mode: 'timestamp' }),
   // Nutrition information (per serving)
   nutrition: text('nutrition', { mode: 'json' }).$type<NutritionInfo>(),
+  // AI-generated improvement ideas
+  improvementIdeas: text('improvement_ideas', { mode: 'json' }).$type<ImprovementSuggestion[]>(),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`),
