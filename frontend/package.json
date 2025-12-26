@@ -12,6 +12,7 @@
   "dependencies": {
     "@tanstack/svelte-query": "^5.62.0",
     "@trpc/client": "^11.0.0",
+    "html2pdf.js": "^0.12.1",
     "marked": "^17.0.1"
   },
   "devDependencies": {

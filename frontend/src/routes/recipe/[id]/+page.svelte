@@ -54,9 +54,88 @@
   let loadingTechnique = $state(false);
   let showChat = $state(false);
   let showMoreMenu = $state(false);
+  let generatingPdf = $state(false);
 
   function closeMoreMenu() {
     showMoreMenu = false;
+  }
+
+  function handlePrint() {
+    closeMoreMenu();
+    window.print();
+  }
+
+  async function handleDownloadPdf() {
+    closeMoreMenu();
+    if (!recipe) return;
+
+    generatingPdf = true;
+
+    try {
+      // Dynamic import to avoid SSR issues
+      const html2pdf = (await import('html2pdf.js')).default;
+
+      // Create a clean version of the recipe for PDF
+      const printContent = document.createElement('div');
+      printContent.innerHTML = `
+        <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 700px; margin: 0 auto; padding: 20px;">
+          ${recipe.imageUrl ? `<img src="${recipe.imageUrl}" alt="${recipe.title}" style="width: 100%; max-height: 300px; object-fit: cover; border-radius: 8px; margin-bottom: 20px;" />` : ''}
+          <h1 style="font-size: 28px; margin: 0 0 10px; color: #333;">${recipe.title}</h1>
+          ${recipe.description ? `<p style="color: #666; font-size: 14px; margin-bottom: 20px; font-style: italic;">${recipe.description}</p>` : ''}
+
+          <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+            ${recipe.prepTime ? `<div><strong>Prep:</strong> ${formatTime(recipe.prepTime)}</div>` : ''}
+            ${recipe.cookTime ? `<div><strong>Cook:</strong> ${formatTime(recipe.cookTime)}</div>` : ''}
+            ${recipe.totalTime ? `<div><strong>Total:</strong> ${formatTime(recipe.totalTime)}</div>` : ''}
+            ${recipe.servings ? `<div><strong>Servings:</strong> ${recipe.servings}</div>` : ''}
+          </div>
+
+          <h2 style="font-size: 20px; margin: 25px 0 15px; color: #333; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">Ingredients</h2>
+          <ul style="margin: 0; padding-left: 20px; line-height: 1.8;">
+            ${displayIngredients.map(ing => `<li style="margin-bottom: 5px;">${ing}</li>`).join('')}
+          </ul>
+
+          <h2 style="font-size: 20px; margin: 25px 0 15px; color: #333; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">Instructions</h2>
+          <ol style="margin: 0; padding-left: 20px; line-height: 1.8;">
+            ${recipe.instructions.map((inst: string) => `<li style="margin-bottom: 12px;">${inst}</li>`).join('')}
+          </ol>
+
+          ${recipe.notes ? `
+            <h2 style="font-size: 20px; margin: 25px 0 15px; color: #333; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">Notes</h2>
+            <p style="color: #555; line-height: 1.6; white-space: pre-wrap;">${recipe.notes}</p>
+          ` : ''}
+
+          ${recipe.nutrition && Object.keys(recipe.nutrition).length > 0 ? `
+            <h2 style="font-size: 20px; margin: 25px 0 15px; color: #333; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">Nutrition (per serving)</h2>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+              ${recipe.nutrition.calories !== undefined ? `<span><strong>Calories:</strong> ${recipe.nutrition.calories}</span>` : ''}
+              ${recipe.nutrition.protein !== undefined ? `<span><strong>Protein:</strong> ${recipe.nutrition.protein}g</span>` : ''}
+              ${recipe.nutrition.carbohydrates !== undefined ? `<span><strong>Carbs:</strong> ${recipe.nutrition.carbohydrates}g</span>` : ''}
+              ${recipe.nutrition.fat !== undefined ? `<span><strong>Fat:</strong> ${recipe.nutrition.fat}g</span>` : ''}
+            </div>
+          ` : ''}
+
+          <div style="margin-top: 40px; padding-top: 15px; border-top: 1px solid #e0e0e0; font-size: 12px; color: #999;">
+            ${recipe.sourceUrl ? `Source: ${recipe.sourceUrl}` : ''}
+          </div>
+        </div>
+      `;
+
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `${recipe.title.replace(/[^a-z0-9]/gi, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      };
+
+      await html2pdf().set(opt).from(printContent).save();
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+      alert('Failed to generate PDF. Please try using Print instead.');
+    } finally {
+      generatingPdf = false;
+    }
   }
 
   function handleClickOutside(event: MouseEvent) {
@@ -554,6 +633,15 @@
                 <button onclick={copyAsJsonLd} class="menu-item" role="menuitem">
                   <span class="menu-icon">{copied ? '✓' : '📋'}</span>
                   <span>{copied ? 'Copied!' : 'Export as JSON-LD'}</span>
+                </button>
+                <div class="menu-divider"></div>
+                <button onclick={handlePrint} class="menu-item" role="menuitem">
+                  <span class="menu-icon">🖨️</span>
+                  <span>Print Recipe</span>
+                </button>
+                <button onclick={handleDownloadPdf} class="menu-item" role="menuitem" disabled={generatingPdf}>
+                  <span class="menu-icon">{generatingPdf ? '⏳' : '📄'}</span>
+                  <span>{generatingPdf ? 'Generating...' : 'Download PDF'}</span>
                 </button>
                 <div class="menu-divider"></div>
                 <button onclick={handleDelete} class="menu-item danger" role="menuitem">
@@ -2259,6 +2347,165 @@
 
     .timer-buttons {
       width: 100%;
+    }
+  }
+
+  /* Print Styles */
+  @media print {
+    /* Hide non-essential elements */
+    :global(header),
+    :global(nav),
+    .recipe-header,
+    .actions,
+    .btn-back,
+    .btn-cooking,
+    .btn-edit,
+    .btn-chat,
+    .btn-more,
+    .more-menu-container,
+    .chat-panel,
+    .scaling-section,
+    .rating-section,
+    .related-section,
+    .btn-substitute,
+    .btn-ai-calculate,
+    .cooking-mode,
+    .no-nutrition .btn-ai-calculate,
+    .nutrition-section.no-nutrition {
+      display: none !important;
+    }
+
+    /* Reset page layout */
+    :global(body) {
+      background: white !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    main {
+      padding: 0 !important;
+    }
+
+    .container {
+      max-width: 100% !important;
+      padding: 20px !important;
+    }
+
+    /* Recipe card styling for print */
+    .recipe-card {
+      box-shadow: none !important;
+      border: none !important;
+      padding: 0 !important;
+    }
+
+    .recipe-image {
+      max-height: 250px !important;
+      page-break-inside: avoid;
+    }
+
+    .recipe-content {
+      padding: 20px 0 !important;
+    }
+
+    /* Typography for print */
+    .recipe-title {
+      font-size: 24pt !important;
+      color: black !important;
+      margin-bottom: 10px !important;
+    }
+
+    .recipe-description {
+      font-size: 11pt !important;
+      color: #333 !important;
+      font-style: italic;
+    }
+
+    .recipe-meta {
+      background: #f5f5f5 !important;
+      padding: 10px 15px !important;
+      margin: 15px 0 !important;
+      border-radius: 4px !important;
+      page-break-inside: avoid;
+    }
+
+    .meta-item {
+      font-size: 10pt !important;
+    }
+
+    /* Section headers */
+    .ingredients h2,
+    .instructions h2,
+    .nutrition-section h2,
+    .components-section h2 {
+      font-size: 14pt !important;
+      color: black !important;
+      border-bottom: 2px solid #333 !important;
+      padding-bottom: 5px !important;
+      margin-top: 20px !important;
+      margin-bottom: 10px !important;
+      page-break-after: avoid;
+    }
+
+    /* Lists */
+    .ingredients ul,
+    .instructions ol {
+      font-size: 11pt !important;
+      line-height: 1.6 !important;
+      padding-left: 25px !important;
+    }
+
+    .ingredients li,
+    .instructions li {
+      margin-bottom: 8px !important;
+      page-break-inside: avoid;
+    }
+
+    .instructions li {
+      margin-bottom: 12px !important;
+    }
+
+    /* Nutrition grid */
+    .nutrition-grid {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 15px !important;
+    }
+
+    .nutrition-item {
+      background: #f5f5f5 !important;
+      padding: 8px 12px !important;
+      border-radius: 4px !important;
+      font-size: 10pt !important;
+    }
+
+    /* Tags */
+    .tags {
+      margin-top: 15px !important;
+    }
+
+    .tag {
+      background: #e0e0e0 !important;
+      color: black !important;
+      font-size: 9pt !important;
+      padding: 3px 8px !important;
+    }
+
+    /* Page breaks */
+    .ingredients,
+    .instructions,
+    .nutrition-section {
+      page-break-inside: avoid;
+    }
+
+    /* Source URL at bottom */
+    .recipe-card::after {
+      content: attr(data-source-url);
+      display: block;
+      margin-top: 30px;
+      padding-top: 15px;
+      border-top: 1px solid #ccc;
+      font-size: 9pt;
+      color: #666;
     }
   }
 </style>
