@@ -13,6 +13,7 @@
   import ImprovementModal from '$lib/components/ai/ImprovementModal.svelte';
   import AdaptRecipeModal from '$lib/components/ai/AdaptRecipeModal.svelte';
   import TechniqueTooltip from '$lib/components/ai/TechniqueTooltip.svelte';
+  import RecipeChat from '$lib/components/RecipeChat.svelte';
 
   let recipe = $state<any>(null);
   let loading = $state(true);
@@ -51,6 +52,19 @@
   let showTechniqueTooltip = $state(false);
   let selectedTechnique = $state<{ term: string; definition: string; steps?: string[]; tips?: string[] } | null>(null);
   let loadingTechnique = $state(false);
+  let showChat = $state(false);
+  let showMoreMenu = $state(false);
+
+  function closeMoreMenu() {
+    showMoreMenu = false;
+  }
+
+  function handleClickOutside(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.more-menu-container')) {
+      showMoreMenu = false;
+    }
+  }
 
   async function handleCalculateNutrition() {
     if (!recipe) return;
@@ -229,6 +243,7 @@
   onMount(() => {
     loadRecipe();
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('click', handleClickOutside);
     // Check notification permission
     if ('Notification' in window) {
       notificationPermission = Notification.permission;
@@ -240,6 +255,7 @@
     stopTimer();
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('click', handleClickOutside);
     }
   });
 
@@ -496,36 +512,66 @@
       <div class="recipe-header">
         <a href="/" class="btn-back">← Back to Recipes</a>
         <div class="actions">
-          <button onclick={handleToggleFavorite} class="btn-favorite" class:is-favorite={recipe.isFavorite}>
-            <span class="icon">{recipe.isFavorite ? '★' : '☆'}</span>
-            <span>Favorite</span>
-          </button>
+          <!-- Primary actions - always visible -->
           <button onclick={toggleCookingMode} class="btn-cooking">
             <span class="icon">{cookingMode ? '📖' : '👨‍🍳'}</span>
-            <span>{cookingMode ? 'View Recipe' : 'Cooking Mode'}</span>
+            <span>{cookingMode ? 'View Recipe' : 'Cook'}</span>
           </button>
           <button onclick={handleEdit} class="btn-edit">
             <span class="icon">✏️</span>
             <span>Edit</span>
           </button>
-          <button onclick={handleDelete} class="btn-delete">
-            <span class="icon">🗑️</span>
-            <span>Delete</span>
+          <button onclick={() => showChat = !showChat} class="btn-chat" class:active={showChat}>
+            <span class="icon">💬</span>
+            <span>Ask AI</span>
           </button>
-          <button onclick={copyAsJsonLd} class="btn-export">
-            <span class="icon">{copied ? '✓' : '📋'}</span>
-            <span>{copied ? 'Copied!' : 'Export'}</span>
-          </button>
-          <AIButton
-            onclick={() => showImprovementModal = true}
-            label="Improve"
-          />
-          <AIButton
-            onclick={() => showAdaptModal = true}
-            label="Adapt"
-          />
+
+          <!-- More menu for secondary actions -->
+          <div class="more-menu-container">
+            <button
+              onclick={() => showMoreMenu = !showMoreMenu}
+              class="btn-more"
+              class:active={showMoreMenu}
+            >
+              <span class="icon">⋯</span>
+              <span>More</span>
+            </button>
+
+            {#if showMoreMenu}
+              <div class="more-menu" onclick={closeMoreMenu} role="menu">
+                <button onclick={handleToggleFavorite} class="menu-item" role="menuitem">
+                  <span class="menu-icon">{recipe.isFavorite ? '★' : '☆'}</span>
+                  <span>{recipe.isFavorite ? 'Remove Favorite' : 'Add to Favorites'}</span>
+                </button>
+                <button onclick={() => { showImprovementModal = true; closeMoreMenu(); }} class="menu-item" role="menuitem">
+                  <span class="menu-icon ai">AI</span>
+                  <span>Suggest Improvements</span>
+                </button>
+                <button onclick={() => { showAdaptModal = true; closeMoreMenu(); }} class="menu-item" role="menuitem">
+                  <span class="menu-icon ai">AI</span>
+                  <span>Adapt for Diet</span>
+                </button>
+                <button onclick={copyAsJsonLd} class="menu-item" role="menuitem">
+                  <span class="menu-icon">{copied ? '✓' : '📋'}</span>
+                  <span>{copied ? 'Copied!' : 'Export as JSON-LD'}</span>
+                </button>
+                <div class="menu-divider"></div>
+                <button onclick={handleDelete} class="menu-item danger" role="menuitem">
+                  <span class="menu-icon">🗑️</span>
+                  <span>Delete Recipe</span>
+                </button>
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
+
+      <!-- Recipe Chat Panel -->
+      {#if showChat && !cookingMode}
+        <div class="chat-panel">
+          <RecipeChat {recipe} onClose={() => showChat = false} />
+        </div>
+      {/if}
 
       {#if cookingMode}
         <!-- Cooking Mode View -->
@@ -1055,8 +1101,7 @@
   }
 
   .btn-edit,
-  .btn-delete,
-  .btn-export {
+  .btn-more {
     padding: var(--spacing-2-5) var(--spacing-4);
     border-radius: var(--radius-lg);
     font-weight: var(--font-medium);
@@ -1082,32 +1127,136 @@
     box-shadow: var(--shadow-md);
   }
 
-  .btn-delete {
-    background: #fef2f2;
+  .btn-more {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border-color: var(--color-border);
+  }
+
+  .btn-more:hover,
+  .btn-more.active {
+    background: var(--color-bg-subtle);
+    border-color: var(--color-text-light);
+  }
+
+  .btn-chat {
+    padding: var(--spacing-2-5) var(--spacing-4);
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: 2px solid transparent;
+    border-radius: var(--radius-lg);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    transition: var(--transition-normal);
+  }
+
+  .btn-chat:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-chat.active {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* More menu dropdown */
+  .more-menu-container {
+    position: relative;
+  }
+
+  .more-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: var(--spacing-2);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    min-width: 220px;
+    z-index: 100;
+    overflow: hidden;
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    width: 100%;
+    padding: var(--spacing-3) var(--spacing-4);
+    background: none;
+    border: none;
+    font-size: var(--text-sm);
+    color: var(--color-text);
+    cursor: pointer;
+    text-align: left;
+    transition: var(--transition-fast);
+  }
+
+  .menu-item:hover {
+    background: var(--color-bg-subtle);
+  }
+
+  .menu-item.danger {
     color: var(--color-error);
-    border-color: #fecaca;
   }
 
-  .btn-delete:hover {
-    background: var(--color-error);
+  .menu-item.danger:hover {
+    background: #fef2f2;
+  }
+
+  .menu-icon {
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .menu-icon.ai {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
     color: white;
-    border-color: var(--color-error);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+    font-size: var(--text-xs);
+    font-weight: var(--font-bold);
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
   }
 
-  .btn-export {
-    background: #f0f9ff;
-    color: #0369a1;
-    border-color: #bae6fd;
+  .menu-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: var(--spacing-2) 0;
   }
 
-  .btn-export:hover {
-    background: #0369a1;
-    color: white;
-    border-color: #0369a1;
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+  .chat-panel {
+    margin-bottom: var(--spacing-6);
+    animation: slideDown 0.2s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .recipe-detail {
@@ -1383,40 +1532,6 @@
   .cooking-ingredients ul {
     margin: 0;
     padding-left: var(--spacing-6);
-  }
-
-  .btn-favorite {
-    padding: var(--spacing-2-5) var(--spacing-4);
-    background: var(--color-surface);
-    color: var(--color-text);
-    border: 2px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    font-weight: var(--font-medium);
-    cursor: pointer;
-    transition: var(--transition-normal);
-    font-size: var(--text-sm);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-2);
-    box-shadow: var(--shadow-xs);
-  }
-
-  .btn-favorite.is-favorite {
-    background: var(--color-secondary);
-    color: white;
-    border-color: var(--color-secondary);
-  }
-
-  .btn-favorite:hover {
-    background: var(--color-bg-subtle);
-    border-color: var(--color-primary);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
-  }
-
-  .btn-favorite.is-favorite:hover {
-    background: #e85a2a;
-    border-color: #e85a2a;
   }
 
   .btn-cooking {

@@ -6,6 +6,7 @@ import { recipes, tags, recipeTags, recipeComponents, type NutritionInfo, type I
 import { eq, like, or, inArray, sql, and } from 'drizzle-orm';
 import { parseRecipeJsonLd } from '../../utils/jsonld-parser.js';
 import { convertRecipeIngredients, cleanRecipeInstructions } from '../../utils/unit-converter.js';
+import { photoImportService, type ExtractedRecipe } from '../../services/ai/photo-import.js';
 
 /**
  * Validate URL to prevent SSRF attacks
@@ -1267,5 +1268,201 @@ export const recipeRouter = t.router({
       }
 
       return { success: true };
+    }),
+
+  // ========== Photo Import Endpoints ==========
+
+  /**
+   * Extract a recipe from one or more photos (multi-page support).
+   * Multiple images are treated as pages of the same recipe.
+   */
+  extractFromPhotos: protectedProcedure
+    .input(
+      z.object({
+        /** Base64 encoded images - can be multiple pages of the same recipe */
+        images: z.array(z.string()).min(1).max(10),
+        /** Optional hint about what the recipe might be */
+        hint: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const initialized = await photoImportService.initialize();
+        if (!initialized) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'AI service not configured. Please add your Anthropic API key in Settings.',
+          });
+        }
+
+        const extractedRecipe = await photoImportService.extractRecipeFromPhotos({
+          images: input.images,
+          hint: input.hint,
+        });
+
+        return extractedRecipe;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        if (error instanceof Error) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: error.message,
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to extract recipe from photos',
+        });
+      }
+    }),
+
+  /**
+   * Analyze multiple photos and group them by recipe.
+   * Use this when uploading many photos that might contain multiple different recipes.
+   */
+  analyzePhotoGroups: protectedProcedure
+    .input(
+      z.object({
+        /** Base64 encoded images */
+        images: z.array(z.string()).min(1).max(20),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const initialized = await photoImportService.initialize();
+        if (!initialized) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'AI service not configured. Please add your Anthropic API key in Settings.',
+          });
+        }
+
+        const result = await photoImportService.analyzeAndGroupPhotos(input.images);
+
+        // Return indices instead of actual images for the client
+        // The client already has the images, just needs to know how to group them
+        const groupIndices: number[][] = [];
+        const imageToIndex = new Map<string, number>();
+        input.images.forEach((img, idx) => imageToIndex.set(img, idx));
+
+        for (const group of result.groups) {
+          const indices: number[] = [];
+          for (const img of group) {
+            const idx = imageToIndex.get(img);
+            if (idx !== undefined) {
+              indices.push(idx);
+            }
+          }
+          if (indices.length > 0) {
+            groupIndices.push(indices);
+          }
+        }
+
+        return {
+          groupIndices,
+          notes: result.notes,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        if (error instanceof Error) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: error.message,
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to analyze photo groups',
+        });
+      }
+    }),
+
+  /**
+   * Bulk extract recipes from grouped photos.
+   * Each group is processed as a single recipe.
+   */
+  bulkExtractFromPhotos: protectedProcedure
+    .input(
+      z.object({
+        /** Array of image groups. Each group contains base64 images for one recipe. */
+        imageGroups: z.array(z.array(z.string()).min(1).max(10)).min(1).max(20),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const initialized = await photoImportService.initialize();
+        if (!initialized) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'AI service not configured. Please add your Anthropic API key in Settings.',
+          });
+        }
+
+        const extractedRecipes = await photoImportService.extractRecipesFromPhotoGroups(
+          input.imageGroups
+        );
+
+        return { recipes: extractedRecipes };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        if (error instanceof Error) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: error.message,
+          });
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to extract recipes from photos',
+        });
+      }
+    }),
+
+  /**
+   * Bulk create multiple recipes at once (for saving extracted recipes).
+   */
+  bulkCreate: protectedProcedure
+    .input(
+      z.object({
+        recipes: z.array(recipeInputSchema).min(1).max(20),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const createdRecipes = [];
+
+      for (const recipeInput of input.recipes) {
+        const { tags: tagNames, ...recipeData } = recipeInput;
+
+        // Create recipe
+        const [newRecipe] = await db
+          .insert(recipes)
+          .values({
+            ...recipeData,
+            imageUrl: recipeData.imageUrl || null,
+            sourceUrl: recipeData.sourceUrl || null,
+          })
+          .returning();
+
+        // Associate tags
+        if (tagNames.length > 0) {
+          const tagIds = await getOrCreateTags(tagNames);
+
+          await db.insert(recipeTags).values(
+            tagIds.map((tagId) => ({
+              recipeId: newRecipe.id,
+              tagId,
+            }))
+          );
+        }
+
+        const tagsForRecipe = await getRecipeTags(newRecipe.id);
+
+        createdRecipes.push({
+          ...newRecipe,
+          tags: tagsForRecipe,
+        });
+      }
+
+      return { recipes: createdRecipes, count: createdRecipes.length };
     }),
 });

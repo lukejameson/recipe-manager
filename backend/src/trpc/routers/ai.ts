@@ -9,7 +9,7 @@ import { suggestSubstitutions } from '../../services/ai/substitution.js';
 import { suggestImprovements, applyImprovements } from '../../services/ai/improvement.js';
 import { adaptRecipe, type AdaptationType } from '../../services/ai/adaptation.js';
 import { findMatchingRecipes } from '../../services/ai/pantry-match.js';
-import { chatAboutRecipes } from '../../services/ai/recipe-chat.js';
+import { chatAboutRecipes, chatAboutSpecificRecipe } from '../../services/ai/recipe-chat.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -330,6 +330,48 @@ export const aiRouter = t.router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error.message || 'Failed to chat about recipes',
+        });
+      }
+    }),
+
+  /**
+   * Chat about a specific recipe - ask questions, get suggestions, etc.
+   */
+  chatAboutRecipe: protectedProcedure
+    .input(
+      z.object({
+        recipe: z.object({
+          title: z.string(),
+          description: z.string().optional(),
+          ingredients: z.array(z.string()),
+          instructions: z.array(z.string()),
+          prepTime: z.number().optional(),
+          cookTime: z.number().optional(),
+          servings: z.number().optional(),
+          tags: z.array(z.string()).optional(),
+        }),
+        messages: z.array(
+          z.object({
+            role: z.enum(['user', 'assistant']),
+            content: z.string(),
+          })
+        ).min(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const initialized = await aiService.initialize();
+      if (!initialized) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'AI service not configured. Please add your Anthropic API key in Settings.',
+        });
+      }
+      try {
+        return await chatAboutSpecificRecipe(input);
+      } catch (error: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error.message || 'Failed to chat about recipe',
         });
       }
     }),

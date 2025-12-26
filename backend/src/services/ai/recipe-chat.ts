@@ -80,6 +80,108 @@ async function getApiConfig(): Promise<{ apiKey: string; model: string } | null>
   }
 }
 
+// System prompt for chatting about a specific recipe
+const SPECIFIC_RECIPE_CHAT_SYSTEM_PROMPT = `You are a helpful culinary assistant. The user is viewing a specific recipe and wants to ask questions about it.
+
+You can help with:
+- Explaining techniques or ingredients
+- Suggesting modifications or substitutions
+- Scaling the recipe up or down
+- Dietary adaptations
+- Troubleshooting cooking issues
+- Pairing suggestions (wines, sides, etc.)
+- Storage and reheating tips
+- Timing and prep advice
+
+Keep your responses concise and practical. Focus on the specific recipe context provided.
+If the user asks for a modified version of the recipe, you can provide updated ingredients or instructions.
+Be friendly and helpful, like a knowledgeable friend in the kitchen.`;
+
+export interface RecipeContext {
+  title: string;
+  description?: string;
+  ingredients: string[];
+  instructions: string[];
+  prepTime?: number;
+  cookTime?: number;
+  servings?: number;
+  tags?: string[];
+}
+
+export interface SpecificRecipeChatInput {
+  recipe: RecipeContext;
+  messages: ChatMessage[];
+}
+
+/**
+ * Chat about a specific recipe - answer questions, suggest modifications, etc.
+ */
+export async function chatAboutSpecificRecipe(
+  input: SpecificRecipeChatInput
+): Promise<{ message: string }> {
+  const config = await getApiConfig();
+
+  if (!config) {
+    throw new Error('AI service not configured. Please add your Anthropic API key in Settings.');
+  }
+
+  // Build the recipe context as the first message
+  const recipeContext = `Here is the recipe the user is asking about:
+
+**${input.recipe.title}**
+${input.recipe.description ? `\n${input.recipe.description}\n` : ''}
+${input.recipe.servings ? `Servings: ${input.recipe.servings}` : ''}
+${input.recipe.prepTime ? ` | Prep: ${input.recipe.prepTime} min` : ''}
+${input.recipe.cookTime ? ` | Cook: ${input.recipe.cookTime} min` : ''}
+${input.recipe.tags?.length ? `\nTags: ${input.recipe.tags.join(', ')}` : ''}
+
+**Ingredients:**
+${input.recipe.ingredients.map((i) => `- ${i}`).join('\n')}
+
+**Instructions:**
+${input.recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
+
+  // Prepend recipe context to messages
+  const messagesWithContext = [
+    { role: 'user' as const, content: recipeContext },
+    { role: 'assistant' as const, content: 'I can see this recipe. What would you like to know about it?' },
+    ...input.messages,
+  ];
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': config.apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: config.model,
+      max_tokens: 1024,
+      system: SPECIFIC_RECIPE_CHAT_SYSTEM_PROMPT,
+      messages: messagesWithContext.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      temperature: 0.5,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
+    const errorMessage = errorData.error?.message || response.statusText;
+    throw new Error(`AI error: ${errorMessage}`);
+  }
+
+  const data = (await response.json()) as {
+    content: Array<{ text: string }>;
+  };
+
+  return {
+    message: data.content[0].text,
+  };
+}
+
 export async function chatAboutRecipes(
   input: RecipeChatInput
 ): Promise<RecipeChatResponse> {

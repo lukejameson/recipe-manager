@@ -1,16 +1,119 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
   import { trpc } from '$lib/trpc/client';
   import Header from '$lib/components/Header.svelte';
   import RecipeForm from '$lib/components/RecipeForm.svelte';
+  import PhotoUploader from '$lib/components/PhotoUploader.svelte';
+  import PhotoGrouper from '$lib/components/PhotoGrouper.svelte';
+  import BulkRecipeReview from '$lib/components/BulkRecipeReview.svelte';
 
-  let mode = $state<'url' | 'jsonld' | 'preview'>('url');
+  type ImportMode = 'url' | 'jsonld' | 'photos' | 'preview';
+  type PhotoStep = 'upload' | 'group' | 'extract' | 'review';
+
+  const DRAFT_STORAGE_KEY = 'recipe-photo-import-draft';
+
+  interface PhotoImportDraft {
+    photos: string[];
+    photoGroups: number[][];
+    photoStep: PhotoStep;
+    savedAt: number;
+  }
+
+  let mode = $state<ImportMode>('url');
   let url = $state('');
   let jsonld = $state('');
   let fetchedRecipe = $state<any>(null);
   let loading = $state(false);
   let error = $state('');
-  let convertToMetric = $state(true); // Default to true for metric conversion
+  let convertToMetric = $state(true);
+
+  // Photo import state
+  let photoStep = $state<PhotoStep>('upload');
+  let photos = $state<string[]>([]);
+  let photoGroups = $state<number[][]>([]);
+  let extractedRecipes = $state<any[]>([]);
+  let extractedImageGroups = $state<string[][]>([]);
+  let extractionProgress = $state({ current: 0, total: 0 });
+  let extracting = $state(false);
+  let saving = $state(false);
+  let hasDraft = $state(false);
+  let draftSavedAt = $state<Date | null>(null);
+
+  // Economy mode - uses higher compression to reduce API costs
+  let economyMode = $state(false);
+  const compressionLevel = $derived(economyMode ? 'high' : 'standard') as 'standard' | 'high';
+
+  // Load draft on mount
+  onMount(() => {
+    loadDraft();
+  });
+
+  // Auto-save draft when photos or groups change
+  $effect(() => {
+    if (photos.length > 0 && (photoStep === 'upload' || photoStep === 'group')) {
+      saveDraft();
+    }
+  });
+
+  function saveDraft() {
+    try {
+      const draft: PhotoImportDraft = {
+        photos,
+        photoGroups,
+        photoStep,
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      draftSavedAt = new Date(draft.savedAt);
+    } catch (err) {
+      // Ignore storage errors (e.g., quota exceeded)
+      console.warn('Failed to save draft:', err);
+    }
+  }
+
+  function loadDraft() {
+    try {
+      const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (stored) {
+        const draft: PhotoImportDraft = JSON.parse(stored);
+        // Only restore if draft is less than 24 hours old
+        const maxAge = 24 * 60 * 60 * 1000;
+        if (Date.now() - draft.savedAt < maxAge && draft.photos.length > 0) {
+          hasDraft = true;
+          draftSavedAt = new Date(draft.savedAt);
+        }
+      }
+    } catch (err) {
+      // Ignore parse errors
+    }
+  }
+
+  function restoreDraft() {
+    try {
+      const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (stored) {
+        const draft: PhotoImportDraft = JSON.parse(stored);
+        photos = draft.photos;
+        photoGroups = draft.photoGroups;
+        photoStep = draft.photoStep;
+        mode = 'photos';
+        hasDraft = false;
+      }
+    } catch (err) {
+      error = 'Failed to restore draft';
+    }
+  }
+
+  function clearDraft() {
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      hasDraft = false;
+      draftSavedAt = null;
+    } catch (err) {
+      // Ignore
+    }
+  }
 
   async function handleFetchFromUrl() {
     error = '';
@@ -66,6 +169,91 @@
       goto('/');
     }
   }
+
+  // Photo import functions
+  function handlePhotosNext() {
+    if (photos.length === 0) {
+      error = 'Please upload at least one photo';
+      return;
+    }
+    error = '';
+    photoGroups = [photos.map((_, i) => i)];
+    photoStep = 'group';
+  }
+
+  async function handleExtractRecipes(imageGroups: string[][]) {
+    error = '';
+    extracting = true;
+    extractionProgress = { current: 0, total: imageGroups.length };
+    photoStep = 'extract';
+    extractedImageGroups = imageGroups;
+
+    try {
+      const result = await trpc.recipe.bulkExtractFromPhotos.mutate({ imageGroups });
+      extractedRecipes = result.recipes;
+      photoStep = 'review';
+    } catch (err: any) {
+      error = err.message || 'Failed to extract recipes from photos';
+      photoStep = 'group';
+    } finally {
+      extracting = false;
+    }
+  }
+
+  async function handleRetryExtraction(groupIndex: number): Promise<any | null> {
+    if (!extractedImageGroups[groupIndex]) return null;
+
+    try {
+      const result = await trpc.recipe.extractFromPhotos.mutate({
+        images: extractedImageGroups[groupIndex],
+      });
+      return result;
+    } catch (err: any) {
+      error = err.message || 'Failed to retry extraction';
+      return null;
+    }
+  }
+
+  async function handleSaveBulkRecipes(recipes: any[]) {
+    saving = true;
+    error = '';
+
+    try {
+      await trpc.recipe.bulkCreate.mutate({ recipes });
+      clearDraft();
+      goto('/');
+    } catch (err: any) {
+      error = err.message || 'Failed to save recipes';
+      saving = false;
+    }
+  }
+
+  function handlePhotoBack() {
+    error = '';
+    if (photoStep === 'group') {
+      photoStep = 'upload';
+    } else if (photoStep === 'review') {
+      photoStep = 'group';
+    }
+  }
+
+  function resetPhotoImport() {
+    photoStep = 'upload';
+    photos = [];
+    photoGroups = [];
+    extractedRecipes = [];
+    extractedImageGroups = [];
+    error = '';
+    clearDraft();
+  }
+
+  function handleModeChange(newMode: ImportMode) {
+    mode = newMode;
+    error = '';
+    if (newMode === 'photos') {
+      resetPhotoImport();
+    }
+  }
 </script>
 
 <Header />
@@ -73,6 +261,35 @@
 <main>
   <div class="container">
     <h2>Import Recipe</h2>
+
+    {#if hasDraft && mode !== 'photos'}
+      <div class="draft-banner">
+        <div class="draft-info">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+          </svg>
+          <div>
+            <strong>You have an unsaved photo import</strong>
+            {#if draftSavedAt}
+              <span class="draft-time">
+                Saved {draftSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            {/if}
+          </div>
+        </div>
+        <div class="draft-actions">
+          <button type="button" class="btn-restore" onclick={restoreDraft}>
+            Continue
+          </button>
+          <button type="button" class="btn-discard" onclick={clearDraft}>
+            Discard
+          </button>
+        </div>
+      </div>
+    {/if}
 
     {#if mode === 'preview' && fetchedRecipe}
       <div class="info">
@@ -83,13 +300,19 @@
       <div class="mode-toggle">
         <button
           class:active={mode === 'url'}
-          onclick={() => { mode = 'url'; error = ''; }}
+          onclick={() => handleModeChange('url')}
         >
           From URL
         </button>
         <button
+          class:active={mode === 'photos'}
+          onclick={() => handleModeChange('photos')}
+        >
+          From Photos
+        </button>
+        <button
           class:active={mode === 'jsonld'}
-          onclick={() => { mode = 'jsonld'; error = ''; }}
+          onclick={() => handleModeChange('jsonld')}
         >
           From JSONLD
         </button>
@@ -142,6 +365,77 @@
             </button>
           </div>
         </form>
+      {:else if mode === 'photos'}
+        {#if photoStep === 'upload'}
+          <div class="info">
+            <p>
+              <strong>Import recipes from photos of cookbooks or recipe cards.</strong>
+            </p>
+            <p>
+              Upload photos of your recipes. Multi-page recipes are supported - just upload all pages and group them together in the next step.
+            </p>
+          </div>
+
+          <div class="economy-toggle">
+            <label class="toggle-label">
+              <input type="checkbox" bind:checked={economyMode} />
+              <span class="toggle-text">
+                <strong>Economy Mode</strong>
+                <span class="toggle-hint">Uses higher image compression to reduce AI costs (~40% savings)</span>
+              </span>
+            </label>
+          </div>
+
+          <PhotoUploader bind:images={photos} maxImages={20} {compressionLevel} />
+
+          <div class="form-actions">
+            <button
+              type="button"
+              class="btn-primary"
+              onclick={handlePhotosNext}
+              disabled={photos.length === 0}
+            >
+              Next: Group Photos
+            </button>
+            <button type="button" class="btn-secondary" onclick={() => goto('/')}>
+              Cancel
+            </button>
+          </div>
+        {:else if photoStep === 'group'}
+          <PhotoGrouper
+            images={photos}
+            bind:groups={photoGroups}
+            onExtract={handleExtractRecipes}
+            disabled={extracting}
+          />
+
+          <div class="back-link">
+            <button type="button" class="btn-link" onclick={handlePhotoBack}>
+              Back to Upload
+            </button>
+          </div>
+        {:else if photoStep === 'extract'}
+          <div class="extracting-state">
+            <div class="spinner-large"></div>
+            <h3>Extracting Recipes...</h3>
+            <p>Analyzing your photos with AI. This may take a moment.</p>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: {(extractionProgress.current / extractionProgress.total) * 100}%"></div>
+            </div>
+            <p class="progress-text">
+              {extractionProgress.current} of {extractionProgress.total} recipes processed
+            </p>
+          </div>
+        {:else if photoStep === 'review'}
+          <BulkRecipeReview
+            recipes={extractedRecipes}
+            imageGroups={extractedImageGroups}
+            onSave={handleSaveBulkRecipes}
+            onBack={handlePhotoBack}
+            onRetry={handleRetryExtraction}
+            {saving}
+          />
+        {/if}
       {:else}
         <div class="info">
           <p>
@@ -396,6 +690,196 @@
 
   .btn-secondary:hover {
     background: #f5f5f5;
+  }
+
+  /* Draft banner styles */
+  .draft-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-4);
+    padding: var(--spacing-4);
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-6);
+  }
+
+  .draft-info {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    color: #0369a1;
+  }
+
+  .draft-info svg {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .draft-time {
+    display: block;
+    font-size: var(--text-sm);
+    color: #0284c7;
+    font-weight: normal;
+  }
+
+  .draft-actions {
+    display: flex;
+    gap: var(--spacing-2);
+  }
+
+  .btn-restore {
+    padding: var(--spacing-2) var(--spacing-4);
+    background: #0284c7;
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-restore:hover {
+    background: #0369a1;
+  }
+
+  .btn-discard {
+    padding: var(--spacing-2) var(--spacing-4);
+    background: transparent;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-discard:hover {
+    background: #f1f5f9;
+  }
+
+  /* Economy mode toggle */
+  .economy-toggle {
+    margin-bottom: var(--spacing-4);
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-3);
+    padding: var(--spacing-4);
+    background: var(--color-surface);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .toggle-label:hover {
+    border-color: var(--color-primary-light);
+  }
+
+  .toggle-label:has(input:checked) {
+    border-color: var(--color-primary);
+    background: rgba(255, 107, 53, 0.03);
+  }
+
+  .toggle-label input {
+    margin-top: 2px;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+  }
+
+  .toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1);
+  }
+
+  .toggle-hint {
+    font-size: var(--text-sm);
+    color: var(--color-text-light);
+    font-weight: normal;
+  }
+
+  /* Photo import styles */
+  .back-link {
+    margin-top: var(--spacing-4);
+  }
+
+  .btn-link {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .btn-link:hover {
+    text-decoration: underline;
+  }
+
+  .extracting-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-12) var(--spacing-4);
+    text-align: center;
+  }
+
+  .spinner-large {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: var(--spacing-6);
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .extracting-state h3 {
+    margin: 0 0 var(--spacing-2) 0;
+    color: var(--color-text);
+  }
+
+  .extracting-state p {
+    margin: 0;
+    color: var(--color-text-light);
+  }
+
+  .progress-bar {
+    width: 100%;
+    max-width: 300px;
+    height: 8px;
+    background: var(--color-border);
+    border-radius: 4px;
+    margin-top: var(--spacing-6);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--color-primary);
+    transition: width 0.3s ease;
+    border-radius: 4px;
+  }
+
+  .progress-text {
+    margin-top: var(--spacing-2) !important;
+    font-size: var(--text-sm);
   }
 
   @media (max-width: 640px) {
