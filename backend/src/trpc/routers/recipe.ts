@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
-import { recipes, tags, recipeTags, recipeComponents, type NutritionInfo, type ImprovementSuggestion } from '../../db/schema.js';
+import { recipes, tags, recipeTags, recipeComponents, settings, type NutritionInfo, type ImprovementSuggestion } from '../../db/schema.js';
+import { decrypt } from '../../utils/encryption.js';
 import { eq, like, or, inArray, sql, and } from 'drizzle-orm';
 import { parseRecipeJsonLd } from '../../utils/jsonld-parser.js';
 import { convertRecipeIngredients, cleanRecipeInstructions } from '../../utils/unit-converter.js';
@@ -1467,5 +1468,133 @@ export const recipeRouter = t.router({
       }
 
       return { recipes: createdRecipes, count: createdRecipes.length };
+    }),
+
+  /**
+   * Search for images using Pexels API
+   * Returns images sorted by relevance to recipe tags
+   */
+  searchImages: protectedProcedure
+    .input(
+      z.object({
+        query: z.string().min(1).max(200),
+        tags: z.array(z.string()).optional(),
+        page: z.number().min(1).default(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      // Get Pexels API key from settings
+      const [appSettings] = await db
+        .select()
+        .from(settings)
+        .where(eq(settings.id, 'app-settings'))
+        .limit(1);
+
+      if (!appSettings?.pexelsApiKey) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Pexels API key not configured. Please add it in Settings.',
+        });
+      }
+
+      let pexelsApiKey: string;
+      try {
+        pexelsApiKey = decrypt(appSettings.pexelsApiKey);
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to decrypt Pexels API key',
+        });
+      }
+
+      // Call Pexels API
+      const searchParams = new URLSearchParams({
+        query: input.query,
+        per_page: '15',
+        page: input.page.toString(),
+      });
+
+      const response = await fetch(
+        `https://api.pexels.com/v1/search?${searchParams}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: pexelsApiKey,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Pexels API error: ${response.status} ${errorText}`,
+        });
+      }
+
+      const data = (await response.json()) as {
+        photos: Array<{
+          id: number;
+          src: {
+            original: string;
+            large: string;
+            medium: string;
+            small: string;
+          };
+          alt: string;
+          photographer: string;
+        }>;
+        total_results: number;
+        page: number;
+        per_page: number;
+      };
+
+      // Score and sort images by tag relevance
+      const searchTags = input.tags?.map((t) => t.toLowerCase()) || [];
+
+      const scoredImages = data.photos.map((photo, originalIndex) => {
+        let score = 0;
+        const altLower = (photo.alt || '').toLowerCase();
+
+        // Score by tag matches
+        for (const tag of searchTags) {
+          if (altLower.includes(tag)) {
+            score += 1;
+          }
+        }
+
+        return {
+          id: photo.id.toString(),
+          url: photo.src.large,
+          thumbnailUrl: photo.src.medium,
+          alt: photo.alt || input.query,
+          photographer: photo.photographer,
+          score,
+          originalIndex,
+        };
+      });
+
+      // Sort by score (descending), then by original index
+      scoredImages.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.originalIndex - b.originalIndex;
+      });
+
+      // Remove internal fields before returning
+      const images = scoredImages.map(({ id, url, thumbnailUrl, alt, photographer }) => ({
+        id,
+        url,
+        thumbnailUrl,
+        alt,
+        photographer,
+      }));
+
+      return {
+        images,
+        totalResults: data.total_results,
+        page: data.page,
+        perPage: data.per_page,
+        hasMore: data.page * data.per_page < data.total_results,
+      };
     }),
 });

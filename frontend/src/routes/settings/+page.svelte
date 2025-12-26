@@ -17,10 +17,17 @@
   let availableModels = $state<Array<{ id: string; name: string }>>([]);
   let testResult = $state<{ valid: boolean; error?: string } | null>(null);
 
+  // Pexels API settings
+  let hasPexelsApiKey = $state(false);
+  let pexelsApiKey = $state('');
+  let savingPexels = $state(false);
+  let pexelsSuccess = $state('');
+
   onMount(async () => {
     try {
       const settings = await trpc.settings.get.query();
       hasApiKey = settings.hasApiKey;
+      hasPexelsApiKey = settings.hasPexelsApiKey;
       selectedModel = settings.model;
       selectedSecondaryModel = settings.secondaryModel;
       availableModels = [...settings.availableModels];
@@ -122,6 +129,47 @@
       saving = false;
     }
   }
+
+  async function handleSavePexelsKey() {
+    if (!pexelsApiKey.trim()) return;
+
+    savingPexels = true;
+    error = '';
+
+    try {
+      await trpc.settings.update.mutate({ pexelsApiKey: pexelsApiKey.trim() });
+      hasPexelsApiKey = true;
+      pexelsApiKey = '';
+      pexelsSuccess = 'Pexels API key saved!';
+      setTimeout(() => {
+        pexelsSuccess = '';
+      }, 3000);
+    } catch (err: any) {
+      error = err.message || 'Failed to save Pexels API key';
+    } finally {
+      savingPexels = false;
+    }
+  }
+
+  async function handleClearPexelsKey() {
+    if (!confirm('Are you sure you want to remove the Pexels API key?')) return;
+
+    savingPexels = true;
+    error = '';
+
+    try {
+      await trpc.settings.update.mutate({ pexelsApiKey: '' });
+      hasPexelsApiKey = false;
+      pexelsSuccess = 'Pexels API key removed';
+      setTimeout(() => {
+        pexelsSuccess = '';
+      }, 3000);
+    } catch (err: any) {
+      error = err.message || 'Failed to remove Pexels API key';
+    } finally {
+      savingPexels = false;
+    }
+  }
 </script>
 
 <Header />
@@ -216,6 +264,50 @@
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
         </div>
+      </section>
+
+      <section class="settings-section">
+        <h2>Image Search</h2>
+        <p class="section-description">
+          Configure Pexels API to enable searching for recipe images directly from the recipe form.
+        </p>
+
+        {#if pexelsSuccess}
+          <div class="success-message">{pexelsSuccess}</div>
+        {/if}
+
+        <div class="form-group">
+          <label for="pexelsApiKey">Pexels API Key</label>
+          {#if hasPexelsApiKey}
+            <div class="api-key-status">
+              <span class="status-badge configured">API Key Configured</span>
+              <button onclick={handleClearPexelsKey} class="btn-text-danger" disabled={savingPexels}>
+                Remove
+              </button>
+            </div>
+          {/if}
+          <input
+            id="pexelsApiKey"
+            type="password"
+            bind:value={pexelsApiKey}
+            placeholder={hasPexelsApiKey ? 'Enter new key to replace...' : 'Enter your Pexels API key'}
+            autocomplete="off"
+          />
+          <p class="hint">
+            Get a free API key from
+            <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">
+              pexels.com/api
+            </a>
+          </p>
+        </div>
+
+        {#if pexelsApiKey.trim()}
+          <div class="form-actions">
+            <button onclick={handleSavePexelsKey} class="btn-primary" disabled={savingPexels}>
+              {savingPexels ? 'Saving...' : 'Save Pexels API Key'}
+            </button>
+          </div>
+        {/if}
       </section>
 
       <section class="settings-section info-section">

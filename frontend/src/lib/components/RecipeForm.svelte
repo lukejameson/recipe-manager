@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { trpc } from '$lib/trpc/client';
   import AddComponentModal from './AddComponentModal.svelte';
+  import ImageSearchModal from './ImageSearchModal.svelte';
   import AIButton from './ai/AIButton.svelte';
   import TagSuggestionsPanel from './ai/TagSuggestionsPanel.svelte';
 
@@ -32,6 +33,9 @@
   // Components for compound recipes
   let showComponents = $state(false);
   let showComponentModal = $state(false);
+
+  // Image search modal
+  let showImageSearch = $state(false);
   let components = $state<Array<{ childRecipeId: string; servingsNeeded: number; childRecipe: any }>>([]);
 
   // Load existing components when editing
@@ -407,8 +411,17 @@
   </div>
 
   <div class="form-group">
-    <label for="imageUrl">Image URL</label>
-    <input id="imageUrl" type="url" bind:value={imageUrl} />
+    <div class="label-with-action">
+      <label for="imageUrl">Image URL</label>
+      <button
+        type="button"
+        class="btn-search-image"
+        onclick={() => showImageSearch = true}
+      >
+        Search Images
+      </button>
+    </div>
+    <input id="imageUrl" type="url" bind:value={imageUrl} placeholder="https://example.com/image.jpg" />
   </div>
 
   <div class="form-group">
@@ -580,6 +593,15 @@
   />
 {/if}
 
+{#if showImageSearch}
+  <ImageSearchModal
+    recipeName={title}
+    tags={tags.split(',').map(t => t.trim()).filter(Boolean)}
+    onSelect={(url) => { imageUrl = url; showImageSearch = false; }}
+    onClose={() => showImageSearch = false}
+  />
+{/if}
+
 <style>
   .recipe-form {
     max-width: 800px;
@@ -624,6 +646,23 @@
 
   .label-with-action label {
     margin-bottom: 0;
+  }
+
+  .btn-search-image {
+    padding: var(--spacing-1) var(--spacing-3);
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-primary);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-search-image:hover {
+    background: var(--color-surface);
+    border-color: var(--color-primary);
   }
 
   .field-error {

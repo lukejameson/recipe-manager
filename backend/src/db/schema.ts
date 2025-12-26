@@ -141,6 +141,7 @@ export const settings = sqliteTable('settings', {
   anthropicApiKey: text('anthropic_api_key'), // Encrypted
   anthropicModel: text('anthropic_model').default('claude-3-5-sonnet-20241022'),
   anthropicSecondaryModel: text('anthropic_secondary_model').default('claude-3-haiku-20240307'),
+  pexelsApiKey: text('pexels_api_key'), // Encrypted - for image search
   updatedAt: integer('updated_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`),

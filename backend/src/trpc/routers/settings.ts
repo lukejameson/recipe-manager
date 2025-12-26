@@ -92,6 +92,7 @@ export const settingsRouter = t.router({
 
     return {
       hasApiKey: !!appSettings?.anthropicApiKey,
+      hasPexelsApiKey: !!appSettings?.pexelsApiKey,
       model: appSettings?.anthropicModel || 'claude-sonnet-4-20250514',
       secondaryModel: appSettings?.anthropicSecondaryModel || 'claude-3-haiku-20240307',
       availableModels,
@@ -117,6 +118,7 @@ export const settingsRouter = t.router({
         anthropicApiKey: z.string().optional(),
         anthropicModel: z.string().optional(),
         anthropicSecondaryModel: z.string().optional(),
+        pexelsApiKey: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -128,6 +130,13 @@ export const settingsRouter = t.router({
       if (input.anthropicApiKey !== undefined) {
         updateData.anthropicApiKey = input.anthropicApiKey
           ? encrypt(input.anthropicApiKey)
+          : null;
+      }
+
+      // Handle Pexels API key - same pattern as Anthropic key
+      if (input.pexelsApiKey !== undefined) {
+        updateData.pexelsApiKey = input.pexelsApiKey
+          ? encrypt(input.pexelsApiKey)
           : null;
       }
 
