@@ -148,6 +148,7 @@ ${input.recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
     ...input.messages,
   ];
 
+  // Use Haiku for recipe Q&A (simpler task than creative brainstorming)
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -156,7 +157,7 @@ ${input.recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: config.model,
+      model: 'claude-haiku-4-20250514',
       max_tokens: 1024,
       system: SPECIFIC_RECIPE_CHAT_SYSTEM_PROMPT,
       messages: messagesWithContext.map((m) => ({

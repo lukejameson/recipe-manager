@@ -418,13 +418,16 @@ export const recipeRouter = t.router({
     .query(async ({ input }) => {
       let query = db.select().from(recipes);
 
-      // Filter by search term
+      // Filter by search term - full-text search across title, description, ingredients, instructions, notes
       if (input?.search) {
         const searchTerm = `%${input.search}%`;
         query = query.where(
           or(
             like(recipes.title, searchTerm),
-            like(recipes.description, searchTerm)
+            like(recipes.description, searchTerm),
+            like(recipes.ingredients, searchTerm),
+            like(recipes.instructions, searchTerm),
+            like(recipes.notes, searchTerm)
           )
         ) as any;
       }

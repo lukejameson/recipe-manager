@@ -173,11 +173,32 @@
     }
   }
 
+  function formatExtractionNotes(recipe: any, originalRecipe: ExtractedRecipe): string {
+    const lines: string[] = [];
+    const now = new Date().toLocaleDateString();
+
+    lines.push(`📷 Imported from photo on ${now}`);
+    lines.push(`Extraction confidence: ${Math.round(originalRecipe.confidence * 100)}%`);
+
+    if (originalRecipe.extractionNotes) {
+      lines.push('');
+      lines.push('AI notes:');
+      lines.push(originalRecipe.extractionNotes);
+    }
+
+    return lines.join('\n');
+  }
+
   async function handleSaveSelected() {
     const toSave = Array.from(selectedIndices)
       .filter((i) => !editedRecipes[i].failed)
       .map((i) => {
         const recipe = editedRecipes[i];
+        const originalRecipe = recipes[i];
+
+        // Format notes with extraction metadata
+        const extractionNote = formatExtractionNotes(recipe, originalRecipe);
+
         return {
           title: recipe.title,
           description: recipe.description || undefined,
@@ -188,6 +209,7 @@
           ingredients: recipe.ingredients,
           instructions: recipe.instructions,
           tags: recipe.tags.map((t: any) => (typeof t === 'string' ? t : t.name)),
+          notes: extractionNote,
         };
       });
 

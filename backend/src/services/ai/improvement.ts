@@ -76,6 +76,7 @@ ${recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
     userPrompt,
     maxTokens: 1024,
     temperature: 0.5,
+    useHaiku: true, // Suggestion generation task
   });
 
   try {

@@ -55,6 +55,7 @@ export async function suggestSubstitutions(input: SubstitutionInput): Promise<Su
     userPrompt,
     maxTokens: 768,
     temperature: 0.3,
+    useHaiku: true, // Simple suggestion task
   });
 
   try {

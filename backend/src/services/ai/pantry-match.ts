@@ -72,6 +72,7 @@ Score how well each recipe matches the available ingredients. Return as JSON.`;
     userPrompt,
     maxTokens: 2048,
     temperature: 0.2,
+    useHaiku: true, // Matching/scoring task
   });
 
   try {

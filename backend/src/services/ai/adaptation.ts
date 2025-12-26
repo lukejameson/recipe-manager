@@ -92,6 +92,7 @@ Return the adapted recipe as JSON.`;
     userPrompt,
     maxTokens: 2048,
     temperature: 0.3,
+    useHaiku: true, // Rule-based substitution task
   });
 
   try {

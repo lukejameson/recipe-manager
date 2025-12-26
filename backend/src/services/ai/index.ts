@@ -8,6 +8,8 @@ export interface AICompletionOptions {
   userPrompt: string;
   maxTokens?: number;
   temperature?: number;
+  /** Override the default model (use 'haiku' for simple tasks) */
+  useHaiku?: boolean;
 }
 
 export interface AICompletionResult {
@@ -78,6 +80,9 @@ export class AIService {
       throw new Error('AI service not initialized. Please configure your API key in Settings.');
     }
 
+    // Use Haiku for simple tasks to reduce costs
+    const modelToUse = options.useHaiku ? 'claude-haiku-4-20250514' : this.model;
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -86,7 +91,7 @@ export class AIService {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: this.model,
+        model: modelToUse,
         max_tokens: options.maxTokens || 1024,
         system: options.systemPrompt,
         messages: [{ role: 'user', content: options.userPrompt }],
@@ -112,6 +117,39 @@ export class AIService {
         outputTokens: data.usage.output_tokens,
       },
     };
+  }
+
+  /**
+   * Execute multiple AI completions in parallel with concurrency limit.
+   * Useful for batch operations like calculating nutrition for multiple recipes.
+   * @param optionsArray - Array of completion options
+   * @param concurrencyLimit - Maximum parallel requests (default: 3)
+   * @returns Array of results (in same order as input)
+   */
+  async batchComplete(
+    optionsArray: AICompletionOptions[],
+    concurrencyLimit: number = 3
+  ): Promise<Array<AICompletionResult | { error: string }>> {
+    const results: Array<AICompletionResult | { error: string }> = new Array(optionsArray.length);
+
+    const processItem = async (index: number): Promise<void> => {
+      try {
+        results[index] = await this.complete(optionsArray[index]);
+      } catch (error) {
+        results[index] = {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    };
+
+    // Process in batches with concurrency limit
+    const indices = optionsArray.map((_, i) => i);
+    for (let i = 0; i < indices.length; i += concurrencyLimit) {
+      const batch = indices.slice(i, i + concurrencyLimit);
+      await Promise.all(batch.map(processItem));
+    }
+
+    return results;
   }
 }
 

@@ -404,37 +404,51 @@ Images are numbered 0 through ${images.length - 1} in the order provided.`;
   /**
    * Extract multiple recipes from multiple photo groups.
    * Each group is processed as a single recipe.
+   * Uses parallel processing with concurrency limit for efficiency.
    */
   async extractRecipesFromPhotoGroups(
     imageGroups: string[][],
     onProgress?: (current: number, total: number, recipe?: ExtractedRecipe) => void
   ): Promise<ExtractedRecipe[]> {
-    const recipes: ExtractedRecipe[] = [];
     const total = imageGroups.length;
+    const CONCURRENCY_LIMIT = 3; // Process up to 3 recipes in parallel
 
-    for (let i = 0; i < imageGroups.length; i++) {
-      const group = imageGroups[i];
+    // Results array initialized with placeholders
+    const results: ExtractedRecipe[] = new Array(total);
+    let completed = 0;
+
+    // Process a single group at a given index
+    const processGroup = async (index: number): Promise<void> => {
+      const group = imageGroups[index];
       try {
         const recipe = await this.extractRecipeFromPhotos({ images: group });
-        recipes.push(recipe);
-        onProgress?.(i + 1, total, recipe);
+        results[index] = recipe;
+        completed++;
+        onProgress?.(completed, total, recipe);
       } catch (error) {
-        console.error(`Failed to extract recipe from group ${i + 1}:`, error);
-        // Add a placeholder for failed extractions
-        recipes.push({
-          title: `Failed Recipe ${i + 1}`,
+        console.error(`Failed to extract recipe from group ${index + 1}:`, error);
+        results[index] = {
+          title: `Failed Recipe ${index + 1}`,
           description: `Failed to extract: ${error instanceof Error ? error.message : 'Unknown error'}`,
           ingredients: [],
           instructions: [],
           tags: [],
           confidence: 0,
           extractionNotes: 'Extraction failed - please try again with clearer images',
-        });
-        onProgress?.(i + 1, total, undefined);
+        };
+        completed++;
+        onProgress?.(completed, total, undefined);
       }
+    };
+
+    // Process in batches with concurrency limit
+    const indices = imageGroups.map((_, i) => i);
+    for (let i = 0; i < indices.length; i += CONCURRENCY_LIMIT) {
+      const batch = indices.slice(i, i + CONCURRENCY_LIMIT);
+      await Promise.all(batch.map(processGroup));
     }
 
-    return recipes;
+    return results;
   }
 }
 

@@ -66,6 +66,7 @@ Return tag suggestions as JSON.`;
     userPrompt,
     maxTokens: 512,
     temperature: 0.2,
+    useHaiku: true, // Simple categorization task
   });
 
   try {

@@ -57,6 +57,7 @@ Please analyze these ingredients and return the nutritional values per serving a
     userPrompt,
     maxTokens: 512,
     temperature: 0.2, // Low temperature for more consistent results
+    useHaiku: true, // Straightforward calculation task
   });
 
   // Parse and validate the JSON response
