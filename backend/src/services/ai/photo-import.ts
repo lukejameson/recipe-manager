@@ -73,12 +73,15 @@ Return ONLY a valid JSON object with this structure:
 }
 
 For ingredients:
-- Include the full quantity, unit, and item (e.g., "2 cups all-purpose flour")
+- ALWAYS use metric units (grams, kilograms, milliliters, liters, etc.)
+- Convert any imperial measurements to metric (e.g., "1 cup flour" → "120g flour", "1 tbsp" → "15ml")
+- Include the full quantity, unit, and item (e.g., "250g all-purpose flour")
 - Include any preparation notes (e.g., "1 onion, finely diced")
 
 For instructions:
 - Each step should be a complete sentence
-- Preserve any important temperature or timing information
+- Convert temperatures to Celsius (e.g., "350°F" → "175°C")
+- Preserve any important timing information
 - If instructions span multiple pages, combine them in order
 
 For confidence score:

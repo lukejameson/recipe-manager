@@ -45,6 +45,8 @@ Guidelines:
 - Consider the home cook's skill level
 - Prioritize impactful changes as "high"
 - Don't suggest changing the fundamental nature of the dish
+- When mentioning quantities, use metric units (grams, ml, liters)
+- When mentioning temperatures, use Celsius
 - Return ONLY the JSON array, no other text`;
 
 export async function suggestImprovements(
@@ -149,6 +151,8 @@ Guidelines:
 - Apply ONLY the requested improvements
 - Keep the recipe's essential character intact
 - Be specific in the changes array about what was modified
+- Use metric units (grams, ml, liters) for all ingredient quantities
+- Use Celsius for any temperatures in instructions
 - Maintain similar formatting for ingredients and instructions
 - If an improvement doesn't require a change to ingredients/instructions, note it in changes but leave the sections unchanged
 - Return ONLY the JSON object, no other text`;

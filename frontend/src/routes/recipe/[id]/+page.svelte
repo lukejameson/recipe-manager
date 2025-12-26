@@ -92,7 +92,7 @@
 
           <h2 style="font-size: 20px; margin: 25px 0 15px; color: #333; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">Ingredients</h2>
           <ul style="margin: 0; padding-left: 20px; line-height: 1.8;">
-            ${displayIngredients.map(ing => `<li style="margin-bottom: 5px;">${ing}</li>`).join('')}
+            ${scaledIngredients.map((ing: string) => `<li style="margin-bottom: 5px;">${ing}</li>`).join('')}
           </ul>
 
           <h2 style="font-size: 20px; margin: 25px 0 15px; color: #333; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">Instructions</h2>

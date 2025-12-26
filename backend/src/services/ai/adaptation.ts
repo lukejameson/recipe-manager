@@ -55,6 +55,8 @@ Return ONLY a valid JSON object:
 Guidelines:
 - Replace only what's necessary for the dietary requirement
 - Maintain ratios and quantities where possible
+- Use metric units (grams, ml, liters) for all ingredient quantities
+- Use Celsius for any temperatures
 - Note significant texture or flavor changes in warnings
 - Keep instructions similar unless changes require different techniques
 - If a dish fundamentally cannot be adapted, explain in warnings

@@ -21,7 +21,7 @@ Return ONLY a valid JSON array of substitutions:
 [
   {
     "substitute": "name of substitute ingredient",
-    "ratio": "conversion ratio (e.g., '1:1', '2 tbsp per 1 cup')",
+    "ratio": "conversion ratio (e.g., '1:1', '30ml per 240ml')",
     "notes": "brief note on flavor/texture differences or best uses",
     "suitableFor": ["baking", "cooking", "sauces"] (what types of recipes this works in)
   }
@@ -31,7 +31,7 @@ Guidelines:
 - Suggest 3-5 practical substitutes
 - Consider common pantry items first
 - Include at least one dietary-friendly option when possible
-- Be specific about ratios
+- Be specific about ratios using METRIC units (grams, ml, liters)
 - Note any significant flavor or texture changes
 - Return ONLY the JSON array, no other text`;
 

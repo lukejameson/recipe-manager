@@ -57,7 +57,10 @@ Guidelines:
 - When giving a full recipe, always include the recipe JSON block
 - Keep responses concise but helpful
 - Times are in minutes
-- Tags should be relevant categories like "dinner", "vegetarian", "quick", "italian", etc.`;
+- Tags should be relevant categories like "dinner", "vegetarian", "quick", "italian", etc.
+- ALWAYS use metric units for ingredients (grams, kilograms, milliliters, liters)
+- ALWAYS use Celsius for temperatures
+- Example ingredients: "250g flour", "500ml milk", "100g butter"`;
 
 async function getApiConfig(): Promise<{ apiKey: string; model: string; secondaryModel: string } | null> {
   try {
@@ -96,7 +99,8 @@ You can help with:
 
 Keep your responses concise and practical. Focus on the specific recipe context provided.
 If the user asks for a modified version of the recipe, you can provide updated ingredients or instructions.
-Be friendly and helpful, like a knowledgeable friend in the kitchen.`;
+Be friendly and helpful, like a knowledgeable friend in the kitchen.
+ALWAYS use metric units (grams, ml, liters) for any quantities and Celsius for temperatures.`;
 
 export interface RecipeContext {
   title: string;
