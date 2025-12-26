@@ -43,6 +43,13 @@
       "when": 1766392796473,
       "tag": "0005_swift_onslaught",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1766774196670,
+      "tag": "0006_nappy_dragon_man",
+      "breakpoints": true
     }
   ]
 }

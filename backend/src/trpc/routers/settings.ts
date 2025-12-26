@@ -93,6 +93,7 @@ export const settingsRouter = t.router({
     return {
       hasApiKey: !!appSettings?.anthropicApiKey,
       model: appSettings?.anthropicModel || 'claude-sonnet-4-20250514',
+      secondaryModel: appSettings?.anthropicSecondaryModel || 'claude-3-haiku-20240307',
       availableModels,
     };
   }),
@@ -108,13 +109,14 @@ export const settingsRouter = t.router({
     }),
 
   /**
-   * Update settings (API key and/or model)
+   * Update settings (API key and/or models)
    */
   update: protectedProcedure
     .input(
       z.object({
         anthropicApiKey: z.string().optional(),
         anthropicModel: z.string().optional(),
+        anthropicSecondaryModel: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -131,6 +133,10 @@ export const settingsRouter = t.router({
 
       if (input.anthropicModel) {
         updateData.anthropicModel = input.anthropicModel;
+      }
+
+      if (input.anthropicSecondaryModel) {
+        updateData.anthropicSecondaryModel = input.anthropicSecondaryModel;
       }
 
       // Check if settings row exists

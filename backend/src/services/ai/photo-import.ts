@@ -106,12 +106,10 @@ Return ONLY a valid JSON object with this structure:
 
 Where "indices" are the 0-based indices of the images that belong together.`;
 
-// Model options for different tasks
-const MODELS = {
-  // High quality extraction - use configured model or Sonnet
+// Default models for different tasks
+const DEFAULT_MODELS = {
   extraction: 'claude-sonnet-4-20250514',
-  // Grouping analysis is simpler - Haiku is sufficient and much cheaper
-  grouping: 'claude-haiku-4-20250514',
+  grouping: 'claude-3-haiku-20240307',
 };
 
 /**
@@ -119,11 +117,11 @@ const MODELS = {
  */
 class PhotoImportService {
   private apiKey: string | null = null;
-  private extractionModel: string = MODELS.extraction;
-  private groupingModel: string = MODELS.grouping;
+  private extractionModel: string = DEFAULT_MODELS.extraction;
+  private groupingModel: string = DEFAULT_MODELS.grouping;
 
   /**
-   * Load API key from database settings.
+   * Load API key and models from database settings.
    */
   async initialize(): Promise<boolean> {
     try {
@@ -139,10 +137,10 @@ class PhotoImportService {
       }
 
       this.apiKey = decrypt(appSettings.anthropicApiKey);
-      // Use the configured model for extraction, Haiku for grouping (cheaper)
-      this.extractionModel = appSettings.anthropicModel || MODELS.extraction;
-      // Always use Haiku for grouping - it's a simpler task
-      this.groupingModel = MODELS.grouping;
+      // Use the configured primary model for extraction
+      this.extractionModel = appSettings.anthropicModel || DEFAULT_MODELS.extraction;
+      // Use the configured secondary model for grouping (simpler task)
+      this.groupingModel = appSettings.anthropicSecondaryModel || DEFAULT_MODELS.grouping;
       return true;
     } catch (error) {
       console.error('Failed to initialize photo import service:', error);

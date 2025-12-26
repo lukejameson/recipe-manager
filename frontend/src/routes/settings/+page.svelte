@@ -13,6 +13,7 @@
   let hasApiKey = $state(false);
   let apiKey = $state('');
   let selectedModel = $state('claude-sonnet-4-20250514');
+  let selectedSecondaryModel = $state('claude-3-haiku-20240307');
   let availableModels = $state<Array<{ id: string; name: string }>>([]);
   let testResult = $state<{ valid: boolean; error?: string } | null>(null);
 
@@ -21,6 +22,7 @@
       const settings = await trpc.settings.get.query();
       hasApiKey = settings.hasApiKey;
       selectedModel = settings.model;
+      selectedSecondaryModel = settings.secondaryModel;
       availableModels = [...settings.availableModels];
     } catch (err: any) {
       error = err.message || 'Failed to load settings';
@@ -47,13 +49,17 @@
         try {
           const result = await trpc.settings.fetchModels.query({ apiKey: apiKey.trim() });
           availableModels = result.models;
-          // Select a good default if current selection isn't in the list
+          // Select a good default primary model if current selection isn't in the list
           if (!availableModels.some((m) => m.id === selectedModel)) {
-            // Prefer claude-sonnet-4 or claude-3-5-sonnet
             const preferred = availableModels.find(
               (m) => m.id.includes('sonnet-4') || m.id.includes('3-5-sonnet')
             );
             selectedModel = preferred?.id || availableModels[0]?.id || selectedModel;
+          }
+          // Select a good default secondary model if current selection isn't in the list
+          if (!availableModels.some((m) => m.id === selectedSecondaryModel)) {
+            const preferred = availableModels.find((m) => m.id.includes('haiku'));
+            selectedSecondaryModel = preferred?.id || availableModels[0]?.id || selectedSecondaryModel;
           }
         } catch (err) {
           console.error('Failed to fetch models:', err);
@@ -77,6 +83,7 @@
       await trpc.settings.update.mutate({
         anthropicApiKey: apiKey.trim() || undefined,
         anthropicModel: selectedModel,
+        anthropicSecondaryModel: selectedSecondaryModel,
       });
 
       if (apiKey.trim()) {
@@ -180,15 +187,27 @@
         {/if}
 
         <div class="form-group">
-          <label for="model">AI Model</label>
+          <label for="model">Primary Model</label>
           <select id="model" bind:value={selectedModel}>
             {#each availableModels as model}
               <option value={model.id}>{model.name}</option>
             {/each}
           </select>
           <p class="hint">
-            Haiku models are faster and more economical. Sonnet models are more capable but cost
-            more.
+            Used for complex tasks like recipe extraction from photos and creative brainstorming.
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label for="secondaryModel">Secondary Model</label>
+          <select id="secondaryModel" bind:value={selectedSecondaryModel}>
+            {#each availableModels as model}
+              <option value={model.id}>{model.name}</option>
+            {/each}
+          </select>
+          <p class="hint">
+            Used for simpler tasks like tag suggestions, nutrition calculation, and recipe Q&A.
+            Haiku models are faster and more economical.
           </p>
         </div>
 

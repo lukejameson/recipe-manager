@@ -59,7 +59,7 @@ Guidelines:
 - Times are in minutes
 - Tags should be relevant categories like "dinner", "vegetarian", "quick", "italian", etc.`;
 
-async function getApiConfig(): Promise<{ apiKey: string; model: string } | null> {
+async function getApiConfig(): Promise<{ apiKey: string; model: string; secondaryModel: string } | null> {
   try {
     const [appSettings] = await db
       .select()
@@ -74,6 +74,7 @@ async function getApiConfig(): Promise<{ apiKey: string; model: string } | null>
     return {
       apiKey: decrypt(appSettings.anthropicApiKey),
       model: appSettings.anthropicModel || 'claude-3-5-sonnet-20241022',
+      secondaryModel: appSettings.anthropicSecondaryModel || 'claude-3-haiku-20240307',
     };
   } catch {
     return null;
@@ -148,7 +149,7 @@ ${input.recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
     ...input.messages,
   ];
 
-  // Use Haiku for recipe Q&A (simpler task than creative brainstorming)
+  // Use secondary model for recipe Q&A (simpler task than creative brainstorming)
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -157,7 +158,7 @@ ${input.recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-20250514',
+      model: config.secondaryModel,
       max_tokens: 1024,
       system: SPECIFIC_RECIPE_CHAT_SYSTEM_PROMPT,
       messages: messagesWithContext.map((m) => ({

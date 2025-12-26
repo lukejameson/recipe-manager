@@ -1,0 +1,1 @@
+ALTER TABLE `settings` ADD `anthropic_secondary_model` text DEFAULT 'claude-3-haiku-20240307';

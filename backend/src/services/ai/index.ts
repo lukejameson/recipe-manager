@@ -27,9 +27,10 @@ export interface AICompletionResult {
 export class AIService {
   private apiKey: string | null = null;
   private model: string = 'claude-3-5-sonnet-20241022';
+  private secondaryModel: string = 'claude-3-haiku-20240307';
 
   /**
-   * Load API key and model from database settings.
+   * Load API key and models from database settings.
    * Must be called before using the service.
    * @returns true if the service is properly configured
    */
@@ -48,6 +49,7 @@ export class AIService {
 
       this.apiKey = decrypt(appSettings.anthropicApiKey);
       this.model = appSettings.anthropicModel || 'claude-3-5-sonnet-20241022';
+      this.secondaryModel = appSettings.anthropicSecondaryModel || 'claude-3-haiku-20240307';
       return true;
     } catch (error) {
       console.error('Failed to initialize AI service:', error);
@@ -80,8 +82,8 @@ export class AIService {
       throw new Error('AI service not initialized. Please configure your API key in Settings.');
     }
 
-    // Use Haiku for simple tasks to reduce costs
-    const modelToUse = options.useHaiku ? 'claude-haiku-4-20250514' : this.model;
+    // Use secondary model (typically Haiku) for simple tasks to reduce costs
+    const modelToUse = options.useHaiku ? this.secondaryModel : this.model;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
