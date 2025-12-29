@@ -84,7 +84,7 @@
           <span class="icon">📁</span>
           <span class="label">Collections</span>
         </a>
-        <a
+        <!-- <a
           href="/pantry-match"
           class:active={$page.url.pathname === '/pantry-match'}
           onclick={closeMobileMenu}
@@ -93,7 +93,7 @@
           <span class="icon">🥘</span>
           <span class="label">What Can I Make?</span>
           <span class="ai-tag">AI</span>
-        </a>
+        </a> -->
         <a
           href="/generate"
           class:active={$page.url.pathname === '/generate'}
