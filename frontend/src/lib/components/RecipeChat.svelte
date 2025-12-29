@@ -4,6 +4,7 @@
   interface Message {
     role: 'user' | 'assistant';
     content: string;
+    images?: string[];
   }
 
   interface Recipe {
@@ -30,6 +31,65 @@
   let sending = $state(false);
   let error = $state('');
   let messagesContainer: HTMLDivElement;
+  let pendingImages = $state<string[]>([]);
+  let fileInput: HTMLInputElement;
+
+  async function compressImage(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        const maxSize = 1024;
+        let { width, height } = img;
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
+          width *= ratio;
+          height *= ratio;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+        URL.revokeObjectURL(img.src);
+      };
+      img.onerror = () => {
+        reject(new Error('Failed to load image'));
+        URL.revokeObjectURL(img.src);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  async function handleFileSelect(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const files = input.files;
+    if (!files) return;
+
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) continue;
+      if (pendingImages.length >= 5) {
+        error = 'Maximum 5 images per message';
+        break;
+      }
+      try {
+        const compressed = await compressImage(file);
+        pendingImages = [...pendingImages, compressed];
+      } catch (err) {
+        console.error('Failed to compress image:', err);
+      }
+    }
+    input.value = '';
+  }
+
+  function removeImage(index: number) {
+    pendingImages = pendingImages.filter((_, i) => i !== index);
+  }
 
   // Quick action suggestions
   const quickActions = [
@@ -42,12 +102,18 @@
   ];
 
   async function sendMessage(content: string) {
-    if (!content.trim() || sending) return;
+    if ((!content.trim() && pendingImages.length === 0) || sending) return;
 
+    const imagesToSend = [...pendingImages];
     error = '';
-    const userMessage: Message = { role: 'user', content: content.trim() };
+    const userMessage: Message = {
+      role: 'user',
+      content: content.trim() || 'What can you tell me about this?',
+      images: imagesToSend.length > 0 ? imagesToSend : undefined,
+    };
     messages = [...messages, userMessage];
     inputValue = '';
+    pendingImages = [];
     sending = true;
 
     // Scroll to bottom
@@ -69,7 +135,11 @@
           servings: recipe.servings,
           tags: recipe.tags?.map((t) => t.name),
         },
-        messages: messages,
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          images: m.images,
+        })),
       });
 
       const assistantMessage: Message = { role: 'assistant', content: result.message };
@@ -107,6 +177,7 @@
 
   function clearChat() {
     messages = [];
+    pendingImages = [];
     error = '';
   }
 </script>
@@ -164,6 +235,13 @@
             {#if message.role === 'assistant'}
               {@html message.content.replace(/\n/g, '<br>')}
             {:else}
+              {#if message.images?.length}
+                <div class="message-images">
+                  {#each message.images as image}
+                    <img src={image} alt="Uploaded" class="chat-image" />
+                  {/each}
+                </div>
+              {/if}
               {message.content}
             {/if}
           </div>
@@ -185,7 +263,41 @@
     <div class="chat-error">{error}</div>
   {/if}
 
+  {#if pendingImages.length > 0}
+    <div class="pending-images">
+      {#each pendingImages as image, index}
+        <div class="pending-image">
+          <img src={image} alt="To upload" />
+          <button type="button" class="remove-image" onclick={() => removeImage(index)}>&times;</button>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
   <form class="chat-input" onsubmit={handleSubmit}>
+    <input
+      type="file"
+      accept="image/*"
+      capture="environment"
+      multiple
+      bind:this={fileInput}
+      onchange={handleFileSelect}
+      style="display: none"
+    />
+    <button
+      type="button"
+      class="btn-attach"
+      onclick={() => fileInput.click()}
+      disabled={sending || pendingImages.length >= 5}
+      title="Add image"
+      aria-label="Add image"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+    </button>
     <textarea
       bind:value={inputValue}
       placeholder="Ask a question..."
@@ -193,7 +305,7 @@
       disabled={sending}
       onkeydown={handleKeydown}
     ></textarea>
-    <button type="submit" class="btn-send" disabled={!inputValue.trim() || sending}>
+    <button type="submit" class="btn-send" disabled={(!inputValue.trim() && pendingImages.length === 0) || sending} aria-label="Send message">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="22" y1="2" x2="11" y2="13" />
         <polygon points="22 2 15 22 11 13 2 9 22 2" />
@@ -480,5 +592,87 @@
     .quick-actions {
       max-width: 100%;
     }
+  }
+
+  /* Image upload styles */
+  .pending-images {
+    display: flex;
+    gap: var(--spacing-2);
+    flex-wrap: wrap;
+    padding: var(--spacing-2) var(--spacing-3);
+    background: var(--color-bg-subtle);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .pending-image {
+    position: relative;
+    width: 60px;
+    height: 60px;
+  }
+
+  .pending-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: var(--radius-md);
+  }
+
+  .remove-image {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--color-error);
+    color: white;
+    border: none;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .remove-image:hover {
+    background: #c53030;
+  }
+
+  .btn-attach {
+    padding: var(--spacing-2);
+    background: transparent;
+    border: none;
+    color: var(--color-text-light);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .btn-attach:hover:not(:disabled) {
+    background: var(--color-bg-subtle);
+    color: var(--color-primary);
+  }
+
+  .btn-attach:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .message-images {
+    display: flex;
+    gap: var(--spacing-1);
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-2);
+  }
+
+  .chat-image {
+    max-width: 120px;
+    max-height: 90px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
   }
 </style>

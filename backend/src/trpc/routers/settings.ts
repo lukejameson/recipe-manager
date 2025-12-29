@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
-import { settings } from '../../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { settings, memories } from '../../db/schema.js';
+import { eq, and, desc } from 'drizzle-orm';
 import { encrypt, decrypt } from '../../utils/encryption.js';
 
 const t = initTRPC.context<Context>().create();
@@ -206,5 +206,105 @@ export const settingsRouter = t.router({
           error: error.message || 'Failed to connect to Anthropic API',
         };
       }
+    }),
+
+  /**
+   * List all memories for the current user
+   */
+  listMemories: protectedProcedure.query(async ({ ctx }) => {
+    const userMemories = await db
+      .select()
+      .from(memories)
+      .where(eq(memories.userId, ctx.userId))
+      .orderBy(desc(memories.createdAt));
+    return userMemories;
+  }),
+
+  /**
+   * Create a new memory
+   */
+  createMemory: protectedProcedure
+    .input(z.object({ content: z.string().min(1).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      const [memory] = await db
+        .insert(memories)
+        .values({
+          userId: ctx.userId,
+          content: input.content,
+          enabled: true,
+        })
+        .returning();
+      return memory;
+    }),
+
+  /**
+   * Update a memory (toggle enabled or edit content)
+   */
+  updateMemory: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        enabled: z.boolean().optional(),
+        content: z.string().min(1).max(500).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify ownership
+      const [existing] = await db
+        .select()
+        .from(memories)
+        .where(and(eq(memories.id, input.id), eq(memories.userId, ctx.userId)))
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Memory not found',
+        });
+      }
+
+      const updateData: Record<string, any> = {};
+      if (input.enabled !== undefined) {
+        updateData.enabled = input.enabled;
+      }
+      if (input.content !== undefined) {
+        updateData.content = input.content;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return existing;
+      }
+
+      const [updated] = await db
+        .update(memories)
+        .set(updateData)
+        .where(eq(memories.id, input.id))
+        .returning();
+
+      return updated;
+    }),
+
+  /**
+   * Delete a memory
+   */
+  deleteMemory: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify ownership
+      const [existing] = await db
+        .select()
+        .from(memories)
+        .where(and(eq(memories.id, input.id), eq(memories.userId, ctx.userId)))
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Memory not found',
+        });
+      }
+
+      await db.delete(memories).where(eq(memories.id, input.id));
+      return { success: true };
     }),
 });

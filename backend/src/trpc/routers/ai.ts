@@ -312,11 +312,12 @@ export const aiRouter = t.router({
           z.object({
             role: z.enum(['user', 'assistant']),
             content: z.string(),
+            images: z.array(z.string()).max(5).optional(),
           })
         ).min(1),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const initialized = await aiService.initialize();
       if (!initialized) {
         throw new TRPCError({
@@ -325,7 +326,7 @@ export const aiRouter = t.router({
         });
       }
       try {
-        return await chatAboutRecipes(input);
+        return await chatAboutRecipes(input, ctx.userId);
       } catch (error: any) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
@@ -354,11 +355,12 @@ export const aiRouter = t.router({
           z.object({
             role: z.enum(['user', 'assistant']),
             content: z.string(),
+            images: z.array(z.string()).max(5).optional(),
           })
         ).min(1),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const initialized = await aiService.initialize();
       if (!initialized) {
         throw new TRPCError({
@@ -367,7 +369,7 @@ export const aiRouter = t.router({
         });
       }
       try {
-        return await chatAboutSpecificRecipe(input);
+        return await chatAboutSpecificRecipe(input, ctx.userId);
       } catch (error: any) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',

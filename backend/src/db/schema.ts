@@ -147,6 +147,18 @@ export const settings = sqliteTable('settings', {
     .default(sql`(unixepoch())`),
 });
 
+// User memories for AI context
+// Note: userId is not a FK because auth uses a fixed 'admin-user' ID that doesn't exist in users table
+export const memories = sqliteTable('memories', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull(),
+  content: text('content').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
 // Type exports for use in application
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -174,3 +186,6 @@ export type InsertRecipeComponent = typeof recipeComponents.$inferInsert;
 
 export type Settings = typeof settings.$inferSelect;
 export type InsertSettings = typeof settings.$inferInsert;
+
+export type Memory = typeof memories.$inferSelect;
+export type InsertMemory = typeof memories.$inferInsert;

@@ -1,11 +1,68 @@
 import { db } from '../../db/index.js';
-import { settings } from '../../db/schema.js';
+import { settings, memories } from '../../db/schema.js';
 import { decrypt } from '../../utils/encryption.js';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  images?: string[]; // base64 data URIs from frontend
+}
+
+// Content block types for Anthropic API
+type ImageContentBlock = {
+  type: 'image';
+  source: {
+    type: 'base64';
+    media_type: string;
+    data: string;
+  };
+};
+
+type TextContentBlock = {
+  type: 'text';
+  text: string;
+};
+
+type ContentBlock = ImageContentBlock | TextContentBlock;
+
+/**
+ * Transform a message's content for the Anthropic API.
+ * If the message has images, returns a content block array.
+ * Otherwise, returns the plain string content.
+ */
+function buildMessageContent(message: ChatMessage): string | ContentBlock[] {
+  if (!message.images?.length) {
+    return message.content;
+  }
+
+  const content: ContentBlock[] = [];
+
+  // Add images first
+  for (const image of message.images) {
+    // Parse data URI: "data:image/jpeg;base64,..."
+    const match = image.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      content.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: match[1],
+          data: match[2],
+        },
+      });
+    }
+  }
+
+  // Add text content
+  if (message.content) {
+    content.push({
+      type: 'text',
+      text: message.content,
+    });
+  }
+
+  return content;
 }
 
 export interface RecipeChatInput {
@@ -84,6 +141,31 @@ async function getApiConfig(): Promise<{ apiKey: string; model: string; secondar
   }
 }
 
+/**
+ * Get enabled memories for a user
+ */
+async function getEnabledMemories(userId: string): Promise<string[]> {
+  const userMemories = await db
+    .select()
+    .from(memories)
+    .where(and(eq(memories.userId, userId), eq(memories.enabled, true)));
+  return userMemories.map((m) => m.content);
+}
+
+/**
+ * Build system prompt with user memories appended
+ */
+function buildSystemPromptWithMemories(basePrompt: string, userMemories: string[]): string {
+  if (userMemories.length === 0) return basePrompt;
+
+  return `${basePrompt}
+
+User Preferences & Memories:
+${userMemories.map((m) => `- ${m}`).join('\n')}
+
+Always consider these preferences when making suggestions.`;
+}
+
 // System prompt for chatting about a specific recipe
 const SPECIFIC_RECIPE_CHAT_SYSTEM_PROMPT = `You are a helpful culinary assistant. The user is viewing a specific recipe and wants to ask questions about it.
 
@@ -122,13 +204,18 @@ export interface SpecificRecipeChatInput {
  * Chat about a specific recipe - answer questions, suggest modifications, etc.
  */
 export async function chatAboutSpecificRecipe(
-  input: SpecificRecipeChatInput
+  input: SpecificRecipeChatInput,
+  userId?: string
 ): Promise<{ message: string }> {
   const config = await getApiConfig();
 
   if (!config) {
     throw new Error('AI service not configured. Please add your Anthropic API key in Settings.');
   }
+
+  // Get user memories if userId is provided
+  const userMemories = userId ? await getEnabledMemories(userId) : [];
+  const systemPrompt = buildSystemPromptWithMemories(SPECIFIC_RECIPE_CHAT_SYSTEM_PROMPT, userMemories);
 
   // Build the recipe context as the first message
   const recipeContext = `Here is the recipe the user is asking about:
@@ -147,7 +234,7 @@ ${input.recipe.ingredients.map((i) => `- ${i}`).join('\n')}
 ${input.recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
 
   // Prepend recipe context to messages
-  const messagesWithContext = [
+  const messagesWithContext: ChatMessage[] = [
     { role: 'user' as const, content: recipeContext },
     { role: 'assistant' as const, content: 'I can see this recipe. What would you like to know about it?' },
     ...input.messages,
@@ -164,10 +251,10 @@ ${input.recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
     body: JSON.stringify({
       model: config.secondaryModel,
       max_tokens: 1024,
-      system: SPECIFIC_RECIPE_CHAT_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: messagesWithContext.map((m) => ({
         role: m.role,
-        content: m.content,
+        content: buildMessageContent(m),
       })),
       temperature: 0.5,
     }),
@@ -189,13 +276,18 @@ ${input.recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
 }
 
 export async function chatAboutRecipes(
-  input: RecipeChatInput
+  input: RecipeChatInput,
+  userId?: string
 ): Promise<RecipeChatResponse> {
   const config = await getApiConfig();
 
   if (!config) {
     throw new Error('AI service not configured. Please add your Anthropic API key in Settings.');
   }
+
+  // Get user memories if userId is provided
+  const userMemories = userId ? await getEnabledMemories(userId) : [];
+  const systemPrompt = buildSystemPromptWithMemories(RECIPE_CHAT_SYSTEM_PROMPT, userMemories);
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -207,10 +299,10 @@ export async function chatAboutRecipes(
     body: JSON.stringify({
       model: config.model,
       max_tokens: 2048,
-      system: RECIPE_CHAT_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: input.messages.map((m) => ({
         role: m.role,
-        content: m.content,
+        content: buildMessageContent(m),
       })),
       temperature: 0.7,
     }),
