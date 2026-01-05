@@ -344,13 +344,13 @@ export const aiRouter = t.router({
       z.object({
         recipe: z.object({
           title: z.string(),
-          description: z.string().optional(),
+          description: z.string().nullish(),
           ingredients: z.array(z.string()),
           instructions: z.array(z.string()),
-          prepTime: z.number().optional(),
-          cookTime: z.number().optional(),
-          servings: z.number().optional(),
-          tags: z.array(z.string()).optional(),
+          prepTime: z.number().nullish(),
+          cookTime: z.number().nullish(),
+          servings: z.number().nullish(),
+          tags: z.array(z.string()).nullish(),
         }),
         messages: z.array(
           z.object({

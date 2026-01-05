@@ -199,13 +199,13 @@ ALWAYS use metric units (grams, ml, liters) for any quantities and Celsius for t
 
 export interface RecipeContext {
   title: string;
-  description?: string;
+  description?: string | null;
   ingredients: string[];
   instructions: string[];
-  prepTime?: number;
-  cookTime?: number;
-  servings?: number;
-  tags?: string[];
+  prepTime?: number | null;
+  cookTime?: number | null;
+  servings?: number | null;
+  tags?: string[] | null;
 }
 
 export interface SpecificRecipeChatInput {
