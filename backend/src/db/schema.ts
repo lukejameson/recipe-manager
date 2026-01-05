@@ -159,6 +159,24 @@ export const memories = sqliteTable('memories', {
     .default(sql`(unixepoch())`),
 });
 
+// AI Agents for specialized chat personas (Chef, Mixologist, custom)
+export const agents = sqliteTable('agents', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  description: text('description'),
+  systemPrompt: text('system_prompt').notNull(),
+  icon: text('icon').notNull().default('🤖'),
+  modelId: text('model_id'), // Specific model ID to use, null = use default from settings
+  isBuiltIn: integer('is_built_in', { mode: 'boolean' }).notNull().default(false),
+  userId: text('user_id'), // null for built-in agents
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
 // Type exports for use in application
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -189,3 +207,6 @@ export type InsertSettings = typeof settings.$inferInsert;
 
 export type Memory = typeof memories.$inferSelect;
 export type InsertMemory = typeof memories.$inferInsert;
+
+export type Agent = typeof agents.$inferSelect;
+export type InsertAgent = typeof agents.$inferInsert;

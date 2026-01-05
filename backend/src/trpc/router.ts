@@ -7,6 +7,7 @@ import { collectionRouter } from './routers/collection.js';
 import { shoppingListRouter } from './routers/shopping-list.js';
 import { settingsRouter } from './routers/settings.js';
 import { aiRouter } from './routers/ai.js';
+import { agentsRouter } from './routers/agents.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -21,6 +22,7 @@ export const appRouter = t.router({
   shoppingList: shoppingListRouter,
   settings: settingsRouter,
   ai: aiRouter,
+  agents: agentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -19,6 +19,7 @@ export interface TagSuggestion {
 const AUTO_TAG_SYSTEM_PROMPT = `You are a culinary expert helping to categorize recipes. Given recipe details, suggest appropriate tags.
 
 Consider these tag categories:
+- Recipe type (cocktail, mocktail, drink, beverage for drinks; food for regular recipes)
 - Cuisine type (Italian, Mexican, Asian, Mediterranean, etc.)
 - Meal type (breakfast, lunch, dinner, snack, dessert)
 - Dietary (vegetarian, vegan, gluten-free, dairy-free, keto, low-carb)
@@ -26,6 +27,7 @@ Consider these tag categories:
 - Difficulty (quick, easy, intermediate, advanced)
 - Season/occasion (summer, winter, holiday, party, weeknight)
 - Main ingredient (chicken, beef, seafood, pasta, vegetables)
+- For cocktails/drinks: spirit base (vodka, gin, rum, whiskey, tequila), style (classic, tiki, sour, fizz)
 
 Return ONLY a valid JSON array of tag suggestions:
 [

@@ -3,6 +3,7 @@
   import { trpc } from '$lib/trpc/client';
   import Header from '$lib/components/Header.svelte';
   import AIBadge from '$lib/components/ai/AIBadge.svelte';
+  import AgentSelector, { type SelectedAgentInfo } from '$lib/components/ai/AgentSelector.svelte';
   import Markdown from '$lib/components/Markdown.svelte';
 
   interface ChatMessage {
@@ -30,6 +31,29 @@
   let messagesContainer: HTMLDivElement;
   let pendingImages = $state<string[]>([]);
   let fileInput: HTMLInputElement;
+  let selectedAgentId = $state<string | null>(null);
+  let currentModelId = $state<string | null>(null);
+
+  function handleAgentSelect(agentId: string | null, agentInfo: SelectedAgentInfo) {
+    // Clear chat when switching agents
+    if (messages.length > 0 && agentId !== selectedAgentId) {
+      messages = [];
+    }
+    currentModelId = agentInfo.modelId;
+  }
+
+  // Format model ID for display (extract meaningful part)
+  function formatModelName(modelId: string | null): string {
+    if (!modelId) return 'Default';
+    // Extract model name from full ID like "claude-opus-4-20250514" -> "Opus 4"
+    const match = modelId.match(/claude-(\w+)-?([\d.]*)/i);
+    if (match) {
+      const name = match[1].charAt(0).toUpperCase() + match[1].slice(1);
+      const version = match[2] ? ` ${match[2].split('-')[0]}` : '';
+      return name + version;
+    }
+    return modelId;
+  }
 
   async function compressImage(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -122,6 +146,7 @@
           content: m.content,
           images: m.images,
         })),
+        agentId: selectedAgentId ?? undefined,
       });
 
       // Add assistant message
@@ -195,7 +220,17 @@
         <h1>Recipe Generator</h1>
         <p class="subtitle">Chat with AI to brainstorm and create new recipes</p>
       </div>
-      <AIBadge size="md" />
+      <div class="header-actions">
+        <AgentSelector bind:selectedAgentId onSelect={handleAgentSelect} />
+        <span
+          class="model-badge"
+          class:opus={currentModelId?.includes('opus')}
+          class:haiku={currentModelId?.includes('haiku')}
+          title={currentModelId || 'Using default model from settings'}
+        >
+          {formatModelName(currentModelId)}
+        </span>
+      </div>
     </div>
 
     <div class="chat-container">
@@ -336,7 +371,6 @@
         <input
           type="file"
           accept="image/*"
-          capture="environment"
           multiple
           bind:this={fileInput}
           onchange={handleFileSelect}
@@ -346,8 +380,8 @@
           class="btn-attach"
           onclick={() => fileInput.click()}
           disabled={loading || pendingImages.length >= 5}
-          title="Add image"
-          aria-label="Add image"
+          title="Add photo"
+          aria-label="Add photo"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -374,7 +408,7 @@
           {/if}
         </button>
       </div>
-      <p class="hint">Press Enter to send, Shift+Enter for new line. Add images with the camera button.</p>
+      <p class="hint">Press Enter to send, Shift+Enter for new line. Add photos with the image button.</p>
     </div>
   </div>
 </main>
@@ -405,6 +439,7 @@
     align-items: center;
     margin-bottom: var(--spacing-4);
     flex-shrink: 0;
+    gap: var(--spacing-4);
   }
 
   .header-content h1 {
@@ -418,6 +453,35 @@
     font-size: var(--text-sm);
     color: var(--color-text-light);
     margin: var(--spacing-1) 0 0;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+  }
+
+  .model-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--spacing-1) var(--spacing-3);
+    background: #f3e8ff;
+    color: #7c3aed;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .model-badge.opus {
+    background: #fef3c7;
+    color: #b45309;
+  }
+
+  .model-badge.haiku {
+    background: #ecfdf5;
+    color: #059669;
   }
 
   .chat-container {
@@ -815,11 +879,16 @@
     .chat-header {
       flex-direction: column;
       align-items: flex-start;
-      gap: var(--spacing-2);
+      gap: var(--spacing-3);
     }
 
     .header-content h1 {
       font-size: var(--text-xl);
+    }
+
+    .header-actions {
+      width: 100%;
+      justify-content: space-between;
     }
 
     .welcome-state {

@@ -64,6 +64,20 @@
       "when": 1767021171892,
       "tag": "0008_slippery_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1767622583636,
+      "tag": "0009_aberrant_may_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1767630000000,
+      "tag": "0010_rename_model_preference",
+      "breakpoints": true
     }
   ]
 }

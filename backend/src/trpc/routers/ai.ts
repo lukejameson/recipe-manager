@@ -315,6 +315,7 @@ export const aiRouter = t.router({
             images: z.array(z.string()).max(5).optional(),
           })
         ).min(1),
+        agentId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -326,7 +327,7 @@ export const aiRouter = t.router({
         });
       }
       try {
-        return await chatAboutRecipes(input, ctx.userId);
+        return await chatAboutRecipes(input, ctx.userId, input.agentId);
       } catch (error: any) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',

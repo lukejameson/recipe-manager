@@ -14,6 +14,10 @@
   let selectedTags = $state<string[]>([]);
   let sortBy = $state<string>('date-newest');
   let viewMode = $state<'grid' | 'list' | 'compact'>('grid');
+  let category = $state<'all' | 'food' | 'cocktails'>('all');
+
+  // Tags that indicate a recipe is a drink/cocktail
+  const drinkTags = ['cocktail', 'mocktail', 'drink', 'beverage', 'cocktails', 'drinks'];
 
   onMount(() => {
     // Load saved preferences from localStorage
@@ -25,6 +29,11 @@
     const savedSortBy = localStorage.getItem('recipeSortBy');
     if (savedSortBy) {
       sortBy = savedSortBy;
+    }
+
+    const savedCategory = localStorage.getItem('recipeCategory');
+    if (savedCategory && ['all', 'food', 'cocktails'].includes(savedCategory)) {
+      category = savedCategory as any;
     }
 
     loadTags();
@@ -50,11 +59,24 @@
     loading = true;
     error = '';
     try {
-      recipes = await trpc.recipe.list.query({
+      let allRecipes = await trpc.recipe.list.query({
         search: searchTerm || undefined,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
         sortBy: sortBy as any,
       });
+
+      // Filter by category based on drink-related tags
+      if (category === 'cocktails') {
+        recipes = allRecipes.filter((r: any) =>
+          r.tags?.some((t: any) => drinkTags.includes(t.name.toLowerCase()))
+        );
+      } else if (category === 'food') {
+        recipes = allRecipes.filter((r: any) =>
+          !r.tags?.some((t: any) => drinkTags.includes(t.name.toLowerCase()))
+        );
+      } else {
+        recipes = allRecipes;
+      }
     } catch (err: any) {
       error = err.message || 'Failed to load recipes';
     } finally {
@@ -109,6 +131,12 @@
     loadRecipes();
   }
 
+  function setCategory(newCategory: 'all' | 'food' | 'cocktails') {
+    category = newCategory;
+    localStorage.setItem('recipeCategory', newCategory);
+    loadRecipes();
+  }
+
   function setViewMode(mode: 'grid' | 'list' | 'compact') {
     viewMode = mode;
     // Save to localStorage
@@ -126,6 +154,32 @@
         <span class="icon">➕</span>
         <span>New Recipe</span>
       </a>
+    </div>
+
+    <div class="category-tabs">
+      <button
+        class="tab"
+        class:active={category === 'all'}
+        onclick={() => setCategory('all')}
+      >
+        All
+      </button>
+      <button
+        class="tab"
+        class:active={category === 'food'}
+        onclick={() => setCategory('food')}
+      >
+        <span class="tab-icon">🍳</span>
+        Food
+      </button>
+      <button
+        class="tab"
+        class:active={category === 'cocktails'}
+        onclick={() => setCategory('cocktails')}
+      >
+        <span class="tab-icon">🍸</span>
+        Cocktails
+      </button>
     </div>
 
     <div class="filters-section">
@@ -641,5 +695,57 @@
   .icon {
     font-style: normal;
     line-height: 1;
+  }
+
+  /* Category tabs */
+  .category-tabs {
+    display: flex;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-5);
+    border-bottom: 2px solid var(--color-border);
+    padding-bottom: var(--spacing-1);
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-4);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    color: var(--color-text-light);
+    transition: var(--transition-fast);
+  }
+
+  .tab:hover {
+    color: var(--color-text);
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+
+  .tab.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+  }
+
+  .tab-icon {
+    font-size: var(--text-base);
+  }
+
+  @media (max-width: 640px) {
+    .category-tabs {
+      justify-content: stretch;
+    }
+
+    .tab {
+      flex: 1;
+      justify-content: center;
+      padding: var(--spacing-3) var(--spacing-2);
+    }
   }
 </style>

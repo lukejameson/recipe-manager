@@ -1,5 +1,5 @@
 import { db } from '../../db/index.js';
-import { settings, memories } from '../../db/schema.js';
+import { settings, memories, agents } from '../../db/schema.js';
 import { decrypt } from '../../utils/encryption.js';
 import { eq, and } from 'drizzle-orm';
 
@@ -153,6 +153,19 @@ async function getEnabledMemories(userId: string): Promise<string[]> {
 }
 
 /**
+ * Get agent by ID
+ */
+async function getAgent(agentId: string): Promise<{ systemPrompt: string; modelId: string | null } | null> {
+  const [agent] = await db
+    .select()
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+
+  return agent ? { systemPrompt: agent.systemPrompt, modelId: agent.modelId } : null;
+}
+
+/**
  * Build system prompt with user memories appended
  */
 function buildSystemPromptWithMemories(basePrompt: string, userMemories: string[]): string {
@@ -277,7 +290,8 @@ ${input.recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
 
 export async function chatAboutRecipes(
   input: RecipeChatInput,
-  userId?: string
+  userId?: string,
+  agentId?: string
 ): Promise<RecipeChatResponse> {
   const config = await getApiConfig();
 
@@ -285,9 +299,18 @@ export async function chatAboutRecipes(
     throw new Error('AI service not configured. Please add your Anthropic API key in Settings.');
   }
 
+  // Get agent if specified
+  const agent = agentId ? await getAgent(agentId) : null;
+
   // Get user memories if userId is provided
   const userMemories = userId ? await getEnabledMemories(userId) : [];
-  const systemPrompt = buildSystemPromptWithMemories(RECIPE_CHAT_SYSTEM_PROMPT, userMemories);
+
+  // Use agent's system prompt or default
+  const basePrompt = agent?.systemPrompt || RECIPE_CHAT_SYSTEM_PROMPT;
+  const systemPrompt = buildSystemPromptWithMemories(basePrompt, userMemories);
+
+  // Use agent's specific model or default to primary model from settings
+  const modelToUse = agent?.modelId || config.model;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -297,7 +320,7 @@ export async function chatAboutRecipes(
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: config.model,
+      model: modelToUse,
       max_tokens: 2048,
       system: systemPrompt,
       messages: input.messages.map((m) => ({
