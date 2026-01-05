@@ -2181,9 +2181,10 @@
       min-width: 60px;
     }
 
-    /* Hide text labels on mobile, show only icons */
-    .actions button span:not(.icon),
-    .actions :global(.ai-btn .label) {
+    /* Hide text labels on mobile, show only icons (but not in dropdown menu) */
+    .actions > button span:not(.icon),
+    .actions > :global(.ai-btn .label),
+    .more-menu-container > .btn-more span:not(.icon) {
       display: none !important;
     }
 
