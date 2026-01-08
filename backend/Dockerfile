@@ -22,7 +22,7 @@ COPY . .
 RUN npm run build
 
 # Copy migrations to dist folder (they're not compiled by tsc)
-RUN cp -r src/db/migrations dist/db/
+RUN cp -r src/db/migrations-pg dist/db/
 
 # Create data directory and set permissions
 RUN mkdir -p /app/data

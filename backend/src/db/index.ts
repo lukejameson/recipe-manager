@@ -1,22 +1,36 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import 'dotenv/config';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 import * as schema from './schema.js';
-import { mkdir } from 'fs/promises';
-import { dirname } from 'path';
 
-// Get database URL from environment or use default
-const dbUrl = process.env.DATABASE_URL || './data/recipes.db';
+// Get PostgreSQL connection string from environment
+// Format: postgresql://user:password@host:port/database
+const connectionString = process.env.DATABASE_URL;
 
-// Ensure data directory exists
-await mkdir(dirname(dbUrl), { recursive: true });
+if (!connectionString) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
 
-// Create SQLite database connection
-const sqlite = new Database(dbUrl);
+// Create connection pool
+const pool = new Pool({
+  connectionString,
+  max: 10,                      // Maximum number of connections
+  idleTimeoutMillis: 30000,     // Close idle connections after 30 seconds
+  connectionTimeoutMillis: 2000, // Timeout after 2 seconds if no connection available
+});
 
-// Enable WAL mode for better concurrent access
-sqlite.pragma('journal_mode = WAL');
+// Handle pool errors
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
 
 // Create Drizzle ORM instance
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle(pool, { schema });
 
 export { schema };
+
+// Graceful shutdown helper
+export async function closePool() {
+  await pool.end();
+}

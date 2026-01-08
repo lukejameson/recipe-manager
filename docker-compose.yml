@@ -3,16 +3,16 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      - DATABASE_URL=/app/data/recipes.db
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
       - PORT=3001
       - ADMIN_USERNAME=${ADMIN_USERNAME:?ADMIN_USERNAME is required}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
       - ALLOWED_ORIGINS=https://${DOMAIN:?DOMAIN is required}
       - NODE_ENV=production
-    volumes:
-      - recipe-data:/app/data
     restart: unless-stopped
     networks:
       - web
@@ -56,14 +56,6 @@ services:
       - 'traefik.http.routers.recipe-frontend-http.middlewares=redirect-to-https'
       - 'traefik.http.routers.recipe-frontend.middlewares=security-headers@docker'
       - 'traefik.docker.network=web'
-
-volumes:
-  recipe-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${FOLDER_LOCATION:?FOLDER_LOCATION is required}
 
 networks:
   web:

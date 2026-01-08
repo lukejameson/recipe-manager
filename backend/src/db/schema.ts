@@ -1,14 +1,13 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
-import { sql } from 'drizzle-orm';
+import { pgTable, text, integer, timestamp, boolean, jsonb } from 'drizzle-orm/pg-core';
 
 // Users table for authentication
-export const users = sqliteTable('users', {
+export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   username: text('username').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 // Nutrition type for storing per-serving nutritional information
@@ -33,7 +32,7 @@ export type ImprovementSuggestion = {
 };
 
 // Recipes table
-export const recipes = sqliteTable('recipes', {
+export const recipes = pgTable('recipes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   title: text('title').notNull(),
   description: text('description'),
@@ -41,39 +40,39 @@ export const recipes = sqliteTable('recipes', {
   cookTime: integer('cook_time'), // in minutes
   totalTime: integer('total_time'), // in minutes
   servings: integer('servings'),
-  ingredients: text('ingredients', { mode: 'json' }).notNull().$type<string[]>(),
-  instructions: text('instructions', { mode: 'json' }).notNull().$type<string[]>(),
+  ingredients: jsonb('ingredients').notNull().$type<string[]>(),
+  instructions: jsonb('instructions').notNull().$type<string[]>(),
   imageUrl: text('image_url'),
   sourceUrl: text('source_url'),
-  isFavorite: integer('is_favorite', { mode: 'boolean' }).notNull().default(false),
+  isFavorite: boolean('is_favorite').notNull().default(false),
   rating: integer('rating'), // 1-5 stars
   notes: text('notes'), // Personal cooking notes
   difficulty: text('difficulty'), // easy, medium, hard
   timesCooked: integer('times_cooked').notNull().default(0),
-  lastCookedAt: integer('last_cooked_at', { mode: 'timestamp' }),
+  lastCookedAt: timestamp('last_cooked_at', { withTimezone: true }),
   // Nutrition information (per serving)
-  nutrition: text('nutrition', { mode: 'json' }).$type<NutritionInfo>(),
+  nutrition: jsonb('nutrition').$type<NutritionInfo>(),
   // AI-generated improvement ideas
-  improvementIdeas: text('improvement_ideas', { mode: 'json' }).$type<ImprovementSuggestion[]>(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  improvementIdeas: jsonb('improvement_ideas').$type<ImprovementSuggestion[]>(),
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 // Tags table
-export const tags = sqliteTable('tags', {
+export const tags = pgTable('tags', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull().unique(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 // Recipe-Tag junction table (many-to-many relationship)
-export const recipeTags = sqliteTable('recipe_tags', {
+export const recipeTags = pgTable('recipe_tags', {
   recipeId: text('recipe_id')
     .notNull()
     .references(() => recipes.id, { onDelete: 'cascade' }),
@@ -83,31 +82,31 @@ export const recipeTags = sqliteTable('recipe_tags', {
 });
 
 // Collections table
-export const collections = sqliteTable('collections', {
+export const collections = pgTable('collections', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
   description: text('description'),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 // Collection-Recipe junction table
-export const collectionRecipes = sqliteTable('collection_recipes', {
+export const collectionRecipes = pgTable('collection_recipes', {
   collectionId: text('collection_id')
     .notNull()
     .references(() => collections.id, { onDelete: 'cascade' }),
   recipeId: text('recipe_id')
     .notNull()
     .references(() => recipes.id, { onDelete: 'cascade' }),
-  addedAt: integer('added_at', { mode: 'timestamp' })
+  addedAt: timestamp('added_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 // Recipe components - for compound/composite recipes
 // Links parent recipes to child recipes with serving multipliers
-export const recipeComponents = sqliteTable('recipe_components', {
+export const recipeComponents = pgTable('recipe_components', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   parentRecipeId: text('parent_recipe_id')
     .notNull()
@@ -117,64 +116,64 @@ export const recipeComponents = sqliteTable('recipe_components', {
     .references(() => recipes.id, { onDelete: 'cascade' }),
   servingsNeeded: integer('servings_needed').notNull().default(1),
   sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 // Shopping list items
-export const shoppingListItems = sqliteTable('shopping_list_items', {
+export const shoppingListItems = pgTable('shopping_list_items', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   ingredient: text('ingredient').notNull(),
   quantity: text('quantity'),
   category: text('category'), // produce, dairy, meat, pantry, etc.
-  isChecked: integer('is_checked', { mode: 'boolean' }).notNull().default(false),
+  isChecked: boolean('is_checked').notNull().default(false),
   recipeId: text('recipe_id').references(() => recipes.id, { onDelete: 'set null' }),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 // App settings (single-row table for configuration)
-export const settings = sqliteTable('settings', {
+export const settings = pgTable('settings', {
   id: text('id').primaryKey().default('app-settings'),
   anthropicApiKey: text('anthropic_api_key'), // Encrypted
   anthropicModel: text('anthropic_model').default('claude-3-5-sonnet-20241022'),
   anthropicSecondaryModel: text('anthropic_secondary_model').default('claude-3-haiku-20240307'),
   pexelsApiKey: text('pexels_api_key'), // Encrypted - for image search
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 // User memories for AI context
 // Note: userId is not a FK because auth uses a fixed 'admin-user' ID that doesn't exist in users table
-export const memories = sqliteTable('memories', {
+export const memories = pgTable('memories', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull(),
   content: text('content').notNull(),
-  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  enabled: boolean('enabled').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 // AI Agents for specialized chat personas (Chef, Mixologist, custom)
-export const agents = sqliteTable('agents', {
+export const agents = pgTable('agents', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
   description: text('description'),
   systemPrompt: text('system_prompt').notNull(),
   icon: text('icon').notNull().default('🤖'),
   modelId: text('model_id'), // Specific model ID to use, null = use default from settings
-  isBuiltIn: integer('is_built_in', { mode: 'boolean' }).notNull().default(false),
+  isBuiltIn: boolean('is_built_in').notNull().default(false),
   userId: text('user_id'), // null for built-in agents
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
-    .default(sql`(unixepoch())`),
+    .defaultNow(),
 });
 
 // Type exports for use in application
