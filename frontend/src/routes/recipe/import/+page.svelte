@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { trpc } from '$lib/trpc/client';
+  import { authStore } from '$lib/stores/auth.svelte';
   import Header from '$lib/components/Header.svelte';
   import RecipeForm from '$lib/components/RecipeForm.svelte';
   import PhotoUploader from '$lib/components/PhotoUploader.svelte';
@@ -10,6 +11,10 @@
 
   type ImportMode = 'url' | 'jsonld' | 'photos' | 'preview';
   type PhotoStep = 'upload' | 'group' | 'extract' | 'review';
+
+  // Feature flags
+  let hasJsonldImport = $derived(authStore.hasFeature('jsonldImport'));
+  let hasPhotoExtraction = $derived(authStore.hasFeature('photoExtraction'));
 
   const DRAFT_STORAGE_KEY = 'recipe-photo-import-draft';
 
@@ -44,9 +49,22 @@
   let economyMode = $state(false);
   const compressionLevel = $derived(economyMode ? 'high' : 'standard') as 'standard' | 'high';
 
-  // Load draft on mount
+  // Load draft on mount and check for quick photo import
   onMount(() => {
     loadDraft();
+
+    // Check for quick photo import from home page
+    const quickPhoto = sessionStorage.getItem('quickPhotoImport');
+    if (quickPhoto) {
+      sessionStorage.removeItem('quickPhotoImport');
+      // Switch to photo mode and add the photo
+      mode = 'photos';
+      photos = [quickPhoto];
+      // Auto-trigger extraction after a brief delay to let the UI update
+      setTimeout(() => {
+        handleExtractRecipes([photos]);
+      }, 100);
+    }
   });
 
   // Auto-save draft when photos or groups change
@@ -177,8 +195,25 @@
       return;
     }
     error = '';
-    photoGroups = [photos.map((_, i) => i)];
-    photoStep = 'group';
+
+    // If only one photo, skip grouping and go straight to extraction
+    if (photos.length === 1) {
+      handleExtractRecipes([photos]);
+    } else {
+      // Default: all photos in one group (one recipe)
+      photoGroups = [photos.map((_, i) => i)];
+      photoStep = 'group';
+    }
+  }
+
+  // Quick extract - skip grouping and extract all as one recipe
+  function handleQuickExtract() {
+    if (photos.length === 0) {
+      error = 'Please upload at least one photo';
+      return;
+    }
+    error = '';
+    handleExtractRecipes([photos]);
   }
 
   async function handleExtractRecipes(imageGroups: string[][]) {
@@ -302,20 +337,24 @@
           class:active={mode === 'url'}
           onclick={() => handleModeChange('url')}
         >
-          From URL
+          From Website
         </button>
-        <button
-          class:active={mode === 'photos'}
-          onclick={() => handleModeChange('photos')}
-        >
-          From Photos
-        </button>
-        <button
-          class:active={mode === 'jsonld'}
-          onclick={() => handleModeChange('jsonld')}
-        >
-          From JSONLD
-        </button>
+        {#if hasPhotoExtraction}
+          <button
+            class:active={mode === 'photos'}
+            onclick={() => handleModeChange('photos')}
+          >
+            From Photo
+          </button>
+        {/if}
+        {#if hasJsonldImport}
+          <button
+            class:active={mode === 'jsonld'}
+            onclick={() => handleModeChange('jsonld')}
+          >
+            From Code
+          </button>
+        {/if}
       </div>
 
       {#if error}
@@ -367,40 +406,65 @@
         </form>
       {:else if mode === 'photos'}
         {#if photoStep === 'upload'}
-          <div class="info">
-            <p>
-              <strong>Import recipes from photos of cookbooks or recipe cards.</strong>
-            </p>
-            <p>
-              Upload photos of your recipes. Multi-page recipes are supported - just upload all pages and group them together in the next step.
-            </p>
-          </div>
-
-          <div class="economy-toggle">
-            <label class="toggle-label">
-              <input type="checkbox" bind:checked={economyMode} />
-              <span class="toggle-text">
-                <strong>Economy Mode</strong>
-                <span class="toggle-hint">Uses higher image compression to reduce AI costs (~40% savings)</span>
-              </span>
-            </label>
+          <div class="info photo-info">
+            <div class="info-icon">📸</div>
+            <div>
+              <p><strong>Take a photo of any recipe to add it to your collection</strong></p>
+              <p class="info-secondary">Works with cookbooks, recipe cards, handwritten notes, or magazine clippings.</p>
+            </div>
           </div>
 
           <PhotoUploader bind:images={photos} maxImages={20} {compressionLevel} />
 
-          <div class="form-actions">
-            <button
-              type="button"
-              class="btn-primary"
-              onclick={handlePhotosNext}
-              disabled={photos.length === 0}
-            >
-              Next: Group Photos
-            </button>
-            <button type="button" class="btn-secondary" onclick={() => goto('/')}>
-              Cancel
-            </button>
+          <div class="photo-actions">
+            {#if photos.length === 1}
+              <button
+                type="button"
+                class="btn-primary btn-large"
+                onclick={handlePhotosNext}
+              >
+                <span class="btn-icon">✨</span>
+                Import Recipe
+              </button>
+            {:else if photos.length > 1}
+              <button
+                type="button"
+                class="btn-primary"
+                onclick={handleQuickExtract}
+              >
+                <span class="btn-icon">✨</span>
+                Import as One Recipe
+              </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                onclick={handlePhotosNext}
+              >
+                Multiple Recipes...
+              </button>
+            {:else}
+              <button
+                type="button"
+                class="btn-primary btn-large"
+                disabled
+              >
+                Upload a photo to get started
+              </button>
+            {/if}
           </div>
+
+          <details class="advanced-options">
+            <summary>Advanced Options</summary>
+            <div class="options-content">
+              <label class="toggle-label">
+                <input type="checkbox" bind:checked={economyMode} />
+                <span class="toggle-text">
+                  <strong>Economy Mode</strong>
+                  <span class="toggle-hint">Uses higher image compression to reduce costs</span>
+                </span>
+              </label>
+            </div>
+          </details>
         {:else if photoStep === 'group'}
           <PhotoGrouper
             images={photos}
@@ -552,8 +616,25 @@
     line-height: 1.6;
   }
 
+  .info.photo-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    background: linear-gradient(135deg, #e8f4ff 0%, #f0f7ff 100%);
+  }
+
+  .info-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+  }
+
+  .info-secondary {
+    color: var(--color-text-light);
+    font-size: 0.9375rem;
+  }
+
   .info p {
-    margin: 0 0 1rem;
+    margin: 0 0 0.5rem;
   }
 
   .info p:last-child {
@@ -690,6 +771,50 @@
 
   .btn-secondary:hover {
     background: #f5f5f5;
+  }
+
+  /* Photo import styles */
+  .photo-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-large {
+    padding: 1rem 2rem;
+    font-size: 1.125rem;
+  }
+
+  .btn-icon {
+    margin-right: 0.5rem;
+  }
+
+  .advanced-options {
+    margin-top: 2rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
+  }
+
+  .advanced-options summary {
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--color-text-light);
+    user-select: none;
+  }
+
+  .advanced-options summary:hover {
+    color: var(--color-text);
+  }
+
+  .advanced-options[open] summary {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .options-content {
+    padding: 1.25rem;
   }
 
   /* Draft banner styles */

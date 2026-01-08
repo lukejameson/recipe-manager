@@ -3,12 +3,37 @@
   import { authStore } from '$lib/stores/auth.svelte';
   import { goto } from '$app/navigation';
 
+  // Form mode
+  let mode = $state<'login' | 'register'>('login');
+
+  // Shared fields
   let username = $state('');
   let password = $state('');
   let error = $state('');
   let loading = $state(false);
 
-  async function handleSubmit() {
+  // Registration-only fields
+  let inviteCode = $state('');
+  let confirmPassword = $state('');
+  let email = $state('');
+  let displayName = $state('');
+
+  function resetForm() {
+    username = '';
+    password = '';
+    inviteCode = '';
+    confirmPassword = '';
+    email = '';
+    displayName = '';
+    error = '';
+  }
+
+  function switchMode(newMode: 'login' | 'register') {
+    mode = newMode;
+    resetForm();
+  }
+
+  async function handleLogin() {
     error = '';
     loading = true;
 
@@ -24,18 +49,97 @@
       loading = false;
     }
   }
+
+  async function handleRegister() {
+    error = '';
+
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      error = 'Passwords do not match';
+      return;
+    }
+
+    // Validate password length
+    if (password.length < 8) {
+      error = 'Password must be at least 8 characters';
+      return;
+    }
+
+    loading = true;
+
+    try {
+      const result = await trpc.auth.register.mutate({
+        username,
+        password,
+        inviteCode: inviteCode.toUpperCase(),
+        email: email || undefined,
+        displayName: displayName || undefined,
+      });
+
+      authStore.setToken(result.token);
+      authStore.setUser(result.user);
+      goto('/');
+    } catch (err: any) {
+      error = err.message || 'Registration failed';
+    } finally {
+      loading = false;
+    }
+  }
+
+  function handleSubmit() {
+    if (mode === 'login') {
+      handleLogin();
+    } else {
+      handleRegister();
+    }
+  }
 </script>
 
 <div class="login-container">
   <div class="login-box">
-    <h1>🍳 Recipe Manager</h1>
-    <h2>Login</h2>
+    <h1>Recipe Manager</h1>
+
+    <div class="mode-tabs">
+      <button
+        class="mode-tab"
+        class:active={mode === 'login'}
+        onclick={() => switchMode('login')}
+        type="button"
+      >
+        Login
+      </button>
+      <button
+        class="mode-tab"
+        class:active={mode === 'register'}
+        onclick={() => switchMode('register')}
+        type="button"
+      >
+        Register
+      </button>
+    </div>
 
     {#if error}
       <div class="error">{error}</div>
     {/if}
 
     <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+      {#if mode === 'register'}
+        <div class="form-group">
+          <label for="inviteCode">Invite Code</label>
+          <input
+            id="inviteCode"
+            type="text"
+            bind:value={inviteCode}
+            required
+            placeholder="Enter your invite code"
+            autocomplete="off"
+            maxlength="8"
+            style="text-transform: uppercase;"
+          />
+          <span class="hint">Required to create an account</span>
+        </div>
+      {/if}
+
       <div class="form-group">
         <label for="username">Username</label>
         <input
@@ -45,8 +149,38 @@
           required
           placeholder="Enter username"
           autocomplete="username"
+          minlength={mode === 'register' ? 3 : undefined}
+          maxlength={mode === 'register' ? 50 : undefined}
         />
+        {#if mode === 'register'}
+          <span class="hint">3-50 characters, letters, numbers, underscores, hyphens</span>
+        {/if}
       </div>
+
+      {#if mode === 'register'}
+        <div class="form-group">
+          <label for="email">Email <span class="optional">(optional)</span></label>
+          <input
+            id="email"
+            type="email"
+            bind:value={email}
+            placeholder="Enter email"
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="displayName">Display Name <span class="optional">(optional)</span></label>
+          <input
+            id="displayName"
+            type="text"
+            bind:value={displayName}
+            placeholder="Enter display name"
+            autocomplete="name"
+            maxlength="100"
+          />
+        </div>
+      {/if}
 
       <div class="form-group">
         <label for="password">Password</label>
@@ -56,12 +190,34 @@
           bind:value={password}
           required
           placeholder="Enter password"
-          autocomplete="current-password"
+          autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
+          minlength={mode === 'register' ? 8 : undefined}
         />
+        {#if mode === 'register'}
+          <span class="hint">Minimum 8 characters</span>
+        {/if}
       </div>
 
+      {#if mode === 'register'}
+        <div class="form-group">
+          <label for="confirmPassword">Confirm Password</label>
+          <input
+            id="confirmPassword"
+            type="password"
+            bind:value={confirmPassword}
+            required
+            placeholder="Confirm password"
+            autocomplete="new-password"
+          />
+        </div>
+      {/if}
+
       <button type="submit" disabled={loading}>
-        {loading ? 'Logging in...' : 'Login'}
+        {#if loading}
+          {mode === 'login' ? 'Logging in...' : 'Creating account...'}
+        {:else}
+          {mode === 'login' ? 'Login' : 'Create Account'}
+        {/if}
       </button>
     </form>
   </div>
@@ -88,19 +244,44 @@
 
   h1 {
     text-align: center;
-    margin: 0 0 var(--spacing-2);
-    font-size: var(--text-4xl);
+    margin: 0 0 var(--spacing-6);
+    font-size: var(--text-3xl);
     font-weight: var(--font-extrabold);
     color: var(--color-text);
     letter-spacing: -0.025em;
   }
 
-  h2 {
-    text-align: center;
-    margin: 0 0 var(--spacing-8);
-    color: var(--color-text-secondary);
-    font-size: var(--text-xl);
+  .mode-tabs {
+    display: flex;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-6);
+    background: var(--color-bg);
+    padding: var(--spacing-1);
+    border-radius: var(--radius-lg);
+  }
+
+  .mode-tab {
+    flex: 1;
+    padding: var(--spacing-3);
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-md);
+    font-size: var(--text-base);
     font-weight: var(--font-medium);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: var(--transition-normal);
+  }
+
+  .mode-tab:hover:not(.active) {
+    color: var(--color-text);
+    background: var(--color-surface);
+  }
+
+  .mode-tab.active {
+    background: var(--color-surface);
+    color: var(--color-primary);
+    box-shadow: var(--shadow-sm);
   }
 
   .error {
@@ -111,7 +292,6 @@
     margin-bottom: var(--spacing-6);
     text-align: center;
     font-weight: var(--font-medium);
-    border-left: 3px solid var(--color-error);
     border: 1px solid #fecaca;
     font-size: var(--text-sm);
   }
@@ -132,6 +312,16 @@
     font-weight: var(--font-semibold);
     color: var(--color-text);
     font-size: var(--text-sm);
+  }
+
+  .optional {
+    font-weight: var(--font-normal);
+    color: var(--color-text-light);
+  }
+
+  .hint {
+    font-size: var(--text-xs);
+    color: var(--color-text-light);
   }
 
   input {
@@ -180,5 +370,4 @@
     transform: none;
     box-shadow: none;
   }
-
 </style>

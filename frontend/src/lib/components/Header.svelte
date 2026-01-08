@@ -4,6 +4,7 @@
 
   let {} = $props();
   let mobileMenuOpen = $state(false);
+  let userMenuOpen = $state(false);
 
   function toggleMobileMenu() {
     mobileMenuOpen = !mobileMenuOpen;
@@ -12,7 +13,24 @@
   function closeMobileMenu() {
     mobileMenuOpen = false;
   }
+
+  function toggleUserMenu() {
+    userMenuOpen = !userMenuOpen;
+  }
+
+  function closeUserMenu() {
+    userMenuOpen = false;
+  }
+
+  function handleClickOutside(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.user-menu-container')) {
+      closeUserMenu();
+    }
+  }
 </script>
+
+<svelte:window onclick={handleClickOutside} />
 
 <header>
   <div class="container">
@@ -39,6 +57,7 @@
     </h1>
 
     {#if authStore.isAuthenticated}
+      <!-- Mobile hamburger button -->
       <button
         class="mobile-menu-btn"
         onclick={toggleMobileMenu}
@@ -51,77 +70,193 @@
         </span>
       </button>
 
-      <nav class:mobile-open={mobileMenuOpen}>
+      <!-- Desktop navigation -->
+      <nav class="desktop-nav">
         <a
           href="/"
           class:active={$page.url.pathname === '/'}
-          onclick={closeMobileMenu}
         >
-          <span class="icon">📋</span>
-          <span class="label">Recipes</span>
+          Recipes
         </a>
         <a
           href="/recipe/import"
           class:active={$page.url.pathname === '/recipe/import'}
-          onclick={closeMobileMenu}
         >
-          <span class="icon">📥</span>
-          <span class="label">Import</span>
+          Import
         </a>
         <a
-          href="/tags"
-          class:active={$page.url.pathname === '/tags'}
-          onclick={closeMobileMenu}
+          href="/generate"
+          class:active={$page.url.pathname === '/generate'}
         >
-          <span class="icon">🏷️</span>
-          <span class="label">Tags</span>
+          Recipe Ideas
         </a>
         <a
           href="/collections"
           class:active={$page.url.pathname.startsWith('/collections')}
-          onclick={closeMobileMenu}
         >
-          <span class="icon">📁</span>
-          <span class="label">Collections</span>
+          Collections
         </a>
-        <!-- <a
-          href="/pantry-match"
-          class:active={$page.url.pathname === '/pantry-match'}
-          onclick={closeMobileMenu}
-          class="ai-link"
-        >
-          <span class="icon">🥘</span>
-          <span class="label">What Can I Make?</span>
-          <span class="ai-tag">AI</span>
-        </a> -->
-        <a
-          href="/generate"
-          class:active={$page.url.pathname === '/generate'}
-          onclick={closeMobileMenu}
-          class="ai-link"
-        >
-          <span class="icon">💬</span>
-          <span class="label">Generate</span>
-          <span class="ai-tag">AI</span>
-        </a>
-        <a
-          href="/settings"
-          class:active={$page.url.pathname === '/settings'}
-          onclick={closeMobileMenu}
-        >
-          <span class="icon">⚙️</span>
-          <span class="label">Settings</span>
-        </a>
-        <button
-          onclick={() => {
-            authStore.logout();
-            closeMobileMenu();
-          }}
-          class="logout-btn"
-        >
-          <span class="icon">🚪</span>
-          <span class="label">Logout</span>
-        </button>
+
+        <!-- User menu dropdown -->
+        <div class="user-menu-container">
+          <button
+            class="user-menu-btn"
+            class:active={userMenuOpen || $page.url.pathname === '/profile' || $page.url.pathname === '/settings'}
+            onclick={(e) => { e.stopPropagation(); toggleUserMenu(); }}
+            aria-label="User menu"
+          >
+            <span class="user-icon">
+              {authStore.user?.displayName?.[0]?.toUpperCase() || authStore.user?.username?.[0]?.toUpperCase() || '?'}
+            </span>
+            <svg class="chevron" class:open={userMenuOpen} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+            </svg>
+          </button>
+
+          {#if userMenuOpen}
+            <div class="user-dropdown">
+              <a href="/tags" class:active={$page.url.pathname === '/tags'} onclick={closeUserMenu}>
+                <span class="dropdown-icon">🏷️</span>
+                Tags
+              </a>
+              <a href="/profile" class:active={$page.url.pathname === '/profile'} onclick={closeUserMenu}>
+                <span class="dropdown-icon">👤</span>
+                Profile
+              </a>
+              <a href="/settings" class:active={$page.url.pathname === '/settings'} onclick={closeUserMenu}>
+                <span class="dropdown-icon">⚙️</span>
+                Settings
+              </a>
+              <a href="/help" class:active={$page.url.pathname === '/help'} onclick={closeUserMenu}>
+                <span class="dropdown-icon">❓</span>
+                Help
+              </a>
+
+              {#if authStore.isAdmin}
+                <div class="dropdown-divider"></div>
+                <a href="/admin" class="admin-item" class:active={$page.url.pathname.startsWith('/admin')} onclick={closeUserMenu}>
+                  <span class="dropdown-icon">🛠️</span>
+                  Admin
+                </a>
+              {/if}
+
+              <div class="dropdown-divider"></div>
+
+              <button class="dropdown-logout" onclick={() => { authStore.logout(); closeUserMenu(); }}>
+                <span class="dropdown-icon">🚪</span>
+                Log out
+              </button>
+            </div>
+          {/if}
+        </div>
+      </nav>
+
+      <!-- Mobile navigation (slide-out menu) -->
+      <nav class="mobile-nav" class:mobile-open={mobileMenuOpen}>
+        <div class="mobile-section">
+          <a
+            href="/"
+            class:active={$page.url.pathname === '/'}
+            onclick={closeMobileMenu}
+          >
+            <span class="icon">📋</span>
+            <span class="label">Recipes</span>
+          </a>
+          <a
+            href="/recipe/import"
+            class:active={$page.url.pathname === '/recipe/import'}
+            onclick={closeMobileMenu}
+          >
+            <span class="icon">📥</span>
+            <span class="label">Import</span>
+          </a>
+          <a
+            href="/generate"
+            class:active={$page.url.pathname === '/generate'}
+            onclick={closeMobileMenu}
+          >
+            <span class="icon">✨</span>
+            <span class="label">Recipe Ideas</span>
+          </a>
+          <a
+            href="/collections"
+            class:active={$page.url.pathname.startsWith('/collections')}
+            onclick={closeMobileMenu}
+          >
+            <span class="icon">📁</span>
+            <span class="label">Collections</span>
+          </a>
+        </div>
+
+        <div class="mobile-section-divider"></div>
+
+        <div class="mobile-section">
+          <a
+            href="/tags"
+            class:active={$page.url.pathname === '/tags'}
+            onclick={closeMobileMenu}
+          >
+            <span class="icon">🏷️</span>
+            <span class="label">Tags</span>
+          </a>
+        </div>
+
+        <div class="mobile-section-divider"></div>
+
+        <div class="mobile-section">
+          <a
+            href="/profile"
+            class:active={$page.url.pathname === '/profile'}
+            onclick={closeMobileMenu}
+          >
+            <span class="icon">👤</span>
+            <span class="label">Profile</span>
+          </a>
+          <a
+            href="/settings"
+            class:active={$page.url.pathname === '/settings'}
+            onclick={closeMobileMenu}
+          >
+            <span class="icon">⚙️</span>
+            <span class="label">Settings</span>
+          </a>
+          <a
+            href="/help"
+            class:active={$page.url.pathname === '/help'}
+            onclick={closeMobileMenu}
+          >
+            <span class="icon">❓</span>
+            <span class="label">Help</span>
+          </a>
+        </div>
+
+        {#if authStore.isAdmin}
+          <div class="mobile-section-divider"></div>
+          <div class="mobile-section">
+            <a
+              href="/admin"
+              class:active={$page.url.pathname.startsWith('/admin')}
+              onclick={closeMobileMenu}
+              class="admin-link"
+            >
+              <span class="icon">🛠️</span>
+              <span class="label">Admin</span>
+            </a>
+          </div>
+        {/if}
+
+        <div class="mobile-section mobile-logout-section">
+          <button
+            onclick={() => {
+              authStore.logout();
+              closeMobileMenu();
+            }}
+            class="logout-btn"
+          >
+            <span class="icon">🚪</span>
+            <span class="label">Log out</span>
+          </button>
+        </div>
       </nav>
     {/if}
   </div>
@@ -171,94 +306,172 @@
     flex-shrink: 0;
   }
 
-  nav {
+  /* Desktop Navigation */
+  .desktop-nav {
     display: flex;
     gap: var(--spacing-1);
     align-items: center;
-    flex-wrap: wrap;
   }
 
-  nav a {
+  .desktop-nav > a {
     color: var(--color-text-secondary);
     text-decoration: none;
     padding: var(--spacing-2) var(--spacing-3);
     border-radius: var(--radius-lg);
     transition: var(--transition-fast);
     font-weight: var(--font-medium);
-    position: relative;
     font-size: var(--text-sm);
   }
 
-  nav a .icon,
-  nav button .icon {
-    display: none;
-  }
-
-  nav a::after {
-    content: '';
-    position: absolute;
-    bottom: -2px;
-    left: 50%;
-    width: 0;
-    height: 2px;
-    background: var(--color-primary);
-    transition: var(--transition-fast);
-    transform: translateX(-50%);
-    border-radius: var(--radius-full);
-  }
-
-  nav a:hover {
+  .desktop-nav > a:hover {
     background: var(--color-bg-subtle);
     color: var(--color-text);
   }
 
-  nav a:hover::after {
-    width: 80%;
-  }
-
-  nav a.active {
+  .desktop-nav > a.active {
     color: var(--color-primary);
     background: var(--color-bg-subtle);
     font-weight: var(--font-semibold);
   }
 
-  nav a.active::after {
-    width: 80%;
+  /* User menu dropdown */
+  .user-menu-container {
+    position: relative;
+    margin-left: var(--spacing-2);
   }
 
-  .logout-btn {
-    background: var(--color-surface);
+  .user-menu-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    padding: var(--spacing-1) var(--spacing-2);
+    background: var(--color-bg-subtle);
     border: 1px solid var(--color-border);
-    padding: var(--spacing-2) var(--spacing-3);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-full);
     cursor: pointer;
-    color: var(--color-text-secondary);
-    font-size: var(--text-sm);
-    font-weight: var(--font-medium);
     transition: var(--transition-fast);
   }
 
-  .logout-btn:hover {
-    background: var(--color-error);
-    border-color: var(--color-error);
-    color: white;
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+  .user-menu-btn:hover,
+  .user-menu-btn.active {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
   }
 
+  .user-icon {
+    width: 28px;
+    height: 28px;
+    background: var(--color-primary);
+    color: white;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+  }
+
+  .chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--color-text-light);
+    transition: transform 0.2s;
+  }
+
+  .chevron.open {
+    transform: rotate(180deg);
+  }
+
+  .user-dropdown {
+    position: absolute;
+    top: calc(100% + var(--spacing-2));
+    right: 0;
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    min-width: 200px;
+    padding: var(--spacing-2);
+    z-index: 200;
+  }
+
+  .user-dropdown a,
+  .user-dropdown button {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    padding: var(--spacing-2) var(--spacing-3);
+    color: var(--color-text);
+    text-decoration: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .user-dropdown a:hover,
+  .user-dropdown button:hover {
+    background: var(--color-bg-subtle);
+  }
+
+  .user-dropdown a.active {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .user-dropdown a.active:hover {
+    background: var(--color-primary-dark);
+  }
+
+  .user-dropdown .admin-item {
+    color: #7c3aed;
+  }
+
+  .user-dropdown .admin-item:hover {
+    background: #f5f3ff;
+  }
+
+  .dropdown-icon {
+    font-size: var(--text-base);
+    width: 20px;
+    text-align: center;
+  }
+
+  .dropdown-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: var(--spacing-2) 0;
+  }
+
+  .dropdown-logout {
+    color: var(--color-error) !important;
+  }
+
+  .dropdown-logout:hover {
+    background: #fef2f2 !important;
+  }
+
+  /* Mobile menu button */
   .mobile-menu-btn {
     display: none;
   }
 
-  @media (max-width: 640px) {
+  /* Mobile navigation - hidden by default */
+  .mobile-nav {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
     header {
       padding: var(--spacing-3) 0;
     }
 
     .container {
-      flex-direction: row;
       padding: 0 var(--spacing-4);
-      gap: var(--spacing-4);
     }
 
     h1 {
@@ -271,6 +484,12 @@
       height: 28px;
     }
 
+    /* Hide desktop nav on mobile */
+    .desktop-nav {
+      display: none;
+    }
+
+    /* Show mobile menu button */
     .mobile-menu-btn {
       display: flex;
       align-items: center;
@@ -314,7 +533,10 @@
       transform: rotate(-45deg) translate(6px, -6px);
     }
 
-    nav {
+    /* Mobile nav slide-out */
+    .mobile-nav {
+      display: flex;
+      flex-direction: column;
       position: fixed;
       top: 0;
       right: -100%;
@@ -323,78 +545,83 @@
       background: var(--color-surface);
       box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
       transition: right 0.3s ease;
-      padding: var(--spacing-16) var(--spacing-6) var(--spacing-6);
-      display: flex;
-      flex-direction: column;
-      gap: 0;
+      padding: var(--spacing-16) var(--spacing-4) var(--spacing-4);
       z-index: 100;
       overflow-y: auto;
     }
 
-    nav.mobile-open {
+    .mobile-nav.mobile-open {
       right: 0;
     }
 
-    nav a,
-    nav button {
+    .mobile-section {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .mobile-section a,
+    .mobile-section button {
       width: 100%;
       padding: var(--spacing-4);
       text-align: left;
       display: flex;
       align-items: center;
       gap: var(--spacing-4);
-      min-height: 56px;
+      min-height: 52px;
       border-radius: var(--radius-lg);
-      margin-bottom: var(--spacing-2);
       font-size: var(--text-base);
+      color: var(--color-text);
+      text-decoration: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      transition: var(--transition-fast);
     }
 
-    nav a .icon,
-    nav button .icon {
-      display: inline;
+    .mobile-section a:hover,
+    .mobile-section button:hover {
+      background: var(--color-bg-subtle);
+    }
+
+    .mobile-section a.active {
+      background: var(--color-primary);
+      color: white;
+      font-weight: var(--font-semibold);
+    }
+
+    .mobile-section a .icon,
+    .mobile-section button .icon {
       font-size: var(--text-xl);
-      width: 32px;
+      width: 28px;
       text-align: center;
-      line-height: 1;
+    }
+
+    .mobile-section-divider {
+      height: 1px;
+      background: var(--color-border);
+      margin: var(--spacing-3) var(--spacing-4);
+    }
+
+    .mobile-logout-section {
+      margin-top: auto;
+      padding-top: var(--spacing-4);
+      border-top: 1px solid var(--color-border);
     }
 
     .logout-btn {
-      margin-top: auto;
-      border-top: 1px solid var(--color-border);
-      border-radius: 0;
-      padding-top: var(--spacing-6);
+      color: var(--color-error) !important;
     }
-  }
 
-  /* Icon styling */
-  .icon {
-    font-style: normal;
-    line-height: 1;
-  }
+    .logout-btn:hover {
+      background: #fef2f2 !important;
+    }
 
-  /* AI tag for AI-powered features */
-  .ai-tag {
-    background: var(--color-border);
-    color: var(--color-text-light);
-    padding: 0.0625rem 0.25rem;
-    border-radius: var(--radius-xs);
-    font-size: 0.5rem;
-    font-weight: 700;
-    letter-spacing: 0.025em;
-    margin-left: var(--spacing-1);
-    vertical-align: middle;
-  }
+    .admin-link {
+      color: #7c3aed !important;
+    }
 
-  .ai-link:hover .ai-tag,
-  .ai-link.active .ai-tag {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  @media (max-width: 640px) {
-    .ai-tag {
-      font-size: 0.625rem;
-      padding: 0.125rem 0.375rem;
+    .admin-link:hover {
+      background: #f5f3ff !important;
     }
   }
 </style>

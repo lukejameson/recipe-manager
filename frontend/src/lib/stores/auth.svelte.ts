@@ -1,10 +1,36 @@
 import { trpc } from '$lib/trpc/client';
 
 /**
+ * Feature flags type - mirrors backend UserFeatureFlags
+ */
+export type UserFeatureFlags = {
+  aiChat: boolean;
+  recipeGeneration: boolean;
+  tagSuggestions: boolean;
+  nutritionCalc: boolean;
+  photoExtraction: boolean;
+  urlImport: boolean;
+  imageSearch: boolean;
+  jsonldImport: boolean;
+};
+
+/**
+ * User type returned from auth endpoints
+ */
+export type User = {
+  id: string;
+  username: string;
+  isAdmin: boolean;
+  email: string | null;
+  displayName: string | null;
+  featureFlags: UserFeatureFlags;
+};
+
+/**
  * Auth store using Svelte 5 Runes
  */
 class AuthStore {
-  private _user = $state<{ id: string; username: string } | null>(null);
+  private _user = $state<User | null>(null);
   private _loading = $state(false);
 
   get user() {
@@ -15,8 +41,19 @@ class AuthStore {
     return this._user !== null;
   }
 
+  get isAdmin() {
+    return this._user?.isAdmin ?? false;
+  }
+
   get loading() {
     return this._loading;
+  }
+
+  /**
+   * Check if user has a specific feature enabled
+   */
+  hasFeature(feature: keyof UserFeatureFlags): boolean {
+    return this._user?.featureFlags[feature] ?? false;
   }
 
   /**
@@ -36,7 +73,7 @@ class AuthStore {
   /**
    * Set user data
    */
-  setUser(user: { id: string; username: string }) {
+  setUser(user: User) {
     this._user = user;
   }
 

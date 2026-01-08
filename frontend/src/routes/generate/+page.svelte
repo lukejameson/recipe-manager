@@ -1,10 +1,16 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
   import { trpc } from '$lib/trpc/client';
+  import { authStore } from '$lib/stores/auth.svelte';
   import Header from '$lib/components/Header.svelte';
   import AIBadge from '$lib/components/ai/AIBadge.svelte';
   import AgentSelector, { type SelectedAgentInfo } from '$lib/components/ai/AgentSelector.svelte';
   import Markdown from '$lib/components/Markdown.svelte';
+
+  // Check if user has access to AI chat
+  let hasAiChat = $derived(authStore.hasFeature('aiChat'));
+  let hasImageSearch = $derived(authStore.hasFeature('imageSearch'));
 
   interface ChatMessage {
     role: 'user' | 'assistant';
@@ -112,13 +118,35 @@
     pendingImages = pendingImages.filter((_, i) => i !== index);
   }
 
-  const starterPrompts = [
+  // Default prompts as fallback
+  const defaultPrompts = [
     "I want to make something with chicken and vegetables",
     "Give me ideas for a quick weeknight dinner",
     "I'm craving Italian food",
     "What can I make that's vegetarian and high protein?",
     "Suggest a fancy dinner for a date night",
   ];
+
+  let starterPrompts = $state<string[]>(defaultPrompts);
+  let loadingPrompts = $state(false);
+
+  // Load personalized suggestions on mount
+  onMount(async () => {
+    if (!hasAiChat) return;
+
+    loadingPrompts = true;
+    try {
+      const result = await trpc.ai.getPersonalizedSuggestions.query();
+      if (result.suggestions.length > 0) {
+        starterPrompts = result.suggestions;
+      }
+    } catch (err) {
+      // Silently fall back to default prompts
+      console.error('Failed to load personalized suggestions:', err);
+    } finally {
+      loadingPrompts = false;
+    }
+  });
 
   async function sendMessage(content?: string) {
     const messageContent = content || inputValue.trim();
@@ -172,9 +200,35 @@
     }
   }
 
+  let savingRecipe = $state(false);
+  let savingStatus = $state('');
+
   async function saveRecipe(recipe: GeneratedRecipe) {
+    savingRecipe = true;
+    savingStatus = 'Saving recipe...';
     try {
-      const newRecipe = await trpc.recipe.create.mutate({
+      let imageUrl: string | undefined;
+
+      // Try to find a matching image from Pexels if user has the feature
+      if (hasImageSearch) {
+        savingStatus = 'Finding a photo...';
+        try {
+          const imageResult = await trpc.recipe.searchImages.mutate({
+            query: recipe.title,
+            tags: recipe.tags,
+            page: 1,
+          });
+          if (imageResult.images.length > 0) {
+            imageUrl = imageResult.images[0].url;
+          }
+        } catch (imgErr: any) {
+          // Continue without image but log the error
+          console.error('Failed to fetch image:', imgErr);
+        }
+      }
+
+      savingStatus = 'Creating recipe...';
+      const recipeData: any = {
         title: recipe.title,
         description: recipe.description,
         ingredients: recipe.ingredients,
@@ -183,10 +237,20 @@
         cookTime: recipe.cookTime,
         servings: recipe.servings,
         tags: recipe.tags,
-      });
+      };
+
+      // Only include imageUrl if we have one
+      if (imageUrl) {
+        recipeData.imageUrl = imageUrl;
+      }
+
+      const newRecipe = await trpc.recipe.create.mutate(recipeData);
       goto(`/recipe/${newRecipe.id}`);
     } catch (err: any) {
       error = err.message || 'Failed to save recipe';
+    } finally {
+      savingRecipe = false;
+      savingStatus = '';
     }
   }
 
@@ -213,12 +277,13 @@
 
 <Header />
 
+{#if hasAiChat}
 <main>
   <div class="container">
     <div class="chat-header">
       <div class="header-content">
-        <h1>Recipe Generator</h1>
-        <p class="subtitle">Chat with AI to brainstorm and create new recipes</p>
+        <h1>Recipe Ideas</h1>
+        <p class="subtitle">Tell me what you're craving and I'll help you create the perfect recipe</p>
       </div>
       <div class="header-actions">
         <AgentSelector bind:selectedAgentId onSelect={handleAgentSelect} />
@@ -241,11 +306,17 @@
           <p>Describe what you're in the mood for, ingredients you have, or any dietary preferences.</p>
 
           <div class="starter-prompts">
-            {#each starterPrompts as prompt}
-              <button class="starter-btn" onclick={() => sendMessage(prompt)}>
-                {prompt}
-              </button>
-            {/each}
+            {#if loadingPrompts}
+              {#each [1, 2, 3, 4, 5] as _}
+                <div class="starter-btn-skeleton"></div>
+              {/each}
+            {:else}
+              {#each starterPrompts as prompt}
+                <button class="starter-btn" onclick={() => sendMessage(prompt)}>
+                  {prompt}
+                </button>
+              {/each}
+            {/if}
           </div>
         </div>
       {:else}
@@ -275,8 +346,13 @@
                   <div class="recipe-card">
                     <div class="recipe-header">
                       <h3>{message.recipe.title}</h3>
-                      <button class="btn-save" onclick={() => saveRecipe(message.recipe!)}>
-                        Save Recipe
+                      <button class="btn-save" onclick={() => saveRecipe(message.recipe!)} disabled={savingRecipe}>
+                        {#if savingRecipe}
+                          <span class="btn-spinner"></span>
+                          {savingStatus || 'Saving...'}
+                        {:else}
+                          Save Recipe
+                        {/if}
                       </button>
                     </div>
 
@@ -412,6 +488,17 @@
     </div>
   </div>
 </main>
+{:else}
+<main class="feature-disabled">
+  <div class="disabled-message">
+    <div class="disabled-icon">🔒</div>
+    <h2>Feature Not Available</h2>
+    <p>Recipe Ideas is not enabled for your account.</p>
+    <p>Ask an admin to enable this feature for you.</p>
+    <a href="/" class="btn-primary">Go to Recipes</a>
+  </div>
+</main>
+{/if}
 
 <style>
   main {
@@ -546,6 +633,25 @@
     border-color: var(--color-primary);
     color: var(--color-primary);
     background: rgba(74, 158, 255, 0.05);
+  }
+
+  .starter-btn-skeleton {
+    padding: var(--spacing-2) var(--spacing-4);
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    height: 38px;
+    min-width: 180px;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-pulse {
+    0%, 100% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 0.8;
+    }
   }
 
   .messages {
@@ -702,8 +808,25 @@
     white-space: nowrap;
   }
 
-  .btn-save:hover {
+  .btn-save:hover:not(:disabled) {
     background: var(--color-primary-dark);
+  }
+
+  .btn-save:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: var(--spacing-2);
+    vertical-align: middle;
   }
 
   .recipe-description {
@@ -1008,5 +1131,51 @@
     object-fit: cover;
     border-radius: var(--radius-md);
     border: 1px solid var(--color-border);
+  }
+
+  /* Feature disabled state */
+  main.feature-disabled {
+    justify-content: center;
+    align-items: center;
+    min-height: calc(100vh - 80px);
+  }
+
+  .disabled-message {
+    text-align: center;
+    padding: var(--spacing-8);
+    max-width: 400px;
+  }
+
+  .disabled-icon {
+    font-size: 4rem;
+    margin-bottom: var(--spacing-4);
+  }
+
+  .disabled-message h2 {
+    font-size: var(--text-2xl);
+    margin: 0 0 var(--spacing-3);
+    color: var(--color-text);
+  }
+
+  .disabled-message p {
+    color: var(--color-text-secondary);
+    margin: 0 0 var(--spacing-2);
+    line-height: 1.5;
+  }
+
+  .disabled-message .btn-primary {
+    display: inline-block;
+    margin-top: var(--spacing-4);
+    padding: var(--spacing-3) var(--spacing-6);
+    background: var(--color-primary);
+    color: white;
+    text-decoration: none;
+    border-radius: var(--radius-md);
+    font-weight: var(--font-semibold);
+    transition: background 0.2s;
+  }
+
+  .disabled-message .btn-primary:hover {
+    background: var(--color-primary-dark);
   }
 </style>

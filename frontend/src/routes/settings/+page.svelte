@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { trpc } from '$lib/trpc/client';
+  import { authStore } from '$lib/stores/auth.svelte';
   import Header from '$lib/components/Header.svelte';
 
   let loading = $state(true);
@@ -10,6 +11,7 @@
   let error = $state('');
   let success = $state('');
 
+  let isAdmin = $state(false);
   let hasApiKey = $state(false);
   let apiKey = $state('');
   let selectedModel = $state('claude-sonnet-4-20250514');
@@ -37,6 +39,7 @@
         trpc.settings.get.query(),
         trpc.settings.listMemories.query(),
       ]);
+      isAdmin = settings.isAdmin;
       hasApiKey = settings.hasApiKey;
       hasPexelsApiKey = settings.hasPexelsApiKey;
       selectedModel = settings.model;
@@ -238,140 +241,141 @@
     {#if loading}
       <div class="loading">Loading settings...</div>
     {:else}
-      <section class="settings-section">
-        <h2>AI Configuration</h2>
-        <p class="section-description">
-          Configure the Anthropic API to enable AI-powered features like automatic nutrition
-          calculation.
-        </p>
+      {#if error}
+        <div class="error-message">{error}</div>
+      {/if}
 
-        {#if error}
-          <div class="error-message">{error}</div>
-        {/if}
-
-        {#if success}
-          <div class="success-message">{success}</div>
-        {/if}
-
-        <div class="form-group">
-          <label for="apiKey">Anthropic API Key</label>
-          {#if hasApiKey}
-            <div class="api-key-status">
-              <span class="status-badge configured">API Key Configured</span>
-              <button onclick={handleClearApiKey} class="btn-text-danger" disabled={saving}>
-                Remove
-              </button>
-            </div>
-          {/if}
-          <input
-            id="apiKey"
-            type="password"
-            bind:value={apiKey}
-            placeholder={hasApiKey ? 'Enter new key to replace...' : 'sk-ant-api03-...'}
-            autocomplete="off"
-          />
-          <p class="hint">
-            Get your API key from
-            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">
-              console.anthropic.com
-            </a>
+      {#if isAdmin}
+        <section class="settings-section">
+          <h2>AI Configuration</h2>
+          <p class="section-description">
+            Configure the Anthropic API to enable AI-powered features like automatic nutrition
+            calculation.
           </p>
-        </div>
 
-        {#if apiKey.trim()}
-          <div class="test-section">
-            <button onclick={handleTestApiKey} class="btn-secondary" disabled={testing}>
-              {testing ? 'Testing...' : 'Test API Key'}
-            </button>
-            {#if testResult}
-              <span class="test-result" class:valid={testResult.valid} class:invalid={!testResult.valid}>
-                {testResult.valid ? 'Valid API key!' : testResult.error}
-              </span>
+          {#if success}
+            <div class="success-message">{success}</div>
+          {/if}
+
+          <div class="form-group">
+            <label for="apiKey">Anthropic API Key</label>
+            {#if hasApiKey}
+              <div class="api-key-status">
+                <span class="status-badge configured">API Key Configured</span>
+                <button onclick={handleClearApiKey} class="btn-text-danger" disabled={saving}>
+                  Remove
+                </button>
+              </div>
             {/if}
+            <input
+              id="apiKey"
+              type="password"
+              bind:value={apiKey}
+              placeholder={hasApiKey ? 'Enter new key to replace...' : 'sk-ant-api03-...'}
+              autocomplete="off"
+            />
+            <p class="hint">
+              Get your API key from
+              <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">
+                console.anthropic.com
+              </a>
+            </p>
           </div>
-        {/if}
 
-        <div class="form-group">
-          <label for="model">Primary Model</label>
-          <select id="model" bind:value={selectedModel}>
-            {#each availableModels as model}
-              <option value={model.id}>{model.name}</option>
-            {/each}
-          </select>
-          <p class="hint">
-            Used for complex tasks like recipe extraction from photos and creative brainstorming.
+          {#if apiKey.trim()}
+            <div class="test-section">
+              <button onclick={handleTestApiKey} class="btn-secondary" disabled={testing}>
+                {testing ? 'Testing...' : 'Test API Key'}
+              </button>
+              {#if testResult}
+                <span class="test-result" class:valid={testResult.valid} class:invalid={!testResult.valid}>
+                  {testResult.valid ? 'Valid API key!' : testResult.error}
+                </span>
+              {/if}
+            </div>
+          {/if}
+
+          <div class="form-group">
+            <label for="model">Primary Model</label>
+            <select id="model" bind:value={selectedModel}>
+              {#each availableModels as model}
+                <option value={model.id}>{model.name}</option>
+              {/each}
+            </select>
+            <p class="hint">
+              Used for complex tasks like recipe extraction from photos and creative brainstorming.
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label for="secondaryModel">Secondary Model</label>
+            <select id="secondaryModel" bind:value={selectedSecondaryModel}>
+              {#each availableModels as model}
+                <option value={model.id}>{model.name}</option>
+              {/each}
+            </select>
+            <p class="hint">
+              Used for simpler tasks like tag suggestions, nutrition calculation, and recipe Q&A.
+              Haiku models are faster and more economical.
+            </p>
+          </div>
+
+          <div class="form-actions">
+            <button onclick={handleSave} class="btn-primary" disabled={saving}>
+              {saving ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h2>Image Search</h2>
+          <p class="section-description">
+            Configure Pexels API to enable searching for recipe images directly from the recipe form.
           </p>
-        </div>
 
-        <div class="form-group">
-          <label for="secondaryModel">Secondary Model</label>
-          <select id="secondaryModel" bind:value={selectedSecondaryModel}>
-            {#each availableModels as model}
-              <option value={model.id}>{model.name}</option>
-            {/each}
-          </select>
-          <p class="hint">
-            Used for simpler tasks like tag suggestions, nutrition calculation, and recipe Q&A.
-            Haiku models are faster and more economical.
-          </p>
-        </div>
+          {#if pexelsSuccess}
+            <div class="success-message">{pexelsSuccess}</div>
+          {/if}
 
-        <div class="form-actions">
-          <button onclick={handleSave} class="btn-primary" disabled={saving}>
-            {saving ? 'Saving...' : 'Save Settings'}
-          </button>
-        </div>
-      </section>
+          <div class="form-group">
+            <label for="pexelsApiKey">Pexels API Key</label>
+            {#if hasPexelsApiKey}
+              <div class="api-key-status">
+                <span class="status-badge configured">API Key Configured</span>
+                <button onclick={handleClearPexelsKey} class="btn-text-danger" disabled={savingPexels}>
+                  Remove
+                </button>
+              </div>
+            {/if}
+            <input
+              id="pexelsApiKey"
+              type="password"
+              bind:value={pexelsApiKey}
+              placeholder={hasPexelsApiKey ? 'Enter new key to replace...' : 'Enter your Pexels API key'}
+              autocomplete="off"
+            />
+            <p class="hint">
+              Get a free API key from
+              <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">
+                pexels.com/api
+              </a>
+            </p>
+          </div>
 
-      <section class="settings-section">
-        <h2>Image Search</h2>
-        <p class="section-description">
-          Configure Pexels API to enable searching for recipe images directly from the recipe form.
-        </p>
-
-        {#if pexelsSuccess}
-          <div class="success-message">{pexelsSuccess}</div>
-        {/if}
-
-        <div class="form-group">
-          <label for="pexelsApiKey">Pexels API Key</label>
-          {#if hasPexelsApiKey}
-            <div class="api-key-status">
-              <span class="status-badge configured">API Key Configured</span>
-              <button onclick={handleClearPexelsKey} class="btn-text-danger" disabled={savingPexels}>
-                Remove
+          {#if pexelsApiKey.trim()}
+            <div class="form-actions">
+              <button onclick={handleSavePexelsKey} class="btn-primary" disabled={savingPexels}>
+                {savingPexels ? 'Saving...' : 'Save Pexels API Key'}
               </button>
             </div>
           {/if}
-          <input
-            id="pexelsApiKey"
-            type="password"
-            bind:value={pexelsApiKey}
-            placeholder={hasPexelsApiKey ? 'Enter new key to replace...' : 'Enter your Pexels API key'}
-            autocomplete="off"
-          />
-          <p class="hint">
-            Get a free API key from
-            <a href="https://www.pexels.com/api/" target="_blank" rel="noopener">
-              pexels.com/api
-            </a>
-          </p>
-        </div>
-
-        {#if pexelsApiKey.trim()}
-          <div class="form-actions">
-            <button onclick={handleSavePexelsKey} class="btn-primary" disabled={savingPexels}>
-              {savingPexels ? 'Saving...' : 'Save Pexels API Key'}
-            </button>
-          </div>
-        {/if}
-      </section>
+        </section>
+      {/if}
 
       <section class="settings-section">
-        <h2>AI Memories</h2>
+        <h2>My Preferences</h2>
         <p class="section-description">
-          Guide the AI with your preferences and dietary restrictions. These will be included when
-          generating or discussing recipes.
+          Tell us about your dietary needs, allergies, and cooking preferences. This helps personalize recipe suggestions and generated recipes just for you.
         </p>
 
         {#if memoriesSuccess}
@@ -393,7 +397,7 @@
                 <button
                   class="btn-icon-danger"
                   onclick={() => handleDeleteMemory(memory.id)}
-                  title="Delete memory"
+                  title="Delete"
                 >
                   &times;
                 </button>
@@ -401,14 +405,14 @@
             {/each}
           </div>
         {:else}
-          <p class="empty-state">No memories yet. Add some preferences to personalize your AI experience.</p>
+          <p class="empty-state">No preferences added yet. Add some to get personalized recipe suggestions.</p>
         {/if}
 
         <div class="add-memory-form">
           <input
             type="text"
             bind:value={newMemory}
-            placeholder="Add a new memory..."
+            placeholder="Add a preference..."
             maxlength="500"
             onkeydown={(e) => e.key === 'Enter' && handleAddMemory()}
           />
@@ -418,26 +422,7 @@
         </div>
 
         <p class="hint">
-          Examples: "I'm vegetarian", "Allergic to shellfish", "I prefer spicy food", "Cooking for a
-          family of 4"
-        </p>
-      </section>
-
-      <section class="settings-section info-section">
-        <h2>About AI Features</h2>
-        <p>
-          When configured, AI features will use your Anthropic API key to process requests. Current
-          AI-powered features include:
-        </p>
-        <ul>
-          <li>
-            <strong>Nutrition Calculator</strong> - Automatically estimate nutritional information
-            from recipe ingredients
-          </li>
-        </ul>
-        <p class="note">
-          Your API key is encrypted and stored securely on the server. API usage is billed directly
-          to your Anthropic account.
+          Examples: "I'm vegetarian", "Allergic to nuts", "Low sodium diet", "Cooking for a family of 4", "I don't like cilantro"
         </p>
       </section>
     {/if}
@@ -644,29 +629,6 @@
   .btn-secondary:disabled {
     opacity: 0.7;
     cursor: not-allowed;
-  }
-
-  .info-section {
-    background: var(--color-bg-subtle);
-  }
-
-  .info-section ul {
-    margin: 1rem 0;
-    padding-left: 1.5rem;
-  }
-
-  .info-section li {
-    margin-bottom: 0.5rem;
-    line-height: 1.5;
-  }
-
-  .note {
-    font-size: 0.875rem;
-    color: var(--color-text-light);
-    margin: 1rem 0 0;
-    padding: 0.75rem;
-    background: rgba(0, 0, 0, 0.03);
-    border-radius: var(--radius-md);
   }
 
   @media (max-width: 640px) {

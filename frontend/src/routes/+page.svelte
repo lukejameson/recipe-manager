@@ -4,6 +4,7 @@
   import Header from '$lib/components/Header.svelte';
   import RecipeCard from '$lib/components/RecipeCard.svelte';
   import { trpc } from '$lib/trpc/client';
+  import { authStore } from '$lib/stores/auth.svelte';
   import { onMount } from 'svelte';
 
   let recipes = $state<any[]>([]);
@@ -15,6 +16,12 @@
   let sortBy = $state<string>('date-newest');
   let viewMode = $state<'grid' | 'list' | 'compact'>('grid');
   let category = $state<'all' | 'food' | 'cocktails'>('all');
+
+  // Feature flags
+  let hasPhotoExtraction = $derived(authStore.hasFeature('photoExtraction'));
+
+  // Photo upload
+  let photoInputRef = $state<HTMLInputElement | null>(null);
 
   // Tags that indicate a recipe is a drink/cocktail
   const drinkTags = ['cocktail', 'mocktail', 'drink', 'beverage', 'cocktails', 'drinks'];
@@ -142,6 +149,29 @@
     // Save to localStorage
     localStorage.setItem('recipeViewMode', mode);
   }
+
+  function triggerPhotoUpload() {
+    photoInputRef?.click();
+  }
+
+  async function handlePhotoSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      // Store in sessionStorage for the import page to pick up
+      sessionStorage.setItem('quickPhotoImport', base64);
+      goto('/recipe/import?mode=photo');
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input so same file can be selected again
+    input.value = '';
+  }
 </script>
 
 <Header />
@@ -150,10 +180,26 @@
   <div class="container">
     <div class="header">
       <h2>My Recipes</h2>
-      <a href="/recipe/new" class="btn-primary mobile-fab">
-        <span class="icon">➕</span>
-        <span>New Recipe</span>
-      </a>
+      <div class="header-actions">
+        {#if hasPhotoExtraction}
+          <button class="btn-photo" onclick={triggerPhotoUpload} title="Import from photo">
+            <span class="icon">📷</span>
+            <span class="btn-text">Scan Recipe</span>
+          </button>
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            class="hidden-input"
+            bind:this={photoInputRef}
+            onchange={handlePhotoSelect}
+          />
+        {/if}
+        <a href="/recipe/new" class="btn-primary">
+          <span class="icon">➕</span>
+          <span class="btn-text">New Recipe</span>
+        </a>
+      </div>
     </div>
 
     <div class="category-tabs">
@@ -330,6 +376,12 @@
     margin-bottom: var(--spacing-5);
   }
 
+  .header-actions {
+    display: flex;
+    gap: var(--spacing-2);
+    align-items: center;
+  }
+
   h2 {
     margin: 0;
     font-size: var(--text-2xl);
@@ -337,19 +389,43 @@
     font-weight: var(--font-bold);
   }
 
+  .hidden-input {
+    display: none;
+  }
+
+  .btn-photo,
   .btn-primary {
     padding: var(--spacing-2) var(--spacing-4);
     border-radius: var(--radius-lg);
-    text-decoration: none;
     font-weight: var(--font-semibold);
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--spacing-2);
     transition: var(--transition-normal);
     font-size: var(--text-sm);
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    height: 40px;
+    box-sizing: border-box;
+  }
+
+  .btn-photo {
+    background: var(--color-surface);
+    color: var(--color-primary);
+    box-shadow: inset 0 0 0 2px var(--color-primary);
+  }
+
+  .btn-photo:hover {
     background: var(--color-primary);
     color: white;
-    border: none;
+    box-shadow: none;
+  }
+
+  .btn-primary {
+    background: var(--color-primary);
+    color: white;
   }
 
   .btn-primary:hover {
@@ -652,13 +728,16 @@
       font-size: var(--text-xl);
     }
 
-    .btn-primary .btn-text {
+    .btn-text {
       display: none;
     }
 
-    .btn-primary {
-      padding: var(--spacing-3);
+    .btn-primary,
+    .btn-photo {
+      padding: 0;
       border-radius: var(--radius-full);
+      width: 44px;
+      height: 44px;
     }
 
     .search-bar input {
