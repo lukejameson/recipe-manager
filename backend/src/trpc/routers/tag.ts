@@ -3,7 +3,7 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
 import { tags, recipeTags, recipes } from '../../db/schema.js';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 
 const t = initTRPC.context<Context>().create();
 
@@ -34,7 +34,7 @@ export const tagRouter = t.router({
         minRecipes: z.number().min(1).default(2),
       }).optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const minRecipes = input?.minRecipes ?? 2;
 
       const tagsWithCounts = await db
@@ -46,6 +46,7 @@ export const tagRouter = t.router({
         })
         .from(tags)
         .leftJoin(recipeTags, eq(tags.id, recipeTags.tagId))
+        .where(eq(tags.userId, ctx.userId))
         .groupBy(tags.id)
         .having(sql`count(${recipeTags.recipeId}) >= ${minRecipes}`)
         .orderBy(sql`count(${recipeTags.recipeId}) DESC`);
@@ -66,11 +67,11 @@ export const tagRouter = t.router({
    */
   getRecipes: protectedProcedure
     .input(z.object({ tagId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const [tag] = await db
         .select()
         .from(tags)
-        .where(eq(tags.id, input.tagId))
+        .where(and(eq(tags.id, input.tagId), eq(tags.userId, ctx.userId)))
         .limit(1);
 
       if (!tag) {
@@ -86,7 +87,7 @@ export const tagRouter = t.router({
         })
         .from(recipeTags)
         .innerJoin(recipes, eq(recipeTags.recipeId, recipes.id))
-        .where(eq(recipeTags.tagId, input.tagId));
+        .where(and(eq(recipeTags.tagId, input.tagId), eq(recipes.userId, ctx.userId)));
 
       return {
         id: `tag:${tag.id}`,
@@ -101,7 +102,7 @@ export const tagRouter = t.router({
   /**
    * List all tags with recipe counts
    */
-  list: protectedProcedure.query(async () => {
+  list: protectedProcedure.query(async ({ ctx }) => {
     const allTags = await db
       .select({
         id: tags.id,
@@ -111,6 +112,7 @@ export const tagRouter = t.router({
       })
       .from(tags)
       .leftJoin(recipeTags, eq(tags.id, recipeTags.tagId))
+      .where(eq(tags.userId, ctx.userId))
       .groupBy(tags.id)
       .orderBy(tags.name);
 
@@ -126,12 +128,12 @@ export const tagRouter = t.router({
         name: z.string().min(1).max(50),
       })
     )
-    .mutation(async ({ input }) => {
-      // Check if tag already exists
+    .mutation(async ({ ctx, input }) => {
+      // Check if tag already exists for this user
       const [existing] = await db
         .select()
         .from(tags)
-        .where(eq(tags.name, input.name))
+        .where(and(eq(tags.name, input.name), eq(tags.userId, ctx.userId)))
         .limit(1);
 
       if (existing) {
@@ -141,7 +143,7 @@ export const tagRouter = t.router({
         });
       }
 
-      const [newTag] = await db.insert(tags).values({ name: input.name }).returning();
+      const [newTag] = await db.insert(tags).values({ name: input.name, userId: ctx.userId }).returning();
 
       return newTag;
     }),
@@ -151,7 +153,21 @@ export const tagRouter = t.router({
    */
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Verify tag belongs to user
+      const [tag] = await db
+        .select()
+        .from(tags)
+        .where(and(eq(tags.id, input.id), eq(tags.userId, ctx.userId)))
+        .limit(1);
+
+      if (!tag) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tag not found',
+        });
+      }
+
       // Check if any recipes use this tag
       const recipesWithTag = await db
         .select()
@@ -181,12 +197,12 @@ export const tagRouter = t.router({
         newName: z.string().min(1).max(50),
       })
     )
-    .mutation(async ({ input }) => {
-      // Check if tag exists
+    .mutation(async ({ ctx, input }) => {
+      // Check if tag exists and belongs to user
       const [existing] = await db
         .select()
         .from(tags)
-        .where(eq(tags.id, input.id))
+        .where(and(eq(tags.id, input.id), eq(tags.userId, ctx.userId)))
         .limit(1);
 
       if (!existing) {
@@ -196,11 +212,11 @@ export const tagRouter = t.router({
         });
       }
 
-      // Check if new name already exists
+      // Check if new name already exists for this user
       const [duplicate] = await db
         .select()
         .from(tags)
-        .where(eq(tags.name, input.newName))
+        .where(and(eq(tags.name, input.newName), eq(tags.userId, ctx.userId)))
         .limit(1);
 
       if (duplicate && duplicate.id !== input.id) {
@@ -223,8 +239,8 @@ export const tagRouter = t.router({
   /**
    * Delete all orphaned tags (tags with no associated recipes)
    */
-  cleanupOrphaned: protectedProcedure.mutation(async () => {
-    // Find tags with no recipes
+  cleanupOrphaned: protectedProcedure.mutation(async ({ ctx }) => {
+    // Find tags with no recipes for this user
     const allTags = await db
       .select({
         id: tags.id,
@@ -233,6 +249,7 @@ export const tagRouter = t.router({
       })
       .from(tags)
       .leftJoin(recipeTags, eq(tags.id, recipeTags.tagId))
+      .where(eq(tags.userId, ctx.userId))
       .groupBy(tags.id);
 
     const orphanedTags = allTags.filter((tag) => tag.recipeCount === 0);
@@ -261,7 +278,7 @@ export const tagRouter = t.router({
         targetTagId: z.string(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       if (input.sourceTagId === input.targetTagId) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
@@ -269,17 +286,17 @@ export const tagRouter = t.router({
         });
       }
 
-      // Check if both tags exist
+      // Check if both tags exist and belong to user
       const [sourceTag] = await db
         .select()
         .from(tags)
-        .where(eq(tags.id, input.sourceTagId))
+        .where(and(eq(tags.id, input.sourceTagId), eq(tags.userId, ctx.userId)))
         .limit(1);
 
       const [targetTag] = await db
         .select()
         .from(tags)
-        .where(eq(tags.id, input.targetTagId))
+        .where(and(eq(tags.id, input.targetTagId), eq(tags.userId, ctx.userId)))
         .limit(1);
 
       if (!sourceTag || !targetTag) {

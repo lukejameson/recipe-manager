@@ -3,7 +3,7 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
 import { collections, collectionRecipes, recipes } from '../../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 const t = initTRPC.context<Context>().create();
 
@@ -28,8 +28,11 @@ export const collectionRouter = t.router({
   /**
    * List all collections with recipe counts
    */
-  list: protectedProcedure.query(async () => {
-    const allCollections = await db.select().from(collections);
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const allCollections = await db
+      .select()
+      .from(collections)
+      .where(eq(collections.userId, ctx.userId));
 
     // Get recipe counts for each collection
     const collectionsWithCounts = await Promise.all(
@@ -54,11 +57,11 @@ export const collectionRouter = t.router({
    */
   get: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const [collection] = await db
         .select()
         .from(collections)
-        .where(eq(collections.id, input.id))
+        .where(and(eq(collections.id, input.id), eq(collections.userId, ctx.userId)))
         .limit(1);
 
       if (!collection) {
@@ -68,7 +71,7 @@ export const collectionRouter = t.router({
         });
       }
 
-      // Get recipes in this collection
+      // Get recipes in this collection (only user's recipes)
       const collectionRecipesData = await db
         .select({
           recipe: recipes,
@@ -76,7 +79,10 @@ export const collectionRouter = t.router({
         })
         .from(collectionRecipes)
         .innerJoin(recipes, eq(collectionRecipes.recipeId, recipes.id))
-        .where(eq(collectionRecipes.collectionId, input.id));
+        .where(and(
+          eq(collectionRecipes.collectionId, input.id),
+          eq(recipes.userId, ctx.userId)
+        ));
 
       return {
         ...collection,
@@ -97,10 +103,10 @@ export const collectionRouter = t.router({
         description: z.string().max(500).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const [newCollection] = await db
         .insert(collections)
-        .values(input)
+        .values({ ...input, userId: ctx.userId })
         .returning();
 
       return newCollection;
@@ -117,21 +123,28 @@ export const collectionRouter = t.router({
         description: z.string().max(500).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+
+      // Verify ownership
+      const [existing] = await db
+        .select()
+        .from(collections)
+        .where(and(eq(collections.id, id), eq(collections.userId, ctx.userId)))
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Collection not found',
+        });
+      }
 
       const [updated] = await db
         .update(collections)
         .set(data)
         .where(eq(collections.id, id))
         .returning();
-
-      if (!updated) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Collection not found',
-        });
-      }
 
       return updated;
     }),
@@ -141,7 +154,21 @@ export const collectionRouter = t.router({
    */
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Verify ownership
+      const [existing] = await db
+        .select()
+        .from(collections)
+        .where(and(eq(collections.id, input.id), eq(collections.userId, ctx.userId)))
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Collection not found',
+        });
+      }
+
       await db.delete(collections).where(eq(collections.id, input.id));
       return { success: true };
     }),
@@ -156,14 +183,44 @@ export const collectionRouter = t.router({
         recipeId: z.string(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Verify collection belongs to user
+      const [collection] = await db
+        .select()
+        .from(collections)
+        .where(and(eq(collections.id, input.collectionId), eq(collections.userId, ctx.userId)))
+        .limit(1);
+
+      if (!collection) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Collection not found',
+        });
+      }
+
+      // Verify recipe belongs to user
+      const [recipe] = await db
+        .select()
+        .from(recipes)
+        .where(and(eq(recipes.id, input.recipeId), eq(recipes.userId, ctx.userId)))
+        .limit(1);
+
+      if (!recipe) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Recipe not found',
+        });
+      }
+
       // Check if already exists
       const [existing] = await db
         .select()
         .from(collectionRecipes)
         .where(
-          eq(collectionRecipes.collectionId, input.collectionId) &&
+          and(
+            eq(collectionRecipes.collectionId, input.collectionId),
             eq(collectionRecipes.recipeId, input.recipeId)
+          )
         )
         .limit(1);
 
@@ -189,12 +246,28 @@ export const collectionRouter = t.router({
         recipeId: z.string(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Verify collection belongs to user
+      const [collection] = await db
+        .select()
+        .from(collections)
+        .where(and(eq(collections.id, input.collectionId), eq(collections.userId, ctx.userId)))
+        .limit(1);
+
+      if (!collection) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Collection not found',
+        });
+      }
+
       await db
         .delete(collectionRecipes)
         .where(
-          eq(collectionRecipes.collectionId, input.collectionId) &&
+          and(
+            eq(collectionRecipes.collectionId, input.collectionId),
             eq(collectionRecipes.recipeId, input.recipeId)
+          )
         );
 
       return { success: true };

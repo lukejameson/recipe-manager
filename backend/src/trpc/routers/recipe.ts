@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
-import { recipes, tags, recipeTags, recipeComponents, settings, type NutritionInfo, type ImprovementSuggestion } from '../../db/schema.js';
+import { recipes, tags, recipeTags, recipeComponents, settings, users, DEFAULT_FEATURE_FLAGS, type NutritionInfo, type ImprovementSuggestion, type UserFeatureFlags } from '../../db/schema.js';
 import { decrypt } from '../../utils/encryption.js';
 import { eq, like, or, inArray, sql, and } from 'drizzle-orm';
 import { parseRecipeJsonLd } from '../../utils/jsonld-parser.js';
@@ -86,6 +86,45 @@ const isAuthenticated = t.middleware(async ({ ctx, next }) => {
 
 const protectedProcedure = t.procedure.use(isAuthenticated);
 
+// Feature flag middleware factory
+const requireFeature = (feature: keyof UserFeatureFlags) => {
+  return t.middleware(async ({ ctx, next }) => {
+    if (!ctx.userId) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'You must be logged in',
+      });
+    }
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, ctx.userId),
+    });
+
+    if (!user) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'User not found',
+      });
+    }
+
+    const featureFlags = user.featureFlags ?? DEFAULT_FEATURE_FLAGS;
+
+    if (!featureFlags[feature]) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: `This feature (${feature}) is not enabled for your account. Contact an administrator.`,
+      });
+    }
+
+    return next({ ctx: { userId: ctx.userId } });
+  });
+};
+
+// Feature-gated procedures
+const urlImportProcedure = t.procedure.use(requireFeature('urlImport'));
+const photoExtractionProcedure = t.procedure.use(requireFeature('photoExtraction'));
+const imageSearchProcedure = t.procedure.use(requireFeature('imageSearch'));
+
 // Nutrition schema for validation
 const nutritionSchema = z.object({
   calories: z.number().min(0).optional(),
@@ -120,24 +159,24 @@ const recipeInputSchema = z.object({
 });
 
 /**
- * Get or create tags by name
+ * Get or create tags by name for a specific user
  */
-async function getOrCreateTags(tagNames: string[]): Promise<string[]> {
+async function getOrCreateTags(tagNames: string[], userId: string): Promise<string[]> {
   const tagIds: string[] = [];
 
   for (const tagName of tagNames) {
-    // Try to find existing tag
+    // Try to find existing tag for this user
     const [existing] = await db
       .select()
       .from(tags)
-      .where(eq(tags.name, tagName))
+      .where(and(eq(tags.name, tagName), eq(tags.userId, userId)))
       .limit(1);
 
     if (existing) {
       tagIds.push(existing.id);
     } else {
-      // Create new tag
-      const [newTag] = await db.insert(tags).values({ name: tagName }).returning();
+      // Create new tag for this user
+      const [newTag] = await db.insert(tags).values({ name: tagName, userId }).returning();
       tagIds.push(newTag.id);
     }
   }
@@ -416,24 +455,28 @@ export const recipeRouter = t.router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
-      let query = db.select().from(recipes);
+    .query(async ({ ctx, input }) => {
+      // Base query filters by user
+      const conditions = [eq(recipes.userId, ctx.userId)];
 
       // Filter by search term - full-text search across title, description, ingredients, instructions, notes
       if (input?.search) {
         const searchTerm = `%${input.search}%`;
-        query = query.where(
+        conditions.push(
           or(
             like(recipes.title, searchTerm),
             like(recipes.description, searchTerm),
             like(recipes.ingredients, searchTerm),
             like(recipes.instructions, searchTerm),
             like(recipes.notes, searchTerm)
-          )
-        ) as any;
+          )!
+        );
       }
 
-      let allRecipes = await query;
+      let allRecipes = await db
+        .select()
+        .from(recipes)
+        .where(and(...conditions));
 
       // Apply sorting
       const sortBy = input?.sortBy || 'date-newest';
@@ -474,11 +517,11 @@ export const recipeRouter = t.router({
 
       // Filter by tags if specified
       if (input?.tags && input.tags.length > 0) {
-        // Get tag IDs for the specified tag names
+        // Get tag IDs for the specified tag names for this user
         const tagRecords = await db
           .select()
           .from(tags)
-          .where(inArray(tags.name, input.tags));
+          .where(and(inArray(tags.name, input.tags), eq(tags.userId, ctx.userId)));
 
         const tagIds = tagRecords.map((t) => t.id);
 
@@ -522,7 +565,18 @@ export const recipeRouter = t.router({
       id: z.string(),
       limit: z.number().min(1).max(20).optional().default(6),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      // Verify the recipe belongs to this user
+      const [recipe] = await db
+        .select()
+        .from(recipes)
+        .where(and(eq(recipes.id, input.id), eq(recipes.userId, ctx.userId)))
+        .limit(1);
+
+      if (!recipe) {
+        return [];
+      }
+
       // Get the current recipe's tags
       const currentRecipeTags = await getRecipeTags(input.id);
       const currentTagIds = currentRecipeTags.map(t => t.id);
@@ -531,14 +585,18 @@ export const recipeRouter = t.router({
         return [];
       }
 
-      // Find recipes with matching tags (excluding the current recipe)
+      // Find recipes with matching tags (excluding the current recipe, only user's recipes)
       const relatedRecipes = await db
         .select({
           recipeId: recipeTags.recipeId,
           matchCount: sql<number>`count(*)`,
         })
         .from(recipeTags)
-        .where(inArray(recipeTags.tagId, currentTagIds))
+        .innerJoin(recipes, eq(recipeTags.recipeId, recipes.id))
+        .where(and(
+          inArray(recipeTags.tagId, currentTagIds),
+          eq(recipes.userId, ctx.userId)
+        ))
         .groupBy(recipeTags.recipeId)
         .orderBy(sql`count(*) DESC`)
         .limit(input.limit + 1); // Get one extra to account for filtering out current recipe
@@ -579,11 +637,11 @@ export const recipeRouter = t.router({
    */
   get: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const [recipe] = await db
         .select()
         .from(recipes)
-        .where(eq(recipes.id, input.id))
+        .where(and(eq(recipes.id, input.id), eq(recipes.userId, ctx.userId)))
         .limit(1);
 
       if (!recipe) {
@@ -606,14 +664,15 @@ export const recipeRouter = t.router({
    */
   create: protectedProcedure
     .input(recipeInputSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { tags: tagNames, ...recipeData } = input;
 
-      // Create recipe
+      // Create recipe with userId
       const [newRecipe] = await db
         .insert(recipes)
         .values({
           ...recipeData,
+          userId: ctx.userId,
           imageUrl: recipeData.imageUrl || null,
           sourceUrl: recipeData.sourceUrl || null,
         })
@@ -621,7 +680,7 @@ export const recipeRouter = t.router({
 
       // Associate tags
       if (tagNames.length > 0) {
-        const tagIds = await getOrCreateTags(tagNames);
+        const tagIds = await getOrCreateTags(tagNames, ctx.userId);
 
         await db.insert(recipeTags).values(
           tagIds.map((tagId) => ({
@@ -649,12 +708,12 @@ export const recipeRouter = t.router({
         data: recipeInputSchema.partial(),
       })
     )
-    .mutation(async ({ input }) => {
-      // Check if recipe exists
+    .mutation(async ({ ctx, input }) => {
+      // Check if recipe exists and belongs to user
       const [existing] = await db
         .select()
         .from(recipes)
-        .where(eq(recipes.id, input.id))
+        .where(and(eq(recipes.id, input.id), eq(recipes.userId, ctx.userId)))
         .limit(1);
 
       if (!existing) {
@@ -685,7 +744,7 @@ export const recipeRouter = t.router({
 
         // Add new tag associations
         if (tagNames.length > 0) {
-          const tagIds = await getOrCreateTags(tagNames);
+          const tagIds = await getOrCreateTags(tagNames, ctx.userId);
 
           await db.insert(recipeTags).values(
             tagIds.map((tagId) => ({
@@ -709,12 +768,12 @@ export const recipeRouter = t.router({
    */
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      // Check if recipe exists
+    .mutation(async ({ ctx, input }) => {
+      // Check if recipe exists and belongs to user
       const [existing] = await db
         .select()
         .from(recipes)
-        .where(eq(recipes.id, input.id))
+        .where(and(eq(recipes.id, input.id), eq(recipes.userId, ctx.userId)))
         .limit(1);
 
       if (!existing) {
@@ -735,11 +794,11 @@ export const recipeRouter = t.router({
    */
   toggleFavorite: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const [recipe] = await db
         .select()
         .from(recipes)
-        .where(eq(recipes.id, input.id))
+        .where(and(eq(recipes.id, input.id), eq(recipes.userId, ctx.userId)))
         .limit(1);
 
       if (!recipe) {
@@ -769,7 +828,21 @@ export const recipeRouter = t.router({
         notes: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Verify ownership
+      const [existing] = await db
+        .select()
+        .from(recipes)
+        .where(and(eq(recipes.id, input.id), eq(recipes.userId, ctx.userId)))
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Recipe not found',
+        });
+      }
+
       const [updated] = await db
         .update(recipes)
         .set({
@@ -779,13 +852,6 @@ export const recipeRouter = t.router({
         })
         .where(eq(recipes.id, input.id))
         .returning();
-
-      if (!updated) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Recipe not found',
-        });
-      }
 
       return updated;
     }),
@@ -807,7 +873,21 @@ export const recipeRouter = t.router({
         ),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Verify ownership
+      const [existing] = await db
+        .select()
+        .from(recipes)
+        .where(and(eq(recipes.id, input.id), eq(recipes.userId, ctx.userId)))
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Recipe not found',
+        });
+      }
+
       const [updated] = await db
         .update(recipes)
         .set({
@@ -817,13 +897,6 @@ export const recipeRouter = t.router({
         .where(eq(recipes.id, input.id))
         .returning();
 
-      if (!updated) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Recipe not found',
-        });
-      }
-
       return updated;
     }),
 
@@ -832,11 +905,11 @@ export const recipeRouter = t.router({
    */
   markAsCooked: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const [recipe] = await db
         .select()
         .from(recipes)
-        .where(eq(recipes.id, input.id))
+        .where(and(eq(recipes.id, input.id), eq(recipes.userId, ctx.userId)))
         .limit(1);
 
       if (!recipe) {
@@ -860,8 +933,9 @@ export const recipeRouter = t.router({
 
   /**
    * Fetch recipe from URL and parse JSONLD (without saving)
+   * Requires: urlImport feature
    */
-  fetchFromUrl: protectedProcedure
+  fetchFromUrl: urlImportProcedure
     .input(
       z.object({
         url: z.string().url(),
@@ -933,14 +1007,15 @@ export const recipeRouter = t.router({
 
   /**
    * Import a recipe from JSONLD
+   * Requires: urlImport feature
    */
-  importJsonLd: protectedProcedure
+  importJsonLd: urlImportProcedure
     .input(
       z.object({
         jsonld: z.string(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
         // Parse JSONLD
         const recipeData = parseRecipeJsonLd(input.jsonld);
@@ -952,6 +1027,7 @@ export const recipeRouter = t.router({
           .insert(recipes)
           .values({
             ...recipeFields,
+            userId: ctx.userId,
             imageUrl: recipeFields.imageUrl || null,
             sourceUrl: recipeFields.sourceUrl || null,
           })
@@ -959,7 +1035,7 @@ export const recipeRouter = t.router({
 
         // Associate tags
         if (tagNames.length > 0) {
-          const tagIds = await getOrCreateTags(tagNames);
+          const tagIds = await getOrCreateTags(tagNames, ctx.userId);
 
           await db.insert(recipeTags).values(
             tagIds.map((tagId) => ({
@@ -996,7 +1072,21 @@ export const recipeRouter = t.router({
    */
   getComponents: protectedProcedure
     .input(z.object({ recipeId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      // Verify the recipe belongs to this user
+      const [recipe] = await db
+        .select()
+        .from(recipes)
+        .where(and(eq(recipes.id, input.recipeId), eq(recipes.userId, ctx.userId)))
+        .limit(1);
+
+      if (!recipe) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Recipe not found',
+        });
+      }
+
       const components = await getRecipeComponents(input.recipeId);
 
       // Get tags for each child recipe
@@ -1018,7 +1108,21 @@ export const recipeRouter = t.router({
    */
   getHierarchy: protectedProcedure
     .input(z.object({ recipeId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      // Verify the recipe belongs to this user
+      const [recipe] = await db
+        .select()
+        .from(recipes)
+        .where(and(eq(recipes.id, input.recipeId), eq(recipes.userId, ctx.userId)))
+        .limit(1);
+
+      if (!recipe) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Recipe not found',
+        });
+      }
+
       return getRecipeHierarchy(input.recipeId);
     }),
 
@@ -1027,11 +1131,11 @@ export const recipeRouter = t.router({
    */
   getAggregatedNutrition: protectedProcedure
     .input(z.object({ recipeId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const [recipe] = await db
         .select()
         .from(recipes)
-        .where(eq(recipes.id, input.recipeId))
+        .where(and(eq(recipes.id, input.recipeId), eq(recipes.userId, ctx.userId)))
         .limit(1);
 
       if (!recipe) {
@@ -1062,12 +1166,12 @@ export const recipeRouter = t.router({
         servingsNeeded: z.number().min(0.1).default(1),
       })
     )
-    .mutation(async ({ input }) => {
-      // Check parent recipe exists
+    .mutation(async ({ ctx, input }) => {
+      // Check parent recipe exists and belongs to user
       const [parent] = await db
         .select()
         .from(recipes)
-        .where(eq(recipes.id, input.parentRecipeId))
+        .where(and(eq(recipes.id, input.parentRecipeId), eq(recipes.userId, ctx.userId)))
         .limit(1);
 
       if (!parent) {
@@ -1077,11 +1181,11 @@ export const recipeRouter = t.router({
         });
       }
 
-      // Check child recipe exists
+      // Check child recipe exists and belongs to user
       const [child] = await db
         .select()
         .from(recipes)
-        .where(eq(recipes.id, input.childRecipeId))
+        .where(and(eq(recipes.id, input.childRecipeId), eq(recipes.userId, ctx.userId)))
         .limit(1);
 
       if (!child) {
@@ -1158,8 +1262,23 @@ export const recipeRouter = t.router({
         sortOrder: z.number().min(0).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { componentId, ...updateData } = input;
+
+      // Verify the component belongs to user's recipe
+      const [component] = await db
+        .select()
+        .from(recipeComponents)
+        .innerJoin(recipes, eq(recipeComponents.parentRecipeId, recipes.id))
+        .where(and(eq(recipeComponents.id, componentId), eq(recipes.userId, ctx.userId)))
+        .limit(1);
+
+      if (!component) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Component not found',
+        });
+      }
 
       // Filter out undefined values
       const updates: Record<string, any> = {};
@@ -1183,13 +1302,6 @@ export const recipeRouter = t.router({
         .where(eq(recipeComponents.id, componentId))
         .returning();
 
-      if (!updated) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Component not found',
-        });
-      }
-
       return updated;
     }),
 
@@ -1198,18 +1310,25 @@ export const recipeRouter = t.router({
    */
   removeComponent: protectedProcedure
     .input(z.object({ componentId: z.string() }))
-    .mutation(async ({ input }) => {
-      const [deleted] = await db
-        .delete(recipeComponents)
-        .where(eq(recipeComponents.id, input.componentId))
-        .returning();
+    .mutation(async ({ ctx, input }) => {
+      // Verify the component belongs to user's recipe
+      const [component] = await db
+        .select()
+        .from(recipeComponents)
+        .innerJoin(recipes, eq(recipeComponents.parentRecipeId, recipes.id))
+        .where(and(eq(recipeComponents.id, input.componentId), eq(recipes.userId, ctx.userId)))
+        .limit(1);
 
-      if (!deleted) {
+      if (!component) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'Component not found',
         });
       }
+
+      await db
+        .delete(recipeComponents)
+        .where(eq(recipeComponents.id, input.componentId));
 
       return { success: true };
     }),
@@ -1229,12 +1348,12 @@ export const recipeRouter = t.router({
         ),
       })
     )
-    .mutation(async ({ input }) => {
-      // Check recipe exists
+    .mutation(async ({ ctx, input }) => {
+      // Check recipe exists and belongs to user
       const [recipe] = await db
         .select()
         .from(recipes)
-        .where(eq(recipes.id, input.recipeId))
+        .where(and(eq(recipes.id, input.recipeId), eq(recipes.userId, ctx.userId)))
         .limit(1);
 
       if (!recipe) {
@@ -1242,6 +1361,22 @@ export const recipeRouter = t.router({
           code: 'NOT_FOUND',
           message: 'Recipe not found',
         });
+      }
+
+      // Verify all child recipes belong to user
+      for (const comp of input.components) {
+        const [child] = await db
+          .select()
+          .from(recipes)
+          .where(and(eq(recipes.id, comp.childRecipeId), eq(recipes.userId, ctx.userId)))
+          .limit(1);
+
+        if (!child) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Child recipe not found',
+          });
+        }
       }
 
       // Check for circular references
@@ -1279,8 +1414,9 @@ export const recipeRouter = t.router({
   /**
    * Extract a recipe from one or more photos (multi-page support).
    * Multiple images are treated as pages of the same recipe.
+   * Requires: photoExtraction feature
    */
-  extractFromPhotos: protectedProcedure
+  extractFromPhotos: photoExtractionProcedure
     .input(
       z.object({
         /** Base64 encoded images - can be multiple pages of the same recipe */
@@ -1323,8 +1459,9 @@ export const recipeRouter = t.router({
   /**
    * Analyze multiple photos and group them by recipe.
    * Use this when uploading many photos that might contain multiple different recipes.
+   * Requires: photoExtraction feature
    */
-  analyzePhotoGroups: protectedProcedure
+  analyzePhotoGroups: photoExtractionProcedure
     .input(
       z.object({
         /** Base64 encoded images */
@@ -1384,8 +1521,9 @@ export const recipeRouter = t.router({
   /**
    * Bulk extract recipes from grouped photos.
    * Each group is processed as a single recipe.
+   * Requires: photoExtraction feature
    */
-  bulkExtractFromPhotos: protectedProcedure
+  bulkExtractFromPhotos: photoExtractionProcedure
     .input(
       z.object({
         /** Array of image groups. Each group contains base64 images for one recipe. */
@@ -1431,17 +1569,18 @@ export const recipeRouter = t.router({
         recipes: z.array(recipeInputSchema).min(1).max(20),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const createdRecipes = [];
 
       for (const recipeInput of input.recipes) {
         const { tags: tagNames, ...recipeData } = recipeInput;
 
-        // Create recipe
+        // Create recipe with userId
         const [newRecipe] = await db
           .insert(recipes)
           .values({
             ...recipeData,
+            userId: ctx.userId,
             imageUrl: recipeData.imageUrl || null,
             sourceUrl: recipeData.sourceUrl || null,
           })
@@ -1449,7 +1588,7 @@ export const recipeRouter = t.router({
 
         // Associate tags
         if (tagNames.length > 0) {
-          const tagIds = await getOrCreateTags(tagNames);
+          const tagIds = await getOrCreateTags(tagNames, ctx.userId);
 
           await db.insert(recipeTags).values(
             tagIds.map((tagId) => ({
@@ -1473,8 +1612,9 @@ export const recipeRouter = t.router({
   /**
    * Search for images using Pexels API
    * Returns images sorted by relevance to recipe tags
+   * Requires: imageSearch feature
    */
-  searchImages: protectedProcedure
+  searchImages: imageSearchProcedure
     .input(
       z.object({
         query: z.string().min(1).max(200),

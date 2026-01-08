@@ -8,6 +8,20 @@
       "when": 1767859973698,
       "tag": "0000_gray_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1767869646098,
+      "tag": "0001_certain_stepford_cuckoos",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1767873489451,
+      "tag": "0002_lonely_rocket_racer",
+      "breakpoints": true
     }
   ]
 }

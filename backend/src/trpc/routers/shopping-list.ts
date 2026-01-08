@@ -3,7 +3,7 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
 import { shoppingListItems, recipes } from '../../db/schema.js';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, and } from 'drizzle-orm';
 
 const t = initTRPC.context<Context>().create();
 
@@ -28,8 +28,11 @@ export const shoppingListRouter = t.router({
   /**
    * Get all shopping list items
    */
-  list: protectedProcedure.query(async () => {
-    return await db.select().from(shoppingListItems);
+  list: protectedProcedure.query(async ({ ctx }) => {
+    return await db
+      .select()
+      .from(shoppingListItems)
+      .where(eq(shoppingListItems.userId, ctx.userId));
   }),
 
   /**
@@ -44,8 +47,27 @@ export const shoppingListRouter = t.router({
         recipeId: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      const [newItem] = await db.insert(shoppingListItems).values(input).returning();
+    .mutation(async ({ ctx, input }) => {
+      // If recipeId is provided, verify it belongs to user
+      if (input.recipeId) {
+        const [recipe] = await db
+          .select()
+          .from(recipes)
+          .where(and(eq(recipes.id, input.recipeId), eq(recipes.userId, ctx.userId)))
+          .limit(1);
+
+        if (!recipe) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Recipe not found',
+          });
+        }
+      }
+
+      const [newItem] = await db
+        .insert(shoppingListItems)
+        .values({ ...input, userId: ctx.userId })
+        .returning();
       return newItem;
     }),
 
@@ -54,12 +76,15 @@ export const shoppingListRouter = t.router({
    */
   generateFromRecipes: protectedProcedure
     .input(z.object({ recipeIds: z.array(z.string()) }))
-    .mutation(async ({ input }) => {
-      // Get all selected recipes
+    .mutation(async ({ ctx, input }) => {
+      // Get all selected recipes (only user's recipes)
       const selectedRecipes = await db
         .select()
         .from(recipes)
-        .where(inArray(recipes.id, input.recipeIds));
+        .where(and(
+          inArray(recipes.id, input.recipeIds),
+          eq(recipes.userId, ctx.userId)
+        ));
 
       // Collect all ingredients
       const allIngredients: { ingredient: string; recipeId: string }[] = [];
@@ -81,6 +106,7 @@ export const shoppingListRouter = t.router({
           .values({
             ingredient: item.ingredient,
             recipeId: item.recipeId,
+            userId: ctx.userId,
             category: categorizeIngredient(item.ingredient),
           })
           .returning();
@@ -95,11 +121,11 @@ export const shoppingListRouter = t.router({
    */
   toggleChecked: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const [item] = await db
         .select()
         .from(shoppingListItems)
-        .where(eq(shoppingListItems.id, input.id))
+        .where(and(eq(shoppingListItems.id, input.id), eq(shoppingListItems.userId, ctx.userId)))
         .limit(1);
 
       if (!item) {
@@ -123,7 +149,21 @@ export const shoppingListRouter = t.router({
    */
   deleteItem: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Verify ownership
+      const [item] = await db
+        .select()
+        .from(shoppingListItems)
+        .where(and(eq(shoppingListItems.id, input.id), eq(shoppingListItems.userId, ctx.userId)))
+        .limit(1);
+
+      if (!item) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Item not found',
+        });
+      }
+
       await db.delete(shoppingListItems).where(eq(shoppingListItems.id, input.id));
       return { success: true };
     }),
@@ -131,16 +171,23 @@ export const shoppingListRouter = t.router({
   /**
    * Clear all checked items
    */
-  clearChecked: protectedProcedure.mutation(async () => {
-    await db.delete(shoppingListItems).where(eq(shoppingListItems.isChecked, true));
+  clearChecked: protectedProcedure.mutation(async ({ ctx }) => {
+    await db
+      .delete(shoppingListItems)
+      .where(and(
+        eq(shoppingListItems.isChecked, true),
+        eq(shoppingListItems.userId, ctx.userId)
+      ));
     return { success: true };
   }),
 
   /**
    * Clear entire shopping list
    */
-  clearAll: protectedProcedure.mutation(async () => {
-    await db.delete(shoppingListItems);
+  clearAll: protectedProcedure.mutation(async ({ ctx }) => {
+    await db
+      .delete(shoppingListItems)
+      .where(eq(shoppingListItems.userId, ctx.userId));
     return { success: true };
   }),
 });

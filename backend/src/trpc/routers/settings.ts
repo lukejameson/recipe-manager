@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
-import { settings, memories } from '../../db/schema.js';
+import { settings, memories, users } from '../../db/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import { encrypt, decrypt } from '../../utils/encryption.js';
 
@@ -19,7 +19,31 @@ const isAuthenticated = t.middleware(async ({ ctx, next }) => {
   return next({ ctx: { userId: ctx.userId } });
 });
 
+// Admin middleware
+const isAdmin = t.middleware(async ({ ctx, next }) => {
+  if (!ctx.userId) {
+    throw new TRPCError({
+      code: 'UNAUTHORIZED',
+      message: 'You must be logged in',
+    });
+  }
+
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, ctx.userId),
+  });
+
+  if (!user || !user.isAdmin) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Admin access required',
+    });
+  }
+
+  return next({ ctx: { userId: ctx.userId, isAdmin: true } });
+});
+
 const protectedProcedure = t.procedure.use(isAuthenticated);
+const adminProcedure = t.procedure.use(isAdmin);
 
 // Fallback models if API fetch fails
 const FALLBACK_MODELS = [
@@ -71,17 +95,24 @@ async function fetchAvailableModels(apiKey: string): Promise<Array<{ id: string;
 export const settingsRouter = t.router({
   /**
    * Get current settings (masks API key for security)
+   * Admin-only for API key info, but returns whether features are available for all users
    */
-  get: protectedProcedure.query(async () => {
+  get: protectedProcedure.query(async ({ ctx }) => {
     const [appSettings] = await db
       .select()
       .from(settings)
       .where(eq(settings.id, 'app-settings'))
       .limit(1);
 
-    // Fetch models dynamically if we have an API key
+    // Check if current user is admin
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, ctx.userId),
+    });
+    const isAdminUser = user?.isAdmin ?? false;
+
+    // Only fetch models for admins
     let availableModels = FALLBACK_MODELS;
-    if (appSettings?.anthropicApiKey) {
+    if (isAdminUser && appSettings?.anthropicApiKey) {
       try {
         const decryptedKey = decrypt(appSettings.anthropicApiKey);
         availableModels = await fetchAvailableModels(decryptedKey);
@@ -95,14 +126,16 @@ export const settingsRouter = t.router({
       hasPexelsApiKey: !!appSettings?.pexelsApiKey,
       model: appSettings?.anthropicModel || 'claude-sonnet-4-20250514',
       secondaryModel: appSettings?.anthropicSecondaryModel || 'claude-3-haiku-20240307',
-      availableModels,
+      availableModels: isAdminUser ? availableModels : [],
+      isAdmin: isAdminUser,
     };
   }),
 
   /**
    * Fetch available models using a provided API key (for testing before saving)
+   * Admin-only
    */
-  fetchModels: protectedProcedure
+  fetchModels: adminProcedure
     .input(z.object({ apiKey: z.string() }))
     .query(async ({ input }) => {
       const models = await fetchAvailableModels(input.apiKey);
@@ -111,8 +144,9 @@ export const settingsRouter = t.router({
 
   /**
    * Update settings (API key and/or models)
+   * Admin-only
    */
-  update: protectedProcedure
+  update: adminProcedure
     .input(
       z.object({
         anthropicApiKey: z.string().optional(),
@@ -172,8 +206,9 @@ export const settingsRouter = t.router({
 
   /**
    * Test an API key by making a minimal request to Anthropic
+   * Admin-only
    */
-  testApiKey: protectedProcedure
+  testApiKey: adminProcedure
     .input(z.object({ apiKey: z.string() }))
     .mutation(async ({ input }) => {
       try {

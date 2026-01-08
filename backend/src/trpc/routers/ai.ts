@@ -10,6 +10,9 @@ import { suggestImprovements, applyImprovements } from '../../services/ai/improv
 import { adaptRecipe, type AdaptationType } from '../../services/ai/adaptation.js';
 import { findMatchingRecipes } from '../../services/ai/pantry-match.js';
 import { chatAboutRecipes, chatAboutSpecificRecipe } from '../../services/ai/recipe-chat.js';
+import { db } from '../../db/index.js';
+import { users, memories, recipes, tags, recipeTags, DEFAULT_FEATURE_FLAGS, type UserFeatureFlags } from '../../db/schema.js';
+import { eq, and, desc, sql } from 'drizzle-orm';
 
 const t = initTRPC.context<Context>().create();
 
@@ -24,7 +27,46 @@ const isAuthenticated = t.middleware(async ({ ctx, next }) => {
   return next({ ctx: { userId: ctx.userId } });
 });
 
+// Feature flag middleware factory
+const requireFeature = (feature: keyof UserFeatureFlags) => {
+  return t.middleware(async ({ ctx, next }) => {
+    if (!ctx.userId) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'You must be logged in',
+      });
+    }
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, ctx.userId),
+    });
+
+    if (!user) {
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'User not found',
+      });
+    }
+
+    const featureFlags = user.featureFlags ?? DEFAULT_FEATURE_FLAGS;
+
+    if (!featureFlags[feature]) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: `This feature (${feature}) is not enabled for your account. Contact an administrator.`,
+      });
+    }
+
+    return next({ ctx: { userId: ctx.userId } });
+  });
+};
+
 const protectedProcedure = t.procedure.use(isAuthenticated);
+
+// Feature-gated procedures
+const aiChatProcedure = t.procedure.use(requireFeature('aiChat'));
+const nutritionProcedure = t.procedure.use(requireFeature('nutritionCalc'));
+const tagSuggestionProcedure = t.procedure.use(requireFeature('tagSuggestions'));
 
 export const aiRouter = t.router({
   /**
@@ -36,9 +78,31 @@ export const aiRouter = t.router({
   }),
 
   /**
-   * Calculate nutrition for a recipe using AI
+   * Get user's feature flags for AI features
    */
-  calculateNutrition: protectedProcedure
+  getFeatureFlags: protectedProcedure.query(async ({ ctx }) => {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, ctx.userId),
+    });
+
+    const featureFlags = user?.featureFlags ?? DEFAULT_FEATURE_FLAGS;
+
+    return {
+      aiChat: featureFlags.aiChat,
+      recipeGeneration: featureFlags.recipeGeneration,
+      tagSuggestions: featureFlags.tagSuggestions,
+      nutritionCalc: featureFlags.nutritionCalc,
+      photoExtraction: featureFlags.photoExtraction,
+      urlImport: featureFlags.urlImport,
+      imageSearch: featureFlags.imageSearch,
+    };
+  }),
+
+  /**
+   * Calculate nutrition for a recipe using AI
+   * Requires: nutritionCalc feature
+   */
+  calculateNutrition: nutritionProcedure
     .input(
       z.object({
         ingredients: z.array(z.string()).min(1, 'At least one ingredient is required'),
@@ -70,8 +134,9 @@ export const aiRouter = t.router({
 
   /**
    * Suggest tags for a recipe using AI
+   * Requires: tagSuggestions feature
    */
-  suggestTags: protectedProcedure
+  suggestTags: tagSuggestionProcedure
     .input(
       z.object({
         recipe: z.object({
@@ -103,8 +168,9 @@ export const aiRouter = t.router({
 
   /**
    * Explain a cooking technique or term
+   * Requires: aiChat feature
    */
-  explainTechnique: protectedProcedure
+  explainTechnique: aiChatProcedure
     .input(
       z.object({
         term: z.string().min(1).max(100),
@@ -131,8 +197,9 @@ export const aiRouter = t.router({
 
   /**
    * Suggest ingredient substitutions
+   * Requires: aiChat feature
    */
-  suggestSubstitutions: protectedProcedure
+  suggestSubstitutions: aiChatProcedure
     .input(
       z.object({
         ingredient: z.string().min(1).max(200),
@@ -160,8 +227,9 @@ export const aiRouter = t.router({
 
   /**
    * Suggest improvements for a recipe
+   * Requires: aiChat feature
    */
-  suggestImprovements: protectedProcedure
+  suggestImprovements: aiChatProcedure
     .input(
       z.object({
         recipe: z.object({
@@ -197,8 +265,9 @@ export const aiRouter = t.router({
 
   /**
    * Apply selected improvements to a recipe
+   * Requires: aiChat feature
    */
-  applyImprovements: protectedProcedure
+  applyImprovements: aiChatProcedure
     .input(
       z.object({
         recipe: z.object({
@@ -229,8 +298,9 @@ export const aiRouter = t.router({
 
   /**
    * Adapt a recipe for dietary requirements
+   * Requires: aiChat feature
    */
-  adaptRecipe: protectedProcedure
+  adaptRecipe: aiChatProcedure
     .input(
       z.object({
         recipe: z.object({
@@ -270,8 +340,9 @@ export const aiRouter = t.router({
 
   /**
    * Find recipes matching available ingredients
+   * Requires: aiChat feature
    */
-  findMatchingRecipes: protectedProcedure
+  findMatchingRecipes: aiChatProcedure
     .input(
       z.object({
         availableIngredients: z.array(z.string()).min(1),
@@ -304,8 +375,9 @@ export const aiRouter = t.router({
 
   /**
    * Chat about recipes - brainstorm ideas and generate new recipes
+   * Requires: aiChat feature
    */
-  recipeChat: protectedProcedure
+  recipeChat: aiChatProcedure
     .input(
       z.object({
         messages: z.array(
@@ -338,8 +410,9 @@ export const aiRouter = t.router({
 
   /**
    * Chat about a specific recipe - ask questions, get suggestions, etc.
+   * Requires: aiChat feature
    */
-  chatAboutRecipe: protectedProcedure
+  chatAboutRecipe: aiChatProcedure
     .input(
       z.object({
         recipe: z.object({
@@ -378,4 +451,128 @@ export const aiRouter = t.router({
         });
       }
     }),
+
+  /**
+   * Get personalized recipe suggestions based on user preferences and existing recipes
+   * No AI feature flag required - just fetches data and generates prompts
+   */
+  getPersonalizedSuggestions: protectedProcedure.query(async ({ ctx }) => {
+    // Get user's preferences/memories
+    const userMemories = await db
+      .select()
+      .from(memories)
+      .where(and(eq(memories.userId, ctx.userId), eq(memories.enabled, true)));
+
+    // Get user's most used tags (top 10)
+    const popularTags = await db
+      .select({
+        name: tags.name,
+        count: sql<number>`count(*)`.as('count'),
+      })
+      .from(recipeTags)
+      .innerJoin(tags, eq(recipeTags.tagId, tags.id))
+      .innerJoin(recipes, eq(recipeTags.recipeId, recipes.id))
+      .where(eq(recipes.userId, ctx.userId))
+      .groupBy(tags.name)
+      .orderBy(desc(sql`count(*)`))
+      .limit(10);
+
+    // Get some recent recipe titles for inspiration
+    const recentRecipes = await db
+      .select({ title: recipes.title })
+      .from(recipes)
+      .where(eq(recipes.userId, ctx.userId))
+      .orderBy(desc(recipes.createdAt))
+      .limit(5);
+
+    // Generate personalized suggestions based on the data
+    const suggestions: string[] = [];
+    const memoryTexts = userMemories.map(m => m.content.toLowerCase());
+
+    // Add preference-based suggestions
+    if (memoryTexts.some(m => m.includes('vegetarian'))) {
+      suggestions.push("I'd like a vegetarian recipe idea");
+    }
+    if (memoryTexts.some(m => m.includes('vegan'))) {
+      suggestions.push("Suggest a delicious vegan dish");
+    }
+    if (memoryTexts.some(m => m.includes('gluten') || m.includes('celiac'))) {
+      suggestions.push("I need a gluten-free recipe");
+    }
+    if (memoryTexts.some(m => m.includes('low carb') || m.includes('keto'))) {
+      suggestions.push("Give me a low-carb meal idea");
+    }
+    if (memoryTexts.some(m => m.includes('dairy'))) {
+      suggestions.push("Suggest a dairy-free recipe");
+    }
+
+    // Add tag-based suggestions
+    const tagNames = popularTags.map(t => t.name.toLowerCase());
+
+    if (tagNames.includes('italian') || tagNames.includes('pasta')) {
+      suggestions.push("I'm in the mood for Italian food");
+    }
+    if (tagNames.includes('asian') || tagNames.includes('chinese') || tagNames.includes('thai')) {
+      suggestions.push("Suggest an Asian-inspired dish");
+    }
+    if (tagNames.includes('mexican') || tagNames.includes('tacos')) {
+      suggestions.push("I'd love something with Mexican flavors");
+    }
+    if (tagNames.includes('indian') || tagNames.includes('curry')) {
+      suggestions.push("Create a flavorful Indian recipe");
+    }
+    if (tagNames.includes('breakfast') || tagNames.includes('brunch')) {
+      suggestions.push("I need a great breakfast idea");
+    }
+    if (tagNames.includes('dessert') || tagNames.includes('sweet')) {
+      suggestions.push("Suggest a tasty dessert recipe");
+    }
+    if (tagNames.includes('soup') || tagNames.includes('stew')) {
+      suggestions.push("I'd like a comforting soup recipe");
+    }
+    if (tagNames.includes('salad') || tagNames.includes('healthy')) {
+      suggestions.push("Give me a healthy salad idea");
+    }
+    if (tagNames.includes('quick') || tagNames.includes('easy')) {
+      suggestions.push("I need something quick and easy");
+    }
+    if (tagNames.includes('chicken')) {
+      suggestions.push("Create a new chicken recipe for me");
+    }
+    if (tagNames.includes('seafood') || tagNames.includes('fish')) {
+      suggestions.push("Suggest a seafood dish");
+    }
+
+    // If user has recipes, suggest something similar
+    if (recentRecipes.length > 0) {
+      const randomRecipe = recentRecipes[Math.floor(Math.random() * recentRecipes.length)];
+      suggestions.push(`Something similar to my ${randomRecipe.title}`);
+    }
+
+    // Add some general suggestions if we don't have enough
+    const defaultSuggestions = [
+      "Surprise me with something new!",
+      "What's good for a weeknight dinner?",
+      "I want to try a new cuisine",
+      "Suggest something with ingredients I probably have",
+      "What's a crowd-pleasing dish?",
+    ];
+
+    // Fill in with defaults if needed, avoiding duplicates
+    for (const suggestion of defaultSuggestions) {
+      if (suggestions.length >= 5) break;
+      if (!suggestions.includes(suggestion)) {
+        suggestions.push(suggestion);
+      }
+    }
+
+    // Shuffle and return top 5
+    const shuffled = suggestions.sort(() => Math.random() - 0.5);
+    return {
+      suggestions: shuffled.slice(0, 5),
+      hasPreferences: userMemories.length > 0,
+      hasRecipes: recentRecipes.length > 0,
+      topTags: popularTags.slice(0, 5).map(t => t.name),
+    };
+  }),
 });

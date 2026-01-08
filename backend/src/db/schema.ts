@@ -1,10 +1,83 @@
-import { pgTable, text, integer, timestamp, boolean, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, timestamp, boolean, jsonb, unique } from 'drizzle-orm/pg-core';
+
+// Feature flags type for per-user feature toggles
+export type UserFeatureFlags = {
+  aiChat: boolean;
+  recipeGeneration: boolean;
+  tagSuggestions: boolean;
+  nutritionCalc: boolean;
+  photoExtraction: boolean;
+  urlImport: boolean;
+  imageSearch: boolean;
+};
+
+// Default feature flags (all enabled)
+export const DEFAULT_FEATURE_FLAGS: UserFeatureFlags = {
+  aiChat: true,
+  recipeGeneration: true,
+  tagSuggestions: true,
+  nutritionCalc: true,
+  photoExtraction: true,
+  urlImport: true,
+  imageSearch: true,
+};
 
 // Users table for authentication
 export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   username: text('username').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
+  isAdmin: boolean('is_admin').notNull().default(false),
+  email: text('email'),
+  displayName: text('display_name'),
+  featureFlags: jsonb('feature_flags').$type<UserFeatureFlags>(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  // Account lockout fields
+  failedLoginAttempts: integer('failed_login_attempts').notNull().default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+});
+
+// User sessions for session management
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: text('token').notNull().unique(),
+  userAgent: text('user_agent'),
+  ipAddress: text('ip_address'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastActiveAt: timestamp('last_active_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
+
+// Audit logs for admin actions
+export const auditLogs = pgTable('audit_logs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  action: text('action').notNull(),
+  targetType: text('target_type'), // 'user', 'invite_code', 'settings', etc.
+  targetId: text('target_id'),
+  details: jsonb('details').$type<Record<string, unknown>>(),
+  ipAddress: text('ip_address'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// Invite codes for registration
+export const inviteCodes = pgTable('invite_codes', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  code: text('code').notNull().unique(),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  usedBy: text('used_by').references(() => users.id),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -34,6 +107,7 @@ export type ImprovementSuggestion = {
 // Recipes table
 export const recipes = pgTable('recipes', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   description: text('description'),
   prepTime: integer('prep_time'), // in minutes
@@ -62,14 +136,18 @@ export const recipes = pgTable('recipes', {
     .defaultNow(),
 });
 
-// Tags table
+// Tags table (user-scoped)
 export const tags = pgTable('tags', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  name: text('name').notNull().unique(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (table) => ({
+  // Unique tag name per user
+  uniqueNamePerUser: unique().on(table.userId, table.name),
+}));
 
 // Recipe-Tag junction table (many-to-many relationship)
 export const recipeTags = pgTable('recipe_tags', {
@@ -84,6 +162,7 @@ export const recipeTags = pgTable('recipe_tags', {
 // Collections table
 export const collections = pgTable('collections', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   description: text('description'),
   createdAt: timestamp('created_at', { withTimezone: true })
@@ -124,6 +203,7 @@ export const recipeComponents = pgTable('recipe_components', {
 // Shopping list items
 export const shoppingListItems = pgTable('shopping_list_items', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   ingredient: text('ingredient').notNull(),
   quantity: text('quantity'),
   category: text('category'), // produce, dairy, meat, pantry, etc.
@@ -141,16 +221,16 @@ export const settings = pgTable('settings', {
   anthropicModel: text('anthropic_model').default('claude-3-5-sonnet-20241022'),
   anthropicSecondaryModel: text('anthropic_secondary_model').default('claude-3-haiku-20240307'),
   pexelsApiKey: text('pexels_api_key'), // Encrypted - for image search
+  defaultFeatureFlags: jsonb('default_feature_flags').$type<UserFeatureFlags>(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
 
 // User memories for AI context
-// Note: userId is not a FK because auth uses a fixed 'admin-user' ID that doesn't exist in users table
 export const memories = pgTable('memories', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  userId: text('user_id').notNull(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   enabled: boolean('enabled').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true })
@@ -167,7 +247,7 @@ export const agents = pgTable('agents', {
   icon: text('icon').notNull().default('🤖'),
   modelId: text('model_id'), // Specific model ID to use, null = use default from settings
   isBuiltIn: boolean('is_built_in').notNull().default(false),
-  userId: text('user_id'), // null for built-in agents
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // null for built-in agents
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -179,6 +259,9 @@ export const agents = pgTable('agents', {
 // Type exports for use in application
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+export type InviteCode = typeof inviteCodes.$inferSelect;
+export type InsertInviteCode = typeof inviteCodes.$inferInsert;
 
 export type Recipe = typeof recipes.$inferSelect;
 export type InsertRecipe = typeof recipes.$inferInsert;
@@ -209,3 +292,9 @@ export type InsertMemory = typeof memories.$inferInsert;
 
 export type Agent = typeof agents.$inferSelect;
 export type InsertAgent = typeof agents.$inferInsert;
+
+export type Session = typeof sessions.$inferSelect;
+export type InsertSession = typeof sessions.$inferInsert;
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;
