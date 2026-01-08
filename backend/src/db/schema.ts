@@ -9,9 +9,10 @@ export type UserFeatureFlags = {
   photoExtraction: boolean;
   urlImport: boolean;
   imageSearch: boolean;
+  jsonldImport: boolean;
 };
 
-// Default feature flags (all enabled)
+// Default feature flags (jsonldImport disabled by default as it's a power user feature)
 export const DEFAULT_FEATURE_FLAGS: UserFeatureFlags = {
   aiChat: true,
   recipeGeneration: true,
@@ -20,6 +21,7 @@ export const DEFAULT_FEATURE_FLAGS: UserFeatureFlags = {
   photoExtraction: true,
   urlImport: true,
   imageSearch: true,
+  jsonldImport: false,
 };
 
 // Users table for authentication

@@ -125,6 +125,7 @@ export const adminRouter = t.router({
           photoExtraction: z.boolean(),
           urlImport: z.boolean(),
           imageSearch: z.boolean(),
+          jsonldImport: z.boolean(),
         }),
       })
     )
