@@ -1,98 +1,220 @@
-# Single-User Authentication Setup
+# Multi-User Authentication System
 
-The Recipe Manager now uses a hardcoded single-user authentication system for enhanced security. This means only one account exists, and it's configured through environment variables.
+Recipe Manager uses a multi-user authentication system with admin roles, invite-only registration, and granular feature flags.
 
-## Setup Instructions
+## System Overview
 
-### 1. Configure Backend Environment
+- **Multi-user support** with separate data isolation per user
+- **Admin roles** for user and system management
+- **Invite-only registration** via single-use codes
+- **Per-user feature flags** to control access to AI features
+- **Session management** with secure HTTP-only cookies
+- **Account lockout** protection against brute-force attacks
 
-Copy the `.env.example` file to create your `.env` file:
+## Initial Setup
+
+### 1. Configure Environment Variables
 
 ```bash
 cd backend
 cp .env.example .env
 ```
 
-### 2. Set Your Credentials
-
-Edit `backend/.env` and set your desired username and password:
+Edit `backend/.env`:
 
 ```env
-# Single User Authentication (hardcoded credentials)
-ADMIN_USERNAME=your_username_here
-ADMIN_PASSWORD=your_secure_password_here
+# Required - JWT signing secret (minimum 32 characters)
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+
+# Required - PostgreSQL connection
+DATABASE_URL=postgresql://user:password@localhost:5432/recipe_manager
+
+# Initial Admin User (used on first startup only)
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your-secure-password-here
+
+# Server Configuration
+PORT=3001
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
-**Important Security Notes:**
-- Choose a strong, unique password (minimum 12 characters recommended)
-- Never commit the `.env` file to version control (it's in `.gitignore`)
-- Change the default credentials immediately
-- Keep the JWT_SECRET secure as well
-
-### 3. Restart the Backend
-
-After changing credentials, restart the backend server:
+### 2. Run Database Migrations
 
 ```bash
-docker compose restart backend
+pnpm db:migrate
 ```
 
-Or if running locally:
+### 3. Start the Application
 
 ```bash
-cd backend
-npm run dev
+pnpm dev
 ```
 
-## Login
+On first startup, the system automatically creates the initial admin user from the `ADMIN_USERNAME` and `ADMIN_PASSWORD` environment variables.
 
-Navigate to http://localhost:5173/login and enter the credentials you configured in the `.env` file.
+### 4. Login
+
+Navigate to http://localhost:5173/login and enter the admin credentials.
+
+## User Management
+
+### Creating Invite Codes (Admin Only)
+
+1. Log in as an admin user
+2. Go to Settings (gear icon in header)
+3. Navigate to "User Management" section
+4. Click "Create Invite Code"
+5. Share the generated code with the new user
+
+Invite codes:
+- Are 8-character alphanumeric strings
+- Can only be used once
+- Can have an optional expiration date
+- Are tracked in audit logs
+
+### Registering New Users
+
+1. Navigate to the login page
+2. Click "Register" or "Create Account"
+3. Enter the invite code provided by an admin
+4. Choose a username and password
+5. Submit to create the account
+
+### Managing User Feature Flags
+
+Admins can control which features each user can access:
+
+1. Go to Settings > User Management
+2. Find the user in the list
+3. Toggle individual feature flags:
+   - **AI Chat** - Recipe Ideas chat and Ask AI
+   - **Recipe Generation** - Save AI-generated recipes
+   - **Tag Suggestions** - AI auto-tagging
+   - **Nutrition Calc** - AI nutrition estimation
+   - **Photo Extraction** - Extract recipes from photos
+   - **URL Import** - Import recipes from URLs
+   - **Image Search** - Pexels image search for recipes
+   - **JSONLD Import** - Schema.org recipe import
+
+### Promoting/Demoting Admins
+
+Admins can promote other users to admin status:
+
+1. Go to Settings > User Management
+2. Find the user
+3. Click "Make Admin" or "Remove Admin"
+
+Note: Admins cannot demote themselves to prevent lockout.
+
+### Deleting Users
+
+Admins can delete user accounts:
+
+1. Go to Settings > User Management
+2. Find the user
+3. Click "Delete User"
+4. Confirm deletion
+
+This permanently removes:
+- User account
+- All user's recipes
+- All user's tags and collections
+- All user's shopping list items
+- All user's memories
 
 ## Security Features
 
-✅ **No Database User Table**: User credentials are not stored in the database
-✅ **Environment-Based**: Credentials configured through environment variables
-✅ **No Registration Endpoint**: Registration functionality has been removed
-✅ **Single Admin User**: Only one user account exists
-✅ **JWT Authentication**: Secure token-based authentication
+### Password Requirements
 
-## Changing Credentials
+- Minimum 8 characters
+- Hashed using bcrypt with 12 salt rounds
+- Users can change their password in Settings
 
-To change your login credentials:
+### Session Management
 
-1. Edit `backend/.env`
-2. Update `ADMIN_USERNAME` and/or `ADMIN_PASSWORD`
-3. Restart the backend server
-4. Use new credentials to login
+- Sessions stored in database with hashed tokens
+- HTTP-only cookies prevent XSS token theft
+- Sessions expire after 7 days of inactivity
+- Users can view active sessions in Settings
+- Users can revoke other sessions
+
+### Rate Limiting
+
+- 5 login attempts per 15 minutes per IP
+- After exceeding limit, IP is blocked temporarily
+
+### Account Lockout
+
+- 5 failed login attempts triggers lockout
+- Account locked for 30 minutes
+- Failed attempts counter resets on successful login
+
+### CSRF Protection
+
+- State-changing operations require CSRF token
+- Token included in cookie and verified on requests
+- Prevents cross-site request forgery attacks
+
+### Audit Logging
+
+Admin actions are logged for accountability:
+- User creation/deletion
+- Admin role changes
+- Feature flag changes
+- Invite code creation/deletion
+- Settings changes
+
+View audit logs in Settings > Audit Logs (admin only).
+
+## Data Isolation
+
+Each user's data is completely isolated:
+
+- Recipes belong to the user who created them
+- Tags are user-scoped (same tag name can exist per user)
+- Collections are user-scoped
+- Shopping lists are user-scoped
+- Memories (AI preferences) are user-scoped
+
+Users cannot see or modify other users' data.
 
 ## Troubleshooting
 
 ### "Invalid username or password" error
 
-- Check that credentials in `backend/.env` match what you're entering
-- Ensure the backend has been restarted after changing `.env`
-- Verify there are no extra spaces in the `.env` file
+1. Verify credentials are correct
+2. Check if account is locked (wait 30 minutes)
+3. Check rate limiting hasn't triggered
+4. Verify backend is running and connected to database
 
-### Login page not loading
+### "Invalid invite code" error
 
-- Ensure frontend is running: `npm run dev` in `frontend/`
-- Check that backend is running: `npm run dev` in `backend/`
-- Verify ports 3001 (backend) and 5173 (frontend) are available
+1. Verify code is entered correctly (case-sensitive)
+2. Check if code has expired
+3. Check if code was already used
+4. Ask admin to generate a new code
 
-## Production Deployment
+### Cannot access admin features
 
-When deploying to production:
+1. Verify your account has admin role
+2. Check with another admin to grant admin access
+3. If no admins exist, the initial admin user can be recreated by:
+   - Clearing the users table in the database
+   - Restarting the backend (creates new admin from env vars)
 
-1. Set strong, unique credentials in production environment variables
-2. Use a secure JWT_SECRET (long random string)
-3. Enable HTTPS
-4. Consider additional security measures like rate limiting
-5. Keep environment variables secure and never expose them
+### Session expired unexpectedly
 
-## Default Credentials
+1. Sessions expire after 7 days of inactivity
+2. Check if session was revoked from another device
+3. Browser privacy settings may be clearing cookies
+4. Log in again to create a new session
 
-The default credentials in `.env.example` are:
-- Username: `admin`
-- Password: `changeme123`
+## Production Recommendations
 
-**⚠️ CHANGE THESE IMMEDIATELY FOR ANY NON-LOCAL DEPLOYMENT!**
+1. **Strong JWT Secret**: Use a random 64+ character string
+2. **HTTPS**: Always use HTTPS in production
+3. **Secure Passwords**: Require strong admin passwords
+4. **Regular Audits**: Review audit logs periodically
+5. **Database Backups**: Regular PostgreSQL backups
+6. **Environment Security**: Never commit .env files
+7. **Update Dependencies**: Keep packages updated for security patches

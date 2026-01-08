@@ -65,8 +65,20 @@ function buildMessageContent(message: ChatMessage): string | ContentBlock[] {
   return content;
 }
 
+export interface ReferencedRecipe {
+  id: string;
+  title: string;
+  description?: string | null;
+  ingredients: string[];
+  instructions: string[];
+  prepTime?: number | null;
+  cookTime?: number | null;
+  servings?: number | null;
+}
+
 export interface RecipeChatInput {
   messages: ChatMessage[];
+  referencedRecipes?: ReferencedRecipe[];
 }
 
 export interface GeneratedRecipe {
@@ -191,11 +203,29 @@ You can help with:
 - Pairing suggestions (wines, sides, etc.)
 - Storage and reheating tips
 - Timing and prep advice
+- Recommending complementary recipes (side dishes, sauces, desserts, etc.)
 
 Keep your responses concise and practical. Focus on the specific recipe context provided.
 If the user asks for a modified version of the recipe, you can provide updated ingredients or instructions.
 Be friendly and helpful, like a knowledgeable friend in the kitchen.
-ALWAYS use metric units (grams, ml, liters) for any quantities and Celsius for temperatures.`;
+ALWAYS use metric units (grams, ml, liters) for any quantities and Celsius for temperatures.
+
+When recommending a complementary recipe (like a side dish, sauce, or dessert to go with the current recipe), include a JSON block with the full recipe details so the user can save it. Format it exactly like this:
+
+\`\`\`recipe
+{
+  "title": "Recipe Name",
+  "description": "A brief appetizing description",
+  "ingredients": ["ingredient 1", "ingredient 2"],
+  "instructions": ["Step 1", "Step 2"],
+  "prepTime": 15,
+  "cookTime": 30,
+  "servings": 4,
+  "tags": ["tag1", "tag2"]
+}
+\`\`\`
+
+Only include the recipe block when suggesting a NEW recipe to complement the one they're viewing - not when explaining or modifying the existing recipe.`;
 
 export interface RecipeContext {
   title: string;
@@ -215,11 +245,12 @@ export interface SpecificRecipeChatInput {
 
 /**
  * Chat about a specific recipe - answer questions, suggest modifications, etc.
+ * Can also return recipe recommendations (e.g., side dishes, sauces)
  */
 export async function chatAboutSpecificRecipe(
   input: SpecificRecipeChatInput,
   userId?: string
-): Promise<{ message: string }> {
+): Promise<{ message: string; recipe?: GeneratedRecipe }> {
   const config = await getApiConfig();
 
   if (!config) {
@@ -283,15 +314,70 @@ ${input.recipe.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
     content: Array<{ text: string }>;
   };
 
+  const messageContent = data.content[0].text;
+
+  // Extract recipe JSON if present (for recommended complementary recipes)
+  const recipeMatch = messageContent.match(/```recipe\n([\s\S]*?)\n```/);
+  let recipe: GeneratedRecipe | undefined;
+
+  if (recipeMatch) {
+    try {
+      const parsed = JSON.parse(recipeMatch[1]);
+      recipe = {
+        title: String(parsed.title || 'Untitled Recipe').slice(0, 200),
+        description: String(parsed.description || '').slice(0, 1000),
+        ingredients: Array.isArray(parsed.ingredients)
+          ? parsed.ingredients.map((i: any) => String(i).slice(0, 500))
+          : [],
+        instructions: Array.isArray(parsed.instructions)
+          ? parsed.instructions.map((i: any) => String(i).slice(0, 1000))
+          : [],
+        prepTime: typeof parsed.prepTime === 'number' ? parsed.prepTime : undefined,
+        cookTime: typeof parsed.cookTime === 'number' ? parsed.cookTime : undefined,
+        servings: typeof parsed.servings === 'number' ? parsed.servings : undefined,
+        tags: Array.isArray(parsed.tags)
+          ? parsed.tags.map((t: any) => String(t).slice(0, 50))
+          : [],
+      };
+    } catch {
+      // Failed to parse recipe, continue without it
+    }
+  }
+
+  // Clean up the message by removing the recipe JSON block for display
+  const cleanMessage = messageContent.replace(/```recipe\n[\s\S]*?\n```/g, '').trim();
+
   return {
-    message: data.content[0].text,
+    message: cleanMessage,
+    recipe,
   };
+}
+
+/**
+ * Format referenced recipes for inclusion in the system prompt
+ */
+function formatReferencedRecipes(recipes: ReferencedRecipe[]): string {
+  if (!recipes.length) return '';
+
+  const formatted = recipes.map((r) => {
+    let text = `**${r.title}**`;
+    if (r.description) text += `\n${r.description}`;
+    if (r.servings) text += `\nServings: ${r.servings}`;
+    if (r.prepTime) text += ` | Prep: ${r.prepTime} min`;
+    if (r.cookTime) text += ` | Cook: ${r.cookTime} min`;
+    text += `\n\nIngredients:\n${r.ingredients.map((i) => `- ${i}`).join('\n')}`;
+    text += `\n\nInstructions:\n${r.instructions.map((inst, i) => `${i + 1}. ${inst}`).join('\n')}`;
+    return text;
+  });
+
+  return `\n\nThe user has referenced the following recipes from their collection:\n\n${formatted.join('\n\n---\n\n')}\n\nConsider these recipes when responding to the user's request. They may be asking for side dishes, complementary recipes, variations, or something to pair with these dishes.`;
 }
 
 export async function chatAboutRecipes(
   input: RecipeChatInput,
   userId?: string,
-  agentId?: string
+  agentId?: string,
+  referencedRecipes?: ReferencedRecipe[]
 ): Promise<RecipeChatResponse> {
   const config = await getApiConfig();
 
@@ -307,7 +393,12 @@ export async function chatAboutRecipes(
 
   // Use agent's system prompt or default
   const basePrompt = agent?.systemPrompt || RECIPE_CHAT_SYSTEM_PROMPT;
-  const systemPrompt = buildSystemPromptWithMemories(basePrompt, userMemories);
+  let systemPrompt = buildSystemPromptWithMemories(basePrompt, userMemories);
+
+  // Add referenced recipes to context if provided
+  if (referencedRecipes?.length) {
+    systemPrompt += formatReferencedRecipes(referencedRecipes);
+  }
 
   // Use agent's specific model or default to primary model from settings
   const modelToUse = agent?.modelId || config.model;

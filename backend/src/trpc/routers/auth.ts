@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { eq, and, isNull, desc, ne } from 'drizzle-orm';
-import { Context } from '../context.js';
+import crypto from 'crypto';
+import { Context, hashToken } from '../context.js';
 import { generateToken, hashPassword, verifyPassword } from '../../utils/auth.js';
 import { createAuditLog } from '../../utils/auditLog.js';
 import { db } from '../../db/index.js';
@@ -24,73 +25,32 @@ const t = initTRPC.context<Context>().create();
 // Admin user ID for the system admin
 const ADMIN_USER_ID = 'admin-user';
 
-// Admin credentials from env - used for initial setup only
-const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-
 // Account lockout settings
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MINUTES = 15;
 const SESSION_DURATION_DAYS = 30;
 
-if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
-  throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD environment variables are required');
-}
+// Cookie settings
+const isProduction = process.env.NODE_ENV === 'production';
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: isProduction, // Only send over HTTPS in production
+  sameSite: 'lax' as const, // CSRF protection
+  maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000, // 30 days in ms
+  path: '/',
+};
 
 /**
- * Ensure admin user exists with correct credentials
- * This handles first-time setup and password updates from env vars
- */
-async function ensureAdminUser(): Promise<void> {
-  const passwordHash = await hashPassword(ADMIN_PASSWORD!);
-
-  // Check if admin user exists
-  const existingAdmin = await db.query.users.findFirst({
-    where: eq(users.id, ADMIN_USER_ID),
-  });
-
-  if (!existingAdmin) {
-    // Create admin user if doesn't exist
-    await db.insert(users).values({
-      id: ADMIN_USER_ID,
-      username: ADMIN_USERNAME!,
-      passwordHash,
-      isAdmin: true,
-      featureFlags: DEFAULT_FEATURE_FLAGS,
-      createdAt: new Date(),
-    });
-    console.log('Admin user created');
-  } else if (existingAdmin.passwordHash.startsWith('$2a$10$placeholder')) {
-    // Update placeholder password hash with real one
-    await db.update(users)
-      .set({
-        passwordHash,
-        username: ADMIN_USERNAME!,
-      })
-      .where(eq(users.id, ADMIN_USER_ID));
-    console.log('Admin user password updated from environment');
-  }
-}
-
-// Initialize admin user on startup
-ensureAdminUser().catch(err => {
-  console.error('Failed to ensure admin user:', err);
-});
-
-/**
- * Generate a random invite code (8 characters, alphanumeric)
+ * Generate a cryptographically secure invite code (12 characters)
  */
 function generateInviteCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
+  // Use crypto.randomBytes for cryptographically secure random values
+  const bytes = crypto.randomBytes(9); // 9 bytes = 12 base64url chars
+  return bytes.toString('base64url').substring(0, 12).toUpperCase();
 }
 
 /**
- * Create a session for a user
+ * Create a session for a user (stores hashed token)
  */
 async function createSession(
   userId: string,
@@ -101,15 +61,36 @@ async function createSession(
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + SESSION_DURATION_DAYS);
 
+  // Store hashed token for security
+  const tokenHash = hashToken(token);
+
   await db.insert(sessions).values({
     userId,
-    token,
+    tokenHash,
     userAgent,
     ipAddress,
     expiresAt,
     createdAt: new Date(),
     lastActiveAt: new Date(),
   });
+}
+
+/**
+ * Set auth cookie on response
+ */
+function setAuthCookie(ctx: Context, token: string): void {
+  if (ctx.res) {
+    ctx.res.cookie('auth_token', token, COOKIE_OPTIONS);
+  }
+}
+
+/**
+ * Clear auth cookie on response
+ */
+function clearAuthCookie(ctx: Context): void {
+  if (ctx.res) {
+    ctx.res.clearCookie('auth_token', { path: '/' });
+  }
 }
 
 export const authRouter = t.router({
@@ -219,6 +200,9 @@ export const authRouter = t.router({
       const token = await generateToken(user.id);
       await createSession(user.id, token, ctx.userAgent, ctx.ipAddress);
 
+      // Set HTTP-only cookie
+      setAuthCookie(ctx, token);
+
       await createAuditLog({
         userId: user.id,
         action: 'user.login',
@@ -231,7 +215,6 @@ export const authRouter = t.router({
       const featureFlags = user.featureFlags ?? DEFAULT_FEATURE_FLAGS;
 
       return {
-        token,
         user: {
           id: user.id,
           username: user.username,
@@ -252,7 +235,7 @@ export const authRouter = t.router({
         username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_-]+$/,
           'Username can only contain letters, numbers, underscores, and hyphens'),
         password: z.string().min(8, 'Password must be at least 8 characters'),
-        inviteCode: z.string().length(8),
+        inviteCode: z.string().length(12),
         email: z.string().email().optional(),
         displayName: z.string().max(100).optional(),
       })
@@ -321,6 +304,9 @@ export const authRouter = t.router({
       const token = await generateToken(userId);
       await createSession(userId, token, ctx.userAgent, ctx.ipAddress);
 
+      // Set HTTP-only cookie
+      setAuthCookie(ctx, token);
+
       await createAuditLog({
         userId,
         action: 'user.register',
@@ -331,7 +317,6 @@ export const authRouter = t.router({
       });
 
       return {
-        token,
         user: {
           id: userId,
           username: input.username,
@@ -522,9 +507,12 @@ export const authRouter = t.router({
     }),
 
   /**
-   * Logout - invalidate current session
+   * Logout - invalidate current session and clear cookie
    */
   logout: t.procedure.mutation(async ({ ctx }) => {
+    // Clear the auth cookie
+    clearAuthCookie(ctx);
+
     if (!ctx.userId || !ctx.sessionId) {
       return { success: true };
     }

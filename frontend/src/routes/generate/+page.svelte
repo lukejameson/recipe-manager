@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { trpc } from '$lib/trpc/client';
   import { authStore } from '$lib/stores/auth.svelte';
   import Header from '$lib/components/Header.svelte';
@@ -17,6 +17,7 @@
     content: string;
     images?: string[];
     recipe?: GeneratedRecipe;
+    referencedRecipes?: ReferencedRecipe[];
   }
 
   interface GeneratedRecipe {
@@ -30,6 +31,17 @@
     tags: string[];
   }
 
+  interface ReferencedRecipe {
+    id: string;
+    title: string;
+    description?: string | null;
+    ingredients: string[];
+    instructions: string[];
+    prepTime?: number | null;
+    cookTime?: number | null;
+    servings?: number | null;
+  }
+
   let messages = $state<ChatMessage[]>([]);
   let inputValue = $state('');
   let loading = $state(false);
@@ -39,6 +51,17 @@
   let fileInput: HTMLInputElement;
   let selectedAgentId = $state<string | null>(null);
   let currentModelId = $state<string | null>(null);
+
+  // @ mention state
+  let referencedRecipes = $state<ReferencedRecipe[]>([]);
+  let showMentionDropdown = $state(false);
+  let mentionSearch = $state('');
+  let mentionResults = $state<ReferencedRecipe[]>([]);
+  let mentionLoading = $state(false);
+  let selectedMentionIndex = $state(0);
+  let textareaRef: HTMLTextAreaElement;
+  let mentionStartPos = $state(-1);
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   function handleAgentSelect(agentId: string | null, agentInfo: SelectedAgentInfo) {
     // Clear chat when switching agents
@@ -118,6 +141,100 @@
     pendingImages = pendingImages.filter((_, i) => i !== index);
   }
 
+  // @ mention handling
+  async function searchMentions(query: string) {
+    if (query.length < 1) {
+      mentionResults = [];
+      return;
+    }
+
+    mentionLoading = true;
+    try {
+      const results = await trpc.ai.searchRecipesForMention.query({
+        query,
+        limit: 5,
+      });
+      // Filter out already referenced recipes
+      mentionResults = results.filter(
+        (r) => !referencedRecipes.some((ref) => ref.id === r.id)
+      );
+      selectedMentionIndex = 0;
+    } catch (err) {
+      console.error('Failed to search recipes:', err);
+      mentionResults = [];
+    } finally {
+      mentionLoading = false;
+    }
+  }
+
+  function handleInput(e: Event) {
+    const target = e.target as HTMLTextAreaElement;
+    const value = target.value;
+    const cursorPos = target.selectionStart;
+
+    // Check if we're in a mention context (typing after @)
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const mentionMatch = textBeforeCursor.match(/@([^@\s]*)$/);
+
+    if (mentionMatch) {
+      showMentionDropdown = true;
+      mentionSearch = mentionMatch[1];
+      mentionStartPos = cursorPos - mentionMatch[1].length - 1;
+
+      // Debounce the search
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        searchMentions(mentionMatch[1]);
+      }, 150);
+    } else {
+      showMentionDropdown = false;
+      mentionSearch = '';
+      mentionStartPos = -1;
+    }
+  }
+
+  function selectMention(recipe: ReferencedRecipe) {
+    // Replace the @query with @RecipeTitle
+    const beforeMention = inputValue.substring(0, mentionStartPos);
+    const afterCursor = inputValue.substring(textareaRef.selectionStart);
+    inputValue = `${beforeMention}@${recipe.title}${afterCursor}`;
+
+    // Add to referenced recipes
+    referencedRecipes = [...referencedRecipes, recipe];
+
+    // Close dropdown and reset
+    showMentionDropdown = false;
+    mentionSearch = '';
+    mentionResults = [];
+    mentionStartPos = -1;
+
+    // Focus back on textarea
+    tick().then(() => {
+      textareaRef?.focus();
+    });
+  }
+
+  function removeMention(id: string) {
+    referencedRecipes = referencedRecipes.filter((r) => r.id !== id);
+  }
+
+  function handleMentionKeydown(e: KeyboardEvent) {
+    if (!showMentionDropdown || mentionResults.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedMentionIndex = Math.min(selectedMentionIndex + 1, mentionResults.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedMentionIndex = Math.max(selectedMentionIndex - 1, 0);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      selectMention(mentionResults[selectedMentionIndex]);
+    } else if (e.key === 'Escape') {
+      showMentionDropdown = false;
+    }
+  }
+
   // Default prompts as fallback
   const defaultPrompts = [
     "I want to make something with chicken and vegetables",
@@ -153,15 +270,18 @@
     if ((!messageContent && pendingImages.length === 0) || loading) return;
 
     const imagesToSend = [...pendingImages];
+    const recipesToReference = [...referencedRecipes];
     inputValue = '';
     pendingImages = [];
+    referencedRecipes = [];
     error = '';
 
-    // Add user message with images
+    // Add user message with images and referenced recipes
     const userMessage: ChatMessage = {
       role: 'user',
       content: messageContent || 'What can you tell me about this?',
       images: imagesToSend.length > 0 ? imagesToSend : undefined,
+      referencedRecipes: recipesToReference.length > 0 ? recipesToReference : undefined,
     };
     messages = [...messages, userMessage];
 
@@ -175,6 +295,7 @@
           images: m.images,
         })),
         agentId: selectedAgentId ?? undefined,
+        referencedRecipes: recipesToReference.length > 0 ? recipesToReference : undefined,
       });
 
       // Add assistant message
@@ -255,6 +376,14 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    // Handle mention dropdown navigation first
+    if (showMentionDropdown && mentionResults.length > 0) {
+      handleMentionKeydown(e);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Tab' || e.key === 'Escape') {
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -264,6 +393,7 @@
   function clearChat() {
     messages = [];
     pendingImages = [];
+    referencedRecipes = [];
     error = '';
   }
 
@@ -328,6 +458,13 @@
               </div>
               <div class="message-content">
                 {#if message.role === 'user'}
+                  {#if message.referencedRecipes?.length}
+                    <div class="referenced-recipes-display">
+                      {#each message.referencedRecipes as ref}
+                        <span class="reference-chip">📖 {ref.title}</span>
+                      {/each}
+                    </div>
+                  {/if}
                   {#if message.images?.length}
                     <div class="message-images">
                       {#each message.images as image}
@@ -443,6 +580,17 @@
         </div>
       {/if}
 
+      {#if referencedRecipes.length > 0}
+        <div class="referenced-recipes">
+          {#each referencedRecipes as ref}
+            <span class="reference-chip removable">
+              📖 {ref.title}
+              <button type="button" class="remove-ref" onclick={() => removeMention(ref.id)}>&times;</button>
+            </span>
+          {/each}
+        </div>
+      {/if}
+
       <div class="input-wrapper">
         <input
           type="file"
@@ -465,13 +613,40 @@
             <polyline points="21 15 16 10 5 21"/>
           </svg>
         </button>
-        <textarea
-          bind:value={inputValue}
-          onkeydown={handleKeydown}
-          placeholder="Describe what you'd like to make..."
-          rows="1"
-          disabled={loading}
-        ></textarea>
+        <div class="textarea-container">
+          <textarea
+            bind:value={inputValue}
+            bind:this={textareaRef}
+            oninput={handleInput}
+            onkeydown={handleKeydown}
+            placeholder="Describe what you'd like to make... Type @ to reference a recipe"
+            rows="1"
+            disabled={loading}
+          ></textarea>
+          {#if showMentionDropdown}
+            <div class="mention-dropdown">
+              {#if mentionLoading}
+                <div class="mention-loading">Searching recipes...</div>
+              {:else if mentionResults.length > 0}
+                {#each mentionResults as recipe, i}
+                  <button
+                    type="button"
+                    class="mention-item"
+                    class:selected={i === selectedMentionIndex}
+                    onclick={() => selectMention(recipe)}
+                  >
+                    <span class="mention-icon">📖</span>
+                    <span class="mention-title">{recipe.title}</span>
+                  </button>
+                {/each}
+              {:else if mentionSearch.length > 0}
+                <div class="mention-empty">No recipes found matching "{mentionSearch}"</div>
+              {:else}
+                <div class="mention-hint">Type a recipe name...</div>
+              {/if}
+            </div>
+          {/if}
+        </div>
         <button
           class="btn-send"
           onclick={() => sendMessage()}
@@ -484,7 +659,7 @@
           {/if}
         </button>
       </div>
-      <p class="hint">Press Enter to send, Shift+Enter for new line. Add photos with the image button.</p>
+      <p class="hint">Press Enter to send, Shift+Enter for new line. Type @ to reference a recipe from your collection.</p>
     </div>
   </div>
 </main>
@@ -919,8 +1094,13 @@
     border-color: var(--color-primary);
   }
 
-  .input-wrapper textarea {
+  .textarea-container {
     flex: 1;
+    position: relative;
+  }
+
+  .input-wrapper textarea {
+    width: 100%;
     border: none;
     background: transparent;
     padding: var(--spacing-2) var(--spacing-3);
@@ -933,6 +1113,120 @@
 
   .input-wrapper textarea:focus {
     outline: none;
+  }
+
+  /* @ mention dropdown */
+  .mention-dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+    margin-bottom: var(--spacing-2);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+  }
+
+  .mention-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    width: 100%;
+    padding: var(--spacing-2) var(--spacing-3);
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .mention-item:hover,
+  .mention-item.selected {
+    background: var(--color-background);
+  }
+
+  .mention-icon {
+    font-size: var(--text-lg);
+  }
+
+  .mention-title {
+    font-size: var(--text-sm);
+    color: var(--color-text);
+  }
+
+  .mention-loading,
+  .mention-empty,
+  .mention-hint {
+    padding: var(--spacing-3);
+    text-align: center;
+    font-size: var(--text-sm);
+    color: var(--color-text-light);
+  }
+
+  /* Referenced recipes chips */
+  .referenced-recipes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-2);
+  }
+
+  .reference-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    padding: var(--spacing-1) var(--spacing-2);
+    background: var(--color-primary-light, rgba(74, 158, 255, 0.1));
+    color: var(--color-primary);
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+
+  .reference-chip.removable {
+    padding-right: var(--spacing-1);
+  }
+
+  .remove-ref {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: none;
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--color-primary);
+    border-radius: 50%;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    margin-left: var(--spacing-1);
+  }
+
+  .remove-ref:hover {
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  /* Referenced recipes in message display */
+  .referenced-recipes-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-1);
+    margin-bottom: var(--spacing-2);
+  }
+
+  .referenced-recipes-display .reference-chip {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-size: var(--text-xs);
   }
 
   .btn-send {

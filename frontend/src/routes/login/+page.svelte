@@ -39,8 +39,7 @@
 
     try {
       const result = await trpc.auth.login.mutate({ username, password });
-
-      authStore.setToken(result.token);
+      // Token is set as HTTP-only cookie by the server
       authStore.setUser(result.user);
       goto('/');
     } catch (err: any) {
@@ -75,8 +74,7 @@
         email: email || undefined,
         displayName: displayName || undefined,
       });
-
-      authStore.setToken(result.token);
+      // Token is set as HTTP-only cookie by the server
       authStore.setUser(result.user);
       goto('/');
     } catch (err: any) {
@@ -133,7 +131,7 @@
             required
             placeholder="Enter your invite code"
             autocomplete="off"
-            maxlength="8"
+            maxlength="12"
             style="text-transform: uppercase;"
           />
           <span class="hint">Required to create an account</span>

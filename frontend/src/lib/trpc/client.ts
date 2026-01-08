@@ -5,19 +5,20 @@ import type { AppRouter } from '../../../../backend/src/trpc/router';
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 /**
- * Create tRPC client with authentication
+ * Create tRPC client with cookie-based authentication
+ *
+ * Credentials are sent via HTTP-only cookies, which the browser
+ * automatically includes with requests when credentials: 'include' is set.
  */
 export const trpc = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
       url: `${API_URL}/trpc`,
-      headers() {
-        const token = localStorage.getItem('auth_token');
-        return token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : {};
+      fetch(url, options) {
+        return fetch(url, {
+          ...options,
+          credentials: 'include', // Include cookies with requests
+        });
       },
     }),
   ],

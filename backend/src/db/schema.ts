@@ -46,7 +46,7 @@ export const users = pgTable('users', {
 export const sessions = pgTable('sessions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  token: text('token').notNull().unique(),
+  tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the token for security
   userAgent: text('user_agent'),
   ipAddress: text('ip_address'),
   createdAt: timestamp('created_at', { withTimezone: true })

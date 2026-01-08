@@ -8,6 +8,7 @@ import { eq, like, or, inArray, sql, and } from 'drizzle-orm';
 import { parseRecipeJsonLd } from '../../utils/jsonld-parser.js';
 import { convertRecipeIngredients, cleanRecipeInstructions } from '../../utils/unit-converter.js';
 import { photoImportService, type ExtractedRecipe } from '../../services/ai/photo-import.js';
+import { validateImages, validateImageGroups } from '../../utils/imageValidation.js';
 
 /**
  * Validate URL to prevent SSRF attacks
@@ -1426,6 +1427,9 @@ export const recipeRouter = t.router({
       })
     )
     .mutation(async ({ input }) => {
+      // Validate image sizes before processing
+      validateImages(input.images);
+
       try {
         const initialized = await photoImportService.initialize();
         if (!initialized) {
@@ -1469,6 +1473,9 @@ export const recipeRouter = t.router({
       })
     )
     .mutation(async ({ input }) => {
+      // Validate image sizes before processing
+      validateImages(input.images);
+
       try {
         const initialized = await photoImportService.initialize();
         if (!initialized) {
@@ -1531,6 +1538,9 @@ export const recipeRouter = t.router({
       })
     )
     .mutation(async ({ input }) => {
+      // Validate image sizes before processing
+      validateImageGroups(input.imageGroups);
+
       try {
         const initialized = await photoImportService.initialize();
         if (!initialized) {

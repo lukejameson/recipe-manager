@@ -1,4 +1,5 @@
 import { CreateExpressContextOptions } from '@trpc/server/adapters/express';
+import crypto from 'crypto';
 import { verifyToken } from '../utils/auth.js';
 import { db } from '../db/index.js';
 import { sessions } from '../db/schema.js';
@@ -12,37 +13,57 @@ export interface Context {
   sessionId?: string;
   userAgent?: string;
   ipAddress?: string;
+  res?: CreateExpressContextOptions['res'];
+}
+
+/**
+ * Hash a token for secure storage comparison
+ */
+export function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 /**
  * Create context for each request
- * Extracts and verifies JWT from Authorization header
+ * Extracts and verifies JWT from HTTP-only cookie or Authorization header (fallback)
  */
 export async function createContext({
   req,
+  res,
 }: CreateExpressContextOptions): Promise<Context> {
-  const authHeader = req.headers.authorization;
   const userAgent = req.headers['user-agent'];
   const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString().split(',')[0];
 
   const baseContext: Context = {
     userAgent,
     ipAddress,
+    res,
   };
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return baseContext;
+  // Try to get token from HTTP-only cookie first, then Authorization header as fallback
+  let token = req.cookies?.auth_token;
+
+  if (!token) {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
   }
 
-  const token = authHeader.substring(7);
+  if (!token) {
+    return baseContext;
+  }
 
   try {
     const { userId } = await verifyToken(token);
 
-    // Validate session exists and is not expired
+    // Hash the token to compare with stored hash
+    const tokenHash = hashToken(token);
+
+    // Validate session exists and is not expired (compare hashed token)
     const session = await db.query.sessions.findFirst({
       where: and(
-        eq(sessions.token, token),
+        eq(sessions.tokenHash, tokenHash),
         gt(sessions.expiresAt, new Date())
       ),
     });

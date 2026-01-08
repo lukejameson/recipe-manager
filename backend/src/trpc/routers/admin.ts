@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { eq, desc, isNull, sql, type SQL } from 'drizzle-orm';
+import crypto from 'crypto';
 import { Context } from '../context.js';
 import { db } from '../../db/index.js';
 import { users, inviteCodes, auditLogs, DEFAULT_FEATURE_FLAGS, type UserFeatureFlags } from '../../db/schema.js';
@@ -49,15 +50,12 @@ const isAdmin = t.middleware(async ({ ctx, next }) => {
 const adminProcedure = t.procedure.use(isAdmin);
 
 /**
- * Generate a random invite code (8 characters, alphanumeric)
+ * Generate a cryptographically secure invite code (12 characters)
  */
 function generateInviteCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
+  // Use crypto.randomBytes for cryptographically secure random values
+  const bytes = crypto.randomBytes(9); // 9 bytes = 12 base64url chars
+  return bytes.toString('base64url').substring(0, 12).toUpperCase();
 }
 
 export const adminRouter = t.router({

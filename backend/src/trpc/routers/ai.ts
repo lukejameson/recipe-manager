@@ -376,6 +376,7 @@ export const aiRouter = t.router({
   /**
    * Chat about recipes - brainstorm ideas and generate new recipes
    * Requires: aiChat feature
+   * Supports @ mentioning existing recipes for context
    */
   recipeChat: aiChatProcedure
     .input(
@@ -388,6 +389,18 @@ export const aiRouter = t.router({
           })
         ).min(1),
         agentId: z.string().optional(),
+        referencedRecipes: z.array(
+          z.object({
+            id: z.string(),
+            title: z.string(),
+            description: z.string().nullish(),
+            ingredients: z.array(z.string()),
+            instructions: z.array(z.string()),
+            prepTime: z.number().nullish(),
+            cookTime: z.number().nullish(),
+            servings: z.number().nullish(),
+          })
+        ).max(5).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -399,7 +412,7 @@ export const aiRouter = t.router({
         });
       }
       try {
-        return await chatAboutRecipes(input, ctx.userId, input.agentId);
+        return await chatAboutRecipes(input, ctx.userId, input.agentId, input.referencedRecipes);
       } catch (error: any) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
@@ -443,13 +456,62 @@ export const aiRouter = t.router({
         });
       }
       try {
-        return await chatAboutSpecificRecipe(input, ctx.userId);
+        const result = await chatAboutSpecificRecipe(input, ctx.userId);
+        return {
+          message: result.message,
+          recipe: result.recipe,
+        };
       } catch (error: any) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error.message || 'Failed to chat about recipe',
         });
       }
+    }),
+
+  /**
+   * Search user's recipes by title for @ mentions in chat
+   * Returns simplified recipe data for context
+   */
+  searchRecipesForMention: aiChatProcedure
+    .input(
+      z.object({
+        query: z.string().min(1).max(100),
+        limit: z.number().min(1).max(10).default(5),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const userRecipes = await db
+        .select({
+          id: recipes.id,
+          title: recipes.title,
+          description: recipes.description,
+          ingredients: recipes.ingredients,
+          instructions: recipes.instructions,
+          prepTime: recipes.prepTime,
+          cookTime: recipes.cookTime,
+          servings: recipes.servings,
+        })
+        .from(recipes)
+        .where(
+          and(
+            eq(recipes.userId, ctx.userId),
+            sql`LOWER(${recipes.title}) LIKE LOWER(${'%' + input.query + '%'})`
+          )
+        )
+        .orderBy(recipes.title)
+        .limit(input.limit);
+
+      return userRecipes.map((r) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        ingredients: r.ingredients,
+        instructions: r.instructions,
+        prepTime: r.prepTime,
+        cookTime: r.cookTime,
+        servings: r.servings,
+      }));
     }),
 
   /**

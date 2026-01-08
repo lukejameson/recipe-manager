@@ -1,10 +1,25 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { trpc } from '$lib/trpc/client';
+  import { authStore } from '$lib/stores/auth.svelte';
+  import Markdown from '$lib/components/Markdown.svelte';
+
+  interface GeneratedRecipe {
+    title: string;
+    description: string;
+    ingredients: string[];
+    instructions: string[];
+    prepTime?: number;
+    cookTime?: number;
+    servings?: number;
+    tags: string[];
+  }
 
   interface Message {
     role: 'user' | 'assistant';
     content: string;
     images?: string[];
+    recipe?: GeneratedRecipe;
   }
 
   interface Recipe {
@@ -26,6 +41,7 @@
     onClose: () => void;
   } = $props();
 
+  let hasImageSearch = $derived(authStore.hasFeature('imageSearch'));
   let messages = $state<Message[]>([]);
   let inputValue = $state('');
   let sending = $state(false);
@@ -33,6 +49,8 @@
   let messagesContainer: HTMLDivElement;
   let pendingImages = $state<string[]>([]);
   let fileInput: HTMLInputElement;
+  let savingRecipe = $state(false);
+  let savingStatus = $state('');
 
   async function compressImage(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -93,13 +111,70 @@
 
   // Quick action suggestions
   const quickActions = [
+    { label: 'Suggest a side dish', prompt: 'Suggest a side dish recipe that would pair well with this' },
     { label: 'Scale recipe', prompt: 'How do I scale this recipe to serve 8 people?' },
     { label: 'Substitutions', prompt: 'What are some good ingredient substitutions for this recipe?' },
     { label: 'Make it healthier', prompt: 'How can I make this recipe healthier?' },
     { label: 'Wine pairing', prompt: 'What wine would pair well with this dish?' },
     { label: 'Storage tips', prompt: 'How should I store leftovers and how long will they keep?' },
-    { label: 'Common mistakes', prompt: 'What are common mistakes to avoid when making this?' },
   ];
+
+  function formatTime(minutes: number): string {
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+
+  async function saveRecommendedRecipe(genRecipe: GeneratedRecipe) {
+    savingRecipe = true;
+    savingStatus = 'Saving recipe...';
+    try {
+      let imageUrl: string | undefined;
+
+      // Try to find a matching image from Pexels if user has the feature
+      if (hasImageSearch) {
+        savingStatus = 'Finding a photo...';
+        try {
+          const imageResult = await trpc.recipe.searchImages.mutate({
+            query: genRecipe.title,
+            tags: genRecipe.tags,
+            page: 1,
+          });
+          if (imageResult.images.length > 0) {
+            imageUrl = imageResult.images[0].url;
+          }
+        } catch (imgErr: any) {
+          console.error('Failed to fetch image:', imgErr);
+        }
+      }
+
+      savingStatus = 'Creating recipe...';
+      const recipeData: any = {
+        title: genRecipe.title,
+        description: genRecipe.description,
+        ingredients: genRecipe.ingredients,
+        instructions: genRecipe.instructions,
+        prepTime: genRecipe.prepTime,
+        cookTime: genRecipe.cookTime,
+        servings: genRecipe.servings,
+        tags: genRecipe.tags,
+      };
+
+      if (imageUrl) {
+        recipeData.imageUrl = imageUrl;
+      }
+
+      const newRecipe = await trpc.recipe.create.mutate(recipeData);
+      onClose();
+      goto(`/recipe/${newRecipe.id}`);
+    } catch (err: any) {
+      error = err.message || 'Failed to save recipe';
+    } finally {
+      savingRecipe = false;
+      savingStatus = '';
+    }
+  }
 
   async function sendMessage(content: string) {
     if ((!content.trim() && pendingImages.length === 0) || sending) return;
@@ -142,7 +217,11 @@
         })),
       });
 
-      const assistantMessage: Message = { role: 'assistant', content: result.message };
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: result.message,
+        recipe: result.recipe,
+      };
       messages = [...messages, assistantMessage];
     } catch (err: any) {
       error = err.message || 'Failed to get response';
@@ -233,7 +312,68 @@
         <div class="message {message.role}">
           <div class="message-content">
             {#if message.role === 'assistant'}
-              {@html message.content.replace(/\n/g, '<br>')}
+              <div class="message-text">
+                <Markdown content={message.content} />
+              </div>
+              {#if message.recipe}
+                <div class="recipe-card">
+                  <div class="recipe-card-header">
+                    <h4>{message.recipe.title}</h4>
+                    <button
+                      class="btn-save"
+                      onclick={() => saveRecommendedRecipe(message.recipe!)}
+                      disabled={savingRecipe}
+                    >
+                      {#if savingRecipe}
+                        <span class="btn-spinner"></span>
+                        {savingStatus || 'Saving...'}
+                      {:else}
+                        Save Recipe
+                      {/if}
+                    </button>
+                  </div>
+                  {#if message.recipe.description}
+                    <p class="recipe-description">{message.recipe.description}</p>
+                  {/if}
+                  <div class="recipe-meta">
+                    {#if message.recipe.prepTime}
+                      <span>Prep: {formatTime(message.recipe.prepTime)}</span>
+                    {/if}
+                    {#if message.recipe.cookTime}
+                      <span>Cook: {formatTime(message.recipe.cookTime)}</span>
+                    {/if}
+                    {#if message.recipe.servings}
+                      <span>Serves: {message.recipe.servings}</span>
+                    {/if}
+                  </div>
+                  {#if message.recipe.tags.length > 0}
+                    <div class="recipe-tags">
+                      {#each message.recipe.tags as tag}
+                        <span class="tag">{tag}</span>
+                      {/each}
+                    </div>
+                  {/if}
+                  <details class="recipe-details">
+                    <summary>View recipe details</summary>
+                    <div class="recipe-section">
+                      <h5>Ingredients</h5>
+                      <ul>
+                        {#each message.recipe.ingredients as ingredient}
+                          <li>{ingredient}</li>
+                        {/each}
+                      </ul>
+                    </div>
+                    <div class="recipe-section">
+                      <h5>Instructions</h5>
+                      <ol>
+                        {#each message.recipe.instructions as instruction}
+                          <li>{instruction}</li>
+                        {/each}
+                      </ol>
+                    </div>
+                  </details>
+                </div>
+              {/if}
             {:else}
               {#if message.images?.length}
                 <div class="message-images">
@@ -479,6 +619,146 @@
     background: var(--color-bg-subtle);
     color: var(--color-text);
     border-bottom-left-radius: var(--radius-sm);
+  }
+
+  .message-text :global(.markdown) {
+    color: var(--color-text);
+  }
+
+  .message-text :global(code) {
+    background: var(--color-surface);
+  }
+
+  .recipe-card {
+    margin-top: var(--spacing-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-3);
+  }
+
+  .recipe-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-2);
+  }
+
+  .recipe-card-header h4 {
+    margin: 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .btn-save {
+    padding: var(--spacing-1) var(--spacing-3);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1);
+  }
+
+  .btn-save:hover:not(:disabled) {
+    background: var(--color-primary-dark);
+  }
+
+  .btn-save:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .btn-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .recipe-description {
+    margin: 0 0 var(--spacing-2);
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+  }
+
+  .recipe-meta {
+    display: flex;
+    gap: var(--spacing-3);
+    font-size: var(--text-xs);
+    color: var(--color-text-light);
+    margin-bottom: var(--spacing-2);
+  }
+
+  .recipe-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-1);
+    margin-bottom: var(--spacing-2);
+  }
+
+  .tag {
+    padding: 2px var(--spacing-2);
+    background: var(--color-background);
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    color: var(--color-text-light);
+  }
+
+  .recipe-details {
+    margin-top: var(--spacing-2);
+    font-size: var(--text-xs);
+  }
+
+  .recipe-details summary {
+    cursor: pointer;
+    color: var(--color-primary);
+    font-weight: 500;
+  }
+
+  .recipe-details summary:hover {
+    text-decoration: underline;
+  }
+
+  .recipe-section {
+    margin-top: var(--spacing-2);
+  }
+
+  .recipe-section h5 {
+    margin: 0 0 var(--spacing-1);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-text);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .recipe-section ul,
+  .recipe-section ol {
+    margin: 0;
+    padding-left: var(--spacing-4);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
+  .recipe-section li {
+    margin-bottom: 2px;
   }
 
   .typing {
