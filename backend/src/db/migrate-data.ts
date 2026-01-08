@@ -209,7 +209,7 @@ async function migrateData() {
           comp.id,
           comp.parent_recipe_id,
           comp.child_recipe_id,
-          comp.servings_needed,
+          Math.round(comp.servings_needed), // Convert decimal to integer
           comp.sort_order,
           unixToDate(comp.created_at),
         ]
