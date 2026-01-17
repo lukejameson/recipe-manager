@@ -19,13 +19,13 @@ services:
       - internal
     labels:
       - 'traefik.enable=true'
-      - 'traefik.http.routers.recipe-api.rule=Host(`${DOMAIN}`) && PathPrefix(`/trpc`, `/health`)'
+      - 'traefik.http.routers.recipe-api.rule=Host(`${DOMAIN}`) && (PathPrefix(`/trpc`) || PathPrefix(`/health`))'
       - 'traefik.http.routers.recipe-api.priority=100'
       - 'traefik.http.routers.recipe-api.entrypoints=websecure'
       - 'traefik.http.routers.recipe-api.tls.certresolver=letsencrypt'
       - 'traefik.http.services.recipe-api.loadbalancer.server.port=3001'
       # HTTP to HTTPS redirect
-      - 'traefik.http.routers.recipe-api-http.rule=Host(`${DOMAIN}`) && PathPrefix(`/trpc`, `/health`)'
+      - 'traefik.http.routers.recipe-api-http.rule=Host(`${DOMAIN}`) && (PathPrefix(`/trpc`) || PathPrefix(`/health`))'
       - 'traefik.http.routers.recipe-api-http.priority=100'
       - 'traefik.http.routers.recipe-api-http.entrypoints=web'
       - 'traefik.http.routers.recipe-api-http.middlewares=redirect-to-https'
