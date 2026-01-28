@@ -1159,6 +1159,7 @@
     min-height: 0;
     height: calc(100vh - 80px); /* Account for header height */
     overflow: hidden;
+    position: relative;
   }
 
   .page-layout {
@@ -1168,6 +1169,7 @@
     min-height: 0;
     height: 100%;
     overflow: hidden;
+    position: relative;
   }
 
   .container {
@@ -1181,6 +1183,7 @@
     min-height: 0;
     height: 100%;
     overflow: hidden;
+    position: relative;
   }
 
 
@@ -1275,6 +1278,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-4);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   .messages::-webkit-scrollbar {
@@ -2349,6 +2354,15 @@
 
   /* Mobile Responsive Styles */
   @media (max-width: 768px) {
+    main {
+      position: fixed;
+      top: 80px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: auto;
+    }
+
     .mobile-toggle-btn {
       display: flex;
     }
@@ -2359,14 +2373,23 @@
 
     .page-layout {
       grid-template-columns: 1fr;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
     }
 
     .container {
       padding: var(--spacing-3);
+      position: relative;
+      height: 100%;
+      overflow: hidden;
     }
 
     .chat-container {
-      min-height: calc(100vh - 180px);
+      height: 100%;
+      min-height: 0;
     }
 
     /* Ensure touch targets are 44px minimum */

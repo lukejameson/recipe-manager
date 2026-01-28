@@ -631,6 +631,7 @@
       z-index: 200;
       box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
       transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
     }
 
     .sidebar.mobile-open {
@@ -643,6 +644,12 @@
 
     .sidebar-header {
       padding-top: calc(var(--spacing-4) + 60px);
+    }
+
+    .sessions-list {
+      height: calc(100vh - 180px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
   }
 </style>
