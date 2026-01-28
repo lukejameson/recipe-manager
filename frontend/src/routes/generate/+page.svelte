@@ -689,6 +689,13 @@
         document.body.style.overflow = '';
       }
     }
+
+    // Cleanup: Always reset overflow when component unmounts
+    return () => {
+      if (typeof window !== 'undefined') {
+        document.body.style.overflow = '';
+      }
+    };
   });
 </script>
 
@@ -1150,6 +1157,8 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    height: calc(100vh - 80px); /* Account for header height */
+    overflow: hidden;
   }
 
   .page-layout {
