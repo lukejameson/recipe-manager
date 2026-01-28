@@ -9,6 +9,7 @@ import { settingsRouter } from './routers/settings.js';
 import { aiRouter } from './routers/ai.js';
 import { agentsRouter } from './routers/agents.js';
 import { adminRouter } from './routers/admin.js';
+import { chatHistoryRouter } from './routers/chat-history.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -25,6 +26,7 @@ export const appRouter = t.router({
   ai: aiRouter,
   agents: agentsRouter,
   admin: adminRouter,
+  chatHistory: chatHistoryRouter,
 });
 
 export type AppRouter = typeof appRouter;

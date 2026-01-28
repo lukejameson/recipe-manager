@@ -86,6 +86,7 @@
   </button>
 
   {#if expanded}
+    <div class="dropdown-backdrop" onclick={() => (expanded = false)}></div>
     <div class="dropdown">
       <button
         class="agent-option"
@@ -137,8 +138,8 @@
   .selector-trigger {
     display: flex;
     align-items: center;
-    gap: var(--spacing-2);
-    padding: var(--spacing-2) var(--spacing-3);
+    gap: var(--spacing-1);
+    padding: var(--spacing-2);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
@@ -146,6 +147,7 @@
     color: var(--color-text);
     cursor: pointer;
     transition: var(--transition-fast);
+    height: 100%;
   }
 
   .selector-trigger:hover:not(:disabled) {
@@ -159,7 +161,7 @@
   }
 
   .agent-icon {
-    font-size: var(--text-lg);
+    font-size: var(--text-base);
     line-height: 1;
   }
 
@@ -168,8 +170,8 @@
   }
 
   .chevron {
-    width: 16px;
-    height: 16px;
+    width: 12px;
+    height: 12px;
     transition: transform 0.2s ease;
     opacity: 0.5;
   }
@@ -180,7 +182,7 @@
 
   .dropdown {
     position: absolute;
-    top: calc(100% + var(--spacing-1));
+    bottom: calc(100% + var(--spacing-1));
     right: 0;
     min-width: 280px;
     background: var(--color-surface);
@@ -274,5 +276,62 @@
   .manage-link svg {
     width: 16px;
     height: 16px;
+  }
+
+  /* Dropdown Backdrop */
+  .dropdown-backdrop {
+    display: none;
+  }
+
+  /* Mobile Styles */
+  @media (max-width: 768px) {
+    .selector-trigger {
+      min-height: 44px;
+      padding: var(--spacing-2);
+      min-width: 44px;
+      justify-content: center;
+    }
+
+    .agent-name,
+    .chevron {
+      display: none;
+    }
+
+    .agent-icon {
+      font-size: var(--text-xl);
+    }
+
+    .dropdown-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 250;
+    }
+
+    .dropdown {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      bottom: auto;
+      right: auto;
+      max-width: 90vw;
+      max-height: 70vh;
+      overflow-y: auto;
+      z-index: 300;
+    }
+
+    .agent-option,
+    .manage-link {
+      min-height: 44px;
+    }
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    .dropdown-backdrop {
+      animation: none;
+    }
   }
 </style>

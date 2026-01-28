@@ -258,6 +258,58 @@ export const agents = pgTable('agents', {
     .defaultNow(),
 });
 
+// Chat sessions for storing AI chat history
+export const chatSessions = pgTable('chat_sessions', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
+  isFavorite: boolean('is_favorite').notNull().default(false),
+  lastMessagePreview: text('last_message_preview'),
+  messageCount: integer('message_count').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// Referenced recipe type for chat messages
+export type ReferencedRecipe = {
+  id: string;
+  title: string;
+  description?: string;
+  ingredients: string[];
+  instructions: string[];
+};
+
+// Generated recipe type from AI
+export type GeneratedRecipe = {
+  title: string;
+  description?: string;
+  ingredients: string[];
+  instructions: string[];
+  prepTime?: number;
+  cookTime?: number;
+  servings?: number;
+  tags?: string[];
+};
+
+// Chat messages for storing individual messages in chat sessions
+export const chatMessages = pgTable('chat_messages', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  sessionId: text('session_id').notNull().references(() => chatSessions.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'user' | 'assistant'
+  content: text('content').notNull(),
+  images: jsonb('images').$type<string[]>(), // Base64 data URIs
+  referencedRecipes: jsonb('referenced_recipes').$type<ReferencedRecipe[]>(),
+  generatedRecipe: jsonb('generated_recipe').$type<GeneratedRecipe>(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 // Type exports for use in application
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -300,3 +352,9 @@ export type InsertSession = typeof sessions.$inferInsert;
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = typeof auditLogs.$inferInsert;
+
+export type ChatSession = typeof chatSessions.$inferSelect;
+export type InsertChatSession = typeof chatSessions.$inferInsert;
+
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type InsertChatMessage = typeof chatMessages.$inferInsert;

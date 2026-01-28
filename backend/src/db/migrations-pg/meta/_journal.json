@@ -29,6 +29,20 @@
       "when": 1767873500000,
       "tag": "0003_rename_token_to_token_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1769606595199,
+      "tag": "0004_chat_history_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1769606605000,
+      "tag": "0005_add_chat_search_indexes",
+      "breakpoints": true
     }
   ]
 }

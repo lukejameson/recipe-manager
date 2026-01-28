@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { onMount, tick } from 'svelte';
   import { trpc } from '$lib/trpc/client';
   import { authStore } from '$lib/stores/auth.svelte';
@@ -7,12 +8,15 @@
   import AIBadge from '$lib/components/ai/AIBadge.svelte';
   import AgentSelector, { type SelectedAgentInfo } from '$lib/components/ai/AgentSelector.svelte';
   import Markdown from '$lib/components/Markdown.svelte';
+  import ChatHistorySidebar from '$lib/components/chat/ChatHistorySidebar.svelte';
+  import ImageSearchModal from '$lib/components/ImageSearchModal.svelte';
 
   // Check if user has access to AI chat
   let hasAiChat = $derived(authStore.hasFeature('aiChat'));
   let hasImageSearch = $derived(authStore.hasFeature('imageSearch'));
 
   interface ChatMessage {
+    id?: string; // Database ID for deletion
     role: 'user' | 'assistant';
     content: string;
     images?: string[];
@@ -51,6 +55,9 @@
   let fileInput: HTMLInputElement;
   let selectedAgentId = $state<string | null>(null);
   let currentModelId = $state<string | null>(null);
+  let currentSessionId = $state<string | null>(null);
+  let showSavedIndicator = $state(false);
+  let savedIndicatorTimer: ReturnType<typeof setTimeout> | null = null;
 
   // @ mention state
   let referencedRecipes = $state<ReferencedRecipe[]>([]);
@@ -69,6 +76,35 @@
       messages = [];
     }
     currentModelId = agentInfo.modelId;
+  }
+
+  function handleNewChat() {
+    messages = [];
+    currentSessionId = null;
+    error = '';
+    pendingImages = [];
+    referencedRecipes = [];
+    goto('/generate');
+  }
+
+  function handleSessionSelect(sessionId: string) {
+    goto(`/generate?session=${sessionId}`);
+    // Auto-close sidebar on mobile when session is selected
+    closeSidebar();
+  }
+
+  function showSaved() {
+    showSavedIndicator = true;
+
+    // Clear existing timer
+    if (savedIndicatorTimer) {
+      clearTimeout(savedIndicatorTimer);
+    }
+
+    // Hide after 2 seconds
+    savedIndicatorTimer = setTimeout(() => {
+      showSavedIndicator = false;
+    }, 2000);
   }
 
   // Format model ID for display (extract meaningful part)
@@ -265,6 +301,51 @@
     }
   });
 
+  // Watch for URL changes to load sessions
+  $effect(() => {
+    if (!hasAiChat) return;
+
+    const sessionId = $page.url.searchParams.get('session');
+    if (sessionId && sessionId !== currentSessionId) {
+      loadSession(sessionId);
+    } else if (!sessionId && currentSessionId) {
+      // URL cleared, reset to new chat
+      messages = [];
+      currentSessionId = null;
+      error = '';
+      pendingImages = [];
+      referencedRecipes = [];
+    }
+  });
+
+  async function loadSession(sessionId: string) {
+    try {
+      const { session, messages: loadedMessages } = await trpc.chatHistory.get.query({ id: sessionId });
+      currentSessionId = session.id;
+      selectedAgentId = session.agentId;
+
+      // Convert loaded messages to ChatMessage format
+      messages = loadedMessages.map((msg: any) => ({
+        id: msg.id, // Store message ID for deletion
+        role: msg.role,
+        content: msg.content,
+        images: msg.images || undefined,
+        referencedRecipes: msg.referencedRecipes || undefined,
+        recipe: msg.generatedRecipe || undefined,
+      }));
+
+      // Scroll to bottom after loading
+      setTimeout(() => {
+        if (messagesContainer) {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+      }, 100);
+    } catch (err) {
+      console.error('Failed to load session:', err);
+      error = 'Failed to load chat session';
+    }
+  }
+
   async function sendMessage(content?: string) {
     const messageContent = content || inputValue.trim();
     if ((!messageContent && pendingImages.length === 0) || loading) return;
@@ -276,6 +357,23 @@
     referencedRecipes = [];
     error = '';
 
+    // Create session on first message
+    if (!currentSessionId && messages.length === 0) {
+      try {
+        const title = messageContent.slice(0, 50) || 'New conversation';
+        const session = await trpc.chatHistory.create.mutate({
+          title: title,
+          agentId: selectedAgentId || undefined,
+        });
+        currentSessionId = session.id;
+        // Update URL without navigation
+        window.history.replaceState({}, '', `/generate?session=${session.id}`);
+      } catch (err) {
+        console.error('Failed to create session:', err);
+        // Continue without session - messages will be in memory only
+      }
+    }
+
     // Add user message with images and referenced recipes
     const userMessage: ChatMessage = {
       role: 'user',
@@ -284,6 +382,24 @@
       referencedRecipes: recipesToReference.length > 0 ? recipesToReference : undefined,
     };
     messages = [...messages, userMessage];
+
+    // Save user message to database
+    if (currentSessionId) {
+      try {
+        const savedUserMessage = await trpc.chatHistory.addMessage.mutate({
+          sessionId: currentSessionId,
+          role: 'user',
+          content: userMessage.content,
+          images: userMessage.images,
+          referencedRecipes: userMessage.referencedRecipes,
+        });
+        // Update the message with its database ID
+        userMessage.id = savedUserMessage.id;
+        messages = [...messages.slice(0, -1), userMessage];
+      } catch (err) {
+        console.error('Failed to save user message:', err);
+      }
+    }
 
     loading = true;
 
@@ -306,6 +422,25 @@
       };
       messages = [...messages, assistantMessage];
 
+      // Save assistant message to database
+      if (currentSessionId) {
+        try {
+          const savedAssistantMessage = await trpc.chatHistory.addMessage.mutate({
+            sessionId: currentSessionId,
+            role: 'assistant',
+            content: assistantMessage.content,
+            generatedRecipe: assistantMessage.recipe,
+          });
+          // Update the message with its database ID
+          assistantMessage.id = savedAssistantMessage.id;
+          messages = [...messages.slice(0, -1), assistantMessage];
+          // Show saved indicator
+          showSaved();
+        } catch (err) {
+          console.error('Failed to save assistant message:', err);
+        }
+      }
+
       // Scroll to bottom
       setTimeout(() => {
         if (messagesContainer) {
@@ -323,55 +458,110 @@
 
   let savingRecipe = $state(false);
   let savingStatus = $state('');
+  let savedRecipeId = $state<string | null>(null);
+  let savedRecipeTitle = $state('');
+  let showSaveSuccessModal = $state(false);
+  let showRecipePreviewModal = $state(false);
+  let recipeToSave = $state<GeneratedRecipe | null>(null);
+  let selectedImageUrl = $state<string | null>(null);
+  let showImageSearch = $state(false);
 
-  async function saveRecipe(recipe: GeneratedRecipe) {
+  function openSaveRecipeModal(recipe: GeneratedRecipe) {
+    recipeToSave = recipe;
+    selectedImageUrl = null;
+    showRecipePreviewModal = true;
+  }
+
+  function closeRecipePreviewModal() {
+    showRecipePreviewModal = false;
+    recipeToSave = null;
+    selectedImageUrl = null;
+    showImageSearch = false;
+  }
+
+  function handleImageSelect(url: string) {
+    selectedImageUrl = url;
+    showImageSearch = false;
+  }
+
+  async function confirmSaveRecipe() {
+    if (!recipeToSave) return;
+
     savingRecipe = true;
     savingStatus = 'Saving recipe...';
-    try {
-      let imageUrl: string | undefined;
 
-      // Try to find a matching image from Pexels if user has the feature
-      if (hasImageSearch) {
+    try {
+      let imageUrl = selectedImageUrl;
+
+      // If no image selected and image search is enabled, try auto-search
+      if (!imageUrl && hasImageSearch) {
         savingStatus = 'Finding a photo...';
         try {
           const imageResult = await trpc.recipe.searchImages.mutate({
-            query: recipe.title,
-            tags: recipe.tags,
+            query: recipeToSave.title,
+            tags: recipeToSave.tags,
             page: 1,
           });
           if (imageResult.images.length > 0) {
             imageUrl = imageResult.images[0].url;
           }
         } catch (imgErr: any) {
-          // Continue without image but log the error
           console.error('Failed to fetch image:', imgErr);
         }
       }
 
       savingStatus = 'Creating recipe...';
       const recipeData: any = {
-        title: recipe.title,
-        description: recipe.description,
-        ingredients: recipe.ingredients,
-        instructions: recipe.instructions,
-        prepTime: recipe.prepTime,
-        cookTime: recipe.cookTime,
-        servings: recipe.servings,
-        tags: recipe.tags,
+        title: recipeToSave.title,
+        description: recipeToSave.description,
+        ingredients: recipeToSave.ingredients,
+        instructions: recipeToSave.instructions,
+        prepTime: recipeToSave.prepTime,
+        cookTime: recipeToSave.cookTime,
+        servings: recipeToSave.servings,
+        tags: recipeToSave.tags,
       };
 
-      // Only include imageUrl if we have one
       if (imageUrl) {
         recipeData.imageUrl = imageUrl;
       }
 
       const newRecipe = await trpc.recipe.create.mutate(recipeData);
-      goto(`/recipe/${newRecipe.id}`);
+
+      // Close preview modal and show success
+      closeRecipePreviewModal();
+      savedRecipeId = newRecipe.id;
+      savedRecipeTitle = newRecipe.title;
+      showSaveSuccessModal = true;
     } catch (err: any) {
       error = err.message || 'Failed to save recipe';
     } finally {
       savingRecipe = false;
       savingStatus = '';
+    }
+  }
+
+  // Keep old function for backwards compatibility, but redirect to new flow
+  async function saveRecipe(recipe: GeneratedRecipe) {
+    openSaveRecipeModal(recipe);
+  }
+
+  function closeSaveSuccessModal() {
+    showSaveSuccessModal = false;
+    savedRecipeId = null;
+    savedRecipeTitle = '';
+  }
+
+  function viewSavedRecipe() {
+    if (savedRecipeId) {
+      goto(`/recipe/${savedRecipeId}`);
+    }
+  }
+
+  function openSavedRecipeNewTab() {
+    if (savedRecipeId) {
+      window.open(`/recipe/${savedRecipeId}`, '_blank');
+      closeSaveSuccessModal();
     }
   }
 
@@ -397,37 +587,138 @@
     error = '';
   }
 
+  async function retryLastMessage() {
+    if (messages.length < 2 || loading) return;
+
+    // Remove the last assistant message
+    const lastUserMessage = messages[messages.length - 2];
+    messages = messages.slice(0, -1);
+
+    // Resend the last user message
+    await sendMessage(lastUserMessage.content);
+  }
+
+  async function resendMessage(index: number) {
+    if (loading) return;
+
+    // Get the message to resend
+    const messageToResend = messages[index];
+
+    // Remove all messages after this one
+    messages = messages.slice(0, index);
+
+    // Resend the message
+    await sendMessage(messageToResend.content);
+  }
+
+  async function deleteMessage(index: number) {
+    if (loading) return;
+
+    const messageToDelete = messages[index];
+
+    // Remove from UI immediately (optimistic update)
+    messages = messages.filter((_, i) => i !== index);
+
+    // Delete from database if it has an ID
+    if (messageToDelete.id && currentSessionId) {
+      try {
+        await trpc.chatHistory.deleteMessage.mutate({
+          messageId: messageToDelete.id,
+        });
+      } catch (err) {
+        console.error('Failed to delete message from database:', err);
+        // Optionally: show error and restore the message
+      }
+    }
+  }
+
+  let editingMessageIndex = $state<number | null>(null);
+  let editingContent = $state('');
+
+  // Mobile sidebar state
+  let sidebarMobileOpen = $state(false);
+
+  function toggleSidebar() {
+    sidebarMobileOpen = !sidebarMobileOpen;
+  }
+
+  function closeSidebar() {
+    sidebarMobileOpen = false;
+  }
+
+  function startEditMessage(index: number, content: string) {
+    editingMessageIndex = index;
+    editingContent = content;
+  }
+
+  function cancelEdit() {
+    editingMessageIndex = null;
+    editingContent = '';
+  }
+
+  async function saveEdit(index: number) {
+    if (!editingContent.trim() || loading) return;
+
+    // Update the message content
+    messages[index].content = editingContent.trim();
+
+    // Remove all messages after this one (including the AI response)
+    messages = messages.slice(0, index + 1);
+
+    // Clear editing state
+    editingMessageIndex = null;
+    editingContent = '';
+
+    // Resend the edited message
+    await sendMessage(messages[index].content);
+  }
+
   function formatTime(minutes: number): string {
     if (minutes < 60) return `${minutes} min`;
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   }
+
+  // Prevent body scroll when sidebar is open on mobile
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      if (sidebarMobileOpen) {
+        document.body.style.overflow = 'hidden';
+      } else {
+        document.body.style.overflow = '';
+      }
+    }
+  });
 </script>
 
 <Header />
 
 {#if hasAiChat}
 <main>
-  <div class="container">
-    <div class="chat-header">
-      <div class="header-content">
-        <h1>Recipe Ideas</h1>
-        <p class="subtitle">Tell me what you're craving and I'll help you create the perfect recipe</p>
-      </div>
-      <div class="header-actions">
-        <AgentSelector bind:selectedAgentId onSelect={handleAgentSelect} />
-        <span
-          class="model-badge"
-          class:opus={currentModelId?.includes('opus')}
-          class:haiku={currentModelId?.includes('haiku')}
-          title={currentModelId || 'Using default model from settings'}
-        >
-          {formatModelName(currentModelId)}
-        </span>
-      </div>
-    </div>
+  <!-- Mobile Toggle Button -->
+  <button class="mobile-toggle-btn" onclick={toggleSidebar} aria-label="Toggle sidebar">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
 
+  <!-- Backdrop -->
+  {#if sidebarMobileOpen}
+    <div class="backdrop" onclick={closeSidebar} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && closeSidebar()}></div>
+  {/if}
+
+  <div class="page-layout">
+    <ChatHistorySidebar
+      bind:currentSessionId
+      onNewChat={handleNewChat}
+      onSessionSelect={handleSessionSelect}
+      mobileOpen={sidebarMobileOpen}
+      onMobileClose={closeSidebar}
+    />
+    <div class="container">
     <div class="chat-container">
       {#if messages.length === 0}
         <div class="welcome-state">
@@ -451,7 +742,7 @@
         </div>
       {:else}
         <div class="messages" bind:this={messagesContainer}>
-          {#each messages as message}
+          {#each messages as message, i}
             <div class="message {message.role}">
               <div class="message-avatar">
                 {message.role === 'user' ? '👤' : '👨‍🍳'}
@@ -472,7 +763,21 @@
                       {/each}
                     </div>
                   {/if}
-                  <p class="message-text">{message.content}</p>
+                  {#if editingMessageIndex === i}
+                    <div class="edit-message-container">
+                      <textarea
+                        class="edit-textarea"
+                        bind:value={editingContent}
+                        rows="3"
+                      />
+                      <div class="edit-actions">
+                        <button class="btn-edit-save" onclick={() => saveEdit(i)}>Save & Resend</button>
+                        <button class="btn-edit-cancel" onclick={cancelEdit}>Cancel</button>
+                      </div>
+                    </div>
+                  {:else}
+                    <p class="message-text">{message.content}</p>
+                  {/if}
                 {:else}
                   <div class="message-text">
                     <Markdown content={message.content} />
@@ -538,6 +843,62 @@
                     </div>
                   </div>
                 {/if}
+
+                <!-- Message Actions -->
+                {#if !loading && editingMessageIndex !== i}
+                  <div class="message-actions">
+                    {#if message.role === 'user'}
+                      <button
+                        class="action-btn"
+                        onclick={() => resendMessage(i)}
+                        title="Resend this message"
+                        aria-label="Resend this message"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <line x1="22" y1="2" x2="11" y2="13"/>
+                          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                        </svg>
+                        <span class="action-btn-text">Resend</span>
+                      </button>
+                      <button
+                        class="action-btn"
+                        onclick={() => startEditMessage(i, message.content)}
+                        title="Edit message"
+                        aria-label="Edit message"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                        <span class="action-btn-text">Edit</span>
+                      </button>
+                    {:else if i === messages.length - 1}
+                      <button
+                        class="action-btn"
+                        onclick={retryLastMessage}
+                        title="Regenerate response"
+                        aria-label="Regenerate response"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                        </svg>
+                        <span class="action-btn-text">Retry</span>
+                      </button>
+                    {/if}
+                    <button
+                      class="action-btn action-btn-delete"
+                      onclick={() => deleteMessage(i)}
+                      title="Delete message"
+                      aria-label="Delete message"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                      <span class="action-btn-text">Delete</span>
+                    </button>
+                  </div>
+                {/if}
               </div>
             </div>
           {/each}
@@ -563,12 +924,6 @@
     {/if}
 
     <div class="input-section">
-      {#if messages.length > 0}
-        <button class="btn-clear" onclick={clearChat} title="Start new chat">
-          New Chat
-        </button>
-      {/if}
-
       {#if pendingImages.length > 0}
         <div class="pending-images">
           {#each pendingImages as image, index}
@@ -647,19 +1002,27 @@
             </div>
           {/if}
         </div>
+        <AgentSelector bind:selectedAgentId onSelect={handleAgentSelect} />
         <button
           class="btn-send"
           onclick={() => sendMessage()}
           disabled={(!inputValue.trim() && pendingImages.length === 0) || loading}
+          title="Send message"
+          aria-label="Send message"
         >
           {#if loading}
             <span class="spinner"></span>
           {:else}
-            Send
+            <svg class="send-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+            <span class="send-text">Send</span>
           {/if}
         </button>
       </div>
       <p class="hint">Press Enter to send, Shift+Enter for new line. Type @ to reference a recipe from your collection.</p>
+    </div>
     </div>
   </div>
 </main>
@@ -675,13 +1038,127 @@
 </main>
 {/if}
 
+<!-- Recipe Preview/Configure Modal -->
+{#if showRecipePreviewModal && recipeToSave}
+  <div class="modal-overlay" onclick={closeRecipePreviewModal} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && closeRecipePreviewModal()}>
+    <div class="modal-content modal-large" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="0" onkeydown={(e) => e.key === 'Escape' && closeRecipePreviewModal()}>
+      <div class="modal-header">
+        <h2>Save Recipe</h2>
+        <button class="modal-close" onclick={closeRecipePreviewModal} title="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <h3 class="recipe-preview-title">{recipeToSave.title}</h3>
+
+        <!-- Image Section -->
+        <div class="image-section">
+          <label>Recipe Image</label>
+          {#if selectedImageUrl}
+            <div class="selected-image-preview">
+              <img src={selectedImageUrl} alt={recipeToSave.title} />
+              <button class="btn-change-image" onclick={() => showImageSearch = true}>
+                Change Image
+              </button>
+            </div>
+          {:else if hasImageSearch}
+            <button class="btn-search-image" onclick={() => showImageSearch = true}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              Search for Image
+            </button>
+          {:else}
+            <p class="no-image-text">No image will be added (image search not enabled)</p>
+          {/if}
+        </div>
+
+        <div class="preview-actions">
+          <button class="btn-modal-primary" onclick={confirmSaveRecipe} disabled={savingRecipe}>
+            {#if savingRecipe}
+              <span class="btn-spinner"></span>
+              {savingStatus || 'Saving...'}
+            {:else}
+              Save Recipe
+            {/if}
+          </button>
+          <button class="btn-modal-tertiary" onclick={closeRecipePreviewModal}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Image Search Modal -->
+{#if showImageSearch && recipeToSave}
+  <ImageSearchModal
+    recipeName={recipeToSave.title}
+    tags={recipeToSave.tags}
+    onSelect={handleImageSelect}
+    onClose={() => showImageSearch = false}
+  />
+{/if}
+
+<!-- Save Success Modal -->
+{#if showSaveSuccessModal}
+  <div class="modal-overlay" onclick={closeSaveSuccessModal} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && closeSaveSuccessModal()}>
+    <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="0" onkeydown={(e) => e.key === 'Escape' && closeSaveSuccessModal()}>
+      <div class="modal-header">
+        <h2>✅ Recipe Saved!</h2>
+        <button class="modal-close" onclick={closeSaveSuccessModal} title="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="success-message">
+          <strong>{savedRecipeTitle}</strong> has been saved to your collection!
+        </p>
+        <div class="modal-actions">
+          <button class="btn-modal-primary" onclick={openSavedRecipeNewTab}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Open in New Tab
+          </button>
+          <button class="btn-modal-secondary" onclick={viewSavedRecipe}>
+            View Recipe
+          </button>
+          <button class="btn-modal-tertiary" onclick={closeSaveSuccessModal}>
+            Continue Chatting
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   main {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: var(--spacing-4) 0;
     min-height: 0;
+  }
+
+  .page-layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
   }
 
   .container {
@@ -691,60 +1168,13 @@
     max-width: 900px;
     width: 100%;
     margin: 0 auto;
-    padding: 0 var(--spacing-4);
+    padding: var(--spacing-4);
     min-height: 0;
+    height: 100%;
+    overflow: hidden;
   }
 
-  .chat-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--spacing-4);
-    flex-shrink: 0;
-    gap: var(--spacing-4);
-  }
 
-  .header-content h1 {
-    font-size: var(--text-2xl);
-    font-weight: 700;
-    margin: 0;
-    color: var(--color-text);
-  }
-
-  .subtitle {
-    font-size: var(--text-sm);
-    color: var(--color-text-light);
-    margin: var(--spacing-1) 0 0;
-  }
-
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-3);
-  }
-
-  .model-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: var(--spacing-1) var(--spacing-3);
-    background: #f3e8ff;
-    color: #7c3aed;
-    border-radius: var(--radius-full);
-    font-size: var(--text-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .model-badge.opus {
-    background: #fef3c7;
-    color: #b45309;
-  }
-
-  .model-badge.haiku {
-    background: #ecfdf5;
-    color: #059669;
-  }
 
   .chat-container {
     flex: 1;
@@ -838,6 +1268,23 @@
     gap: var(--spacing-4);
   }
 
+  .messages::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .messages::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .messages::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 2px;
+  }
+
+  .messages::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-light);
+  }
+
   .message {
     display: flex;
     gap: var(--spacing-3);
@@ -909,6 +1356,114 @@
 
   .message.assistant .message-text :global(pre) {
     background: var(--color-surface);
+  }
+
+  /* Message Actions */
+  .message-actions {
+    display: flex;
+    gap: var(--spacing-2);
+    margin-top: var(--spacing-2);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+  }
+
+  .message:hover .message-actions {
+    opacity: 1;
+  }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    padding: var(--spacing-1) var(--spacing-2);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .action-btn-text {
+    display: inline;
+  }
+
+  .action-btn:hover {
+    background: var(--color-background);
+    color: var(--color-text);
+    border-color: var(--color-primary);
+  }
+
+  .action-btn-delete:hover {
+    background: #fee;
+    color: #c00;
+    border-color: #faa;
+  }
+
+  .action-btn svg {
+    flex-shrink: 0;
+  }
+
+  /* Edit Message */
+  .edit-message-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+  }
+
+  .edit-textarea {
+    width: 100%;
+    padding: var(--spacing-3);
+    background: var(--color-background);
+    border: 2px solid var(--color-primary);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    font-family: inherit;
+    color: var(--color-text);
+    resize: vertical;
+    min-height: 80px;
+  }
+
+  .edit-textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+
+  .edit-actions {
+    display: flex;
+    gap: var(--spacing-2);
+  }
+
+  .btn-edit-save {
+    padding: var(--spacing-2) var(--spacing-3);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-edit-save:hover {
+    background: var(--color-primary-dark);
+  }
+
+  .btn-edit-cancel {
+    padding: var(--spacing-2) var(--spacing-3);
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-edit-cancel:hover {
+    background: var(--color-background);
   }
 
   .typing-indicator {
@@ -1027,10 +1582,10 @@
   }
 
   .tag {
-    padding: var(--spacing-1) var(--spacing-2);
+    padding: 2px var(--spacing-2);
     background: var(--color-background);
     border-radius: var(--radius-full);
-    font-size: var(--text-xs);
+    font-size: 0.7rem;
     color: var(--color-text-light);
   }
 
@@ -1082,6 +1637,7 @@
 
   .input-wrapper {
     display: flex;
+    align-items: center;
     gap: var(--spacing-2);
     background: var(--color-surface);
     border: 2px solid var(--color-border);
@@ -1241,7 +1797,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: var(--spacing-1);
     min-width: 80px;
+  }
+
+  .send-icon {
+    display: none;
+  }
+
+  .send-text {
+    display: inline;
   }
 
   .btn-send:hover:not(:disabled) {
@@ -1268,28 +1833,17 @@
     }
   }
 
-  .btn-clear {
-    align-self: flex-start;
-    padding: var(--spacing-1) var(--spacing-3);
-    background: transparent;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
-    color: var(--color-text-light);
-    cursor: pointer;
-    transition: var(--transition-fast);
-  }
-
-  .btn-clear:hover {
-    background: var(--color-background);
-    color: var(--color-text);
-  }
-
   .hint {
     font-size: var(--text-xs);
     color: var(--color-text-lighter);
     margin: 0;
     text-align: center;
+  }
+
+  @media (max-width: 768px) {
+    .hint {
+      display: none;
+    }
   }
 
   @media (max-width: 640px) {
@@ -1471,5 +2025,472 @@
 
   .disabled-message .btn-primary:hover {
     background: var(--color-primary-dark);
+  }
+
+  /* Save Success Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .modal-content {
+    background: var(--color-surface);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow: auto;
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .modal-large {
+    max-width: 600px;
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-5);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .modal-header h2 {
+    margin: 0;
+    font-size: var(--text-xl);
+    color: var(--color-text);
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--color-text-light);
+    cursor: pointer;
+    padding: var(--spacing-2);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-fast);
+  }
+
+  .modal-close:hover {
+    background: var(--color-background);
+    color: var(--color-text);
+  }
+
+  .modal-body {
+    padding: var(--spacing-5);
+  }
+
+  .success-message {
+    margin: 0 0 var(--spacing-5);
+    font-size: var(--text-base);
+    color: var(--color-text);
+    text-align: center;
+  }
+
+  .success-message strong {
+    color: var(--color-primary);
+  }
+
+  .modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+  }
+
+  .btn-modal-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-3) var(--spacing-4);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-modal-primary:hover {
+    background: var(--color-primary-dark);
+    transform: translateY(-1px);
+  }
+
+  .btn-modal-secondary {
+    padding: var(--spacing-3) var(--spacing-4);
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 2px solid var(--color-primary);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-modal-secondary:hover {
+    background: var(--color-primary-light);
+  }
+
+  .btn-modal-tertiary {
+    padding: var(--spacing-3) var(--spacing-4);
+    background: transparent;
+    color: var(--color-text-secondary);
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-modal-tertiary:hover {
+    background: var(--color-background);
+    color: var(--color-text);
+  }
+
+  /* Recipe Preview Modal */
+  .recipe-preview-title {
+    margin: 0 0 var(--spacing-4);
+    font-size: var(--text-xl);
+    color: var(--color-text);
+  }
+
+  .image-section {
+    margin-bottom: var(--spacing-5);
+  }
+
+  .image-section label {
+    display: block;
+    margin-bottom: var(--spacing-2);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .selected-image-preview {
+    position: relative;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 2px solid var(--color-border);
+  }
+
+  .selected-image-preview img {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .btn-change-image {
+    position: absolute;
+    bottom: var(--spacing-3);
+    right: var(--spacing-3);
+    padding: var(--spacing-2) var(--spacing-3);
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    backdrop-filter: blur(8px);
+  }
+
+  .btn-change-image:hover {
+    background: white;
+    transform: translateY(-1px);
+  }
+
+  .btn-search-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
+    width: 100%;
+    padding: var(--spacing-4);
+    background: var(--color-background);
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    color: var(--color-text);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-search-image:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+  }
+
+  .no-image-text {
+    padding: var(--spacing-3);
+    background: var(--color-background);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    text-align: center;
+    margin: 0;
+  }
+
+  .preview-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+    margin-top: var(--spacing-4);
+  }
+
+  .btn-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Mobile Toggle Button */
+  .mobile-toggle-btn {
+    display: none;
+    position: fixed;
+    top: 80px;
+    left: var(--spacing-3);
+    width: 44px;
+    height: 44px;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    z-index: 150;
+    transition: var(--transition-fast);
+  }
+
+  .mobile-toggle-btn:hover {
+    background: var(--color-primary-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .mobile-toggle-btn:active {
+    transform: translateY(0);
+  }
+
+  /* Backdrop */
+  .backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 190;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Mobile Responsive Styles */
+  @media (max-width: 768px) {
+    .mobile-toggle-btn {
+      display: flex;
+    }
+
+    .backdrop {
+      display: block;
+    }
+
+    .page-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .container {
+      padding: var(--spacing-3);
+    }
+
+    .chat-container {
+      min-height: calc(100vh - 180px);
+    }
+
+    /* Ensure touch targets are 44px minimum */
+    .btn-attach,
+    .btn-send,
+    .action-btn {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    .session-item {
+      min-height: 44px;
+    }
+
+    /* Icon-only action buttons on mobile - compact */
+    .action-btn-text {
+      display: none;
+    }
+
+    .action-btn {
+      padding: var(--spacing-1);
+      width: 32px;
+      height: 32px;
+      justify-content: center;
+      min-height: 32px;
+      min-width: 32px;
+    }
+
+    .action-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .message-actions {
+      margin-top: var(--spacing-1);
+      gap: var(--spacing-1);
+    }
+
+    /* Compact send button - icon only */
+    .btn-send {
+      padding: var(--spacing-2);
+      min-width: 44px;
+      width: 44px;
+      height: 44px;
+    }
+
+    .send-icon {
+      display: block;
+    }
+
+    .send-text {
+      display: none;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .container {
+      padding: var(--spacing-2);
+    }
+
+    .input-wrapper {
+      flex-wrap: wrap;
+      padding: var(--spacing-1);
+      gap: var(--spacing-1);
+    }
+
+    .message-content {
+      max-width: 95%;
+    }
+
+    .btn-attach {
+      padding: var(--spacing-1);
+      min-width: 40px;
+      width: 40px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .input-wrapper {
+      padding: 6px;
+      gap: 6px;
+    }
+
+    .input-wrapper textarea {
+      font-size: 16px; /* Prevent iOS zoom */
+      padding: var(--spacing-1) var(--spacing-2);
+    }
+
+    .input-section {
+      padding-bottom: env(safe-area-inset-bottom, 0); /* iOS safe area */
+    }
+
+    .btn-attach {
+      min-width: 36px;
+      width: 36px;
+      height: 36px;
+    }
+
+    .btn-attach svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-send {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+    }
+
+    .btn-send svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+
+  /* Touch device optimizations */
+  @media (hover: none) {
+    .message-actions {
+      opacity: 1; /* Always visible on touch devices */
+    }
+
+    .star-btn {
+      opacity: 0.6;
+    }
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar,
+    .backdrop,
+    .mobile-toggle-btn {
+      transition: none;
+      animation: none;
+    }
   }
 </style>
