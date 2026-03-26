@@ -58,6 +58,7 @@
   let currentSessionId = $state<string | null>(null);
   let showSavedIndicator = $state(false);
   let savedIndicatorTimer: ReturnType<typeof setTimeout> | null = null;
+  let isLoadingSession = $state(false);
 
   // @ mention state
   let referencedRecipes = $state<ReferencedRecipe[]>([]);
@@ -71,7 +72,13 @@
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   function handleAgentSelect(agentId: string | null, agentInfo: SelectedAgentInfo) {
-    // Clear chat when switching agents
+    // Don't clear chat when loading a session
+    if (isLoadingSession) {
+      currentModelId = agentInfo.modelId;
+      return;
+    }
+
+    // Clear chat when switching agents manually
     if (messages.length > 0 && agentId !== selectedAgentId) {
       messages = [];
     }
@@ -319,13 +326,21 @@
   });
 
   async function loadSession(sessionId: string) {
+    isLoadingSession = true;
     try {
       const { session, messages: loadedMessages } = await trpc.chatHistory.get.query({ id: sessionId });
+      console.log('📥 Loaded session:', { sessionId, messageCount: loadedMessages.length });
+      console.log('📝 Messages from database:', loadedMessages);
+
+      // IMPORTANT: Set session and agent BEFORE messages to prevent agent change handler from clearing
       currentSessionId = session.id;
       selectedAgentId = session.agentId;
 
-      // Convert loaded messages to ChatMessage format
-      messages = loadedMessages.map((msg: any) => ({
+      // Small delay to ensure agent change is processed before setting messages
+      await tick();
+
+      // Convert loaded messages to ChatMessage format - use spread to ensure reactivity
+      const convertedMessages = loadedMessages.map((msg: any) => ({
         id: msg.id, // Store message ID for deletion
         role: msg.role,
         content: msg.content,
@@ -333,6 +348,13 @@
         referencedRecipes: msg.referencedRecipes || undefined,
         recipe: msg.generatedRecipe || undefined,
       }));
+
+      // Force reactivity by using spread
+      messages = [...convertedMessages];
+
+      console.log('✅ Converted messages:', messages.length);
+      console.log('   - User messages:', messages.filter(m => m.role === 'user').length);
+      console.log('   - Assistant messages:', messages.filter(m => m.role === 'assistant').length);
 
       // Scroll to bottom after loading
       setTimeout(() => {
@@ -343,6 +365,8 @@
     } catch (err) {
       console.error('Failed to load session:', err);
       error = 'Failed to load chat session';
+    } finally {
+      isLoadingSession = false;
     }
   }
 
@@ -386,6 +410,12 @@
     // Save user message to database
     if (currentSessionId) {
       try {
+        console.log('💾 Saving user message to database...', {
+          sessionId: currentSessionId,
+          contentLength: userMessage.content.length,
+          hasImages: !!userMessage.images?.length,
+          hasReferences: !!userMessage.referencedRecipes?.length,
+        });
         const savedUserMessage = await trpc.chatHistory.addMessage.mutate({
           sessionId: currentSessionId,
           role: 'user',
@@ -393,11 +423,13 @@
           images: userMessage.images,
           referencedRecipes: userMessage.referencedRecipes,
         });
+        console.log('✅ User message saved:', savedUserMessage.id);
         // Update the message with its database ID
         userMessage.id = savedUserMessage.id;
         messages = [...messages.slice(0, -1), userMessage];
       } catch (err) {
-        console.error('Failed to save user message:', err);
+        console.error('❌ Failed to save user message:', err);
+        console.error('Error details:', JSON.stringify(err, null, 2));
       }
     }
 
@@ -425,19 +457,26 @@
       // Save assistant message to database
       if (currentSessionId) {
         try {
+          console.log('💾 Saving assistant message to database...', {
+            sessionId: currentSessionId,
+            contentLength: assistantMessage.content.length,
+            hasRecipe: !!assistantMessage.recipe,
+          });
           const savedAssistantMessage = await trpc.chatHistory.addMessage.mutate({
             sessionId: currentSessionId,
             role: 'assistant',
             content: assistantMessage.content,
             generatedRecipe: assistantMessage.recipe,
           });
+          console.log('✅ Assistant message saved:', savedAssistantMessage.id);
           // Update the message with its database ID
           assistantMessage.id = savedAssistantMessage.id;
           messages = [...messages.slice(0, -1), assistantMessage];
           // Show saved indicator
           showSaved();
         } catch (err) {
-          console.error('Failed to save assistant message:', err);
+          console.error('❌ Failed to save assistant message:', err);
+          console.error('Error details:', JSON.stringify(err, null, 2));
         }
       }
 
