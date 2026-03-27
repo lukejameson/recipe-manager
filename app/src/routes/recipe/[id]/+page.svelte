@@ -14,13 +14,14 @@
   import AdaptRecipeModal from '$lib/components/ai/AdaptRecipeModal.svelte';
   import TechniqueTooltip from '$lib/components/ai/TechniqueTooltip.svelte';
   import RecipeChat from '$lib/components/RecipeChat.svelte';
+  import LoadingSkeleton from '$lib/components/LoadingSkeleton.svelte';
 
   let recipe = $state<any>(null);
   let loading = $state(true);
   let error = $state('');
   let cookingMode = $state(false);
   let currentStep = $state(0);
-  let scaledServings = $state<number | null>(null);
+  let scaledServings = $state<number | ''>('');
   let showRatingForm = $state(false);
   let rating = $state(0);
   let notes = $state('');
@@ -416,8 +417,8 @@
   }
 
   const scaledIngredients = $derived(
-    recipe && scaledServings && recipe.servings
-      ? scaleRecipe(recipe.ingredients, recipe.servings, scaledServings)
+    recipe && scaledServings !== '' && recipe.servings
+      ? scaleRecipe(recipe.ingredients, recipe.servings, Number(scaledServings))
       : recipe?.ingredients || []
   );
 
@@ -573,7 +574,7 @@
 <main>
   <div class="container">
     {#if loading}
-      <div class="loading">Loading recipe...</div>
+      <LoadingSkeleton variant="recipe-detail" />
     {:else if error}
       <div class="error">{error}</div>
       <a href="/" class="btn-back">← Back to Recipes</a>
@@ -1007,9 +1008,9 @@
                 min="1"
                 max="99"
               />
-              {#if scaledServings !== null && scaledServings !== recipe.servings}
+              {#if scaledServings !== '' && scaledServings !== recipe.servings}
                 <span class="scale-factor">
-                  ({(scaledServings / recipe.servings).toFixed(1)}x)
+                  ({(Number(scaledServings) / recipe.servings).toFixed(1)}x)
                 </span>
               {/if}
             </div>

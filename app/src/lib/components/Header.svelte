@@ -1,17 +1,47 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { authStore } from '$lib/stores/auth.svelte';
+  import {
+    BookOpen,
+    User,
+    Settings,
+    HelpCircle,
+    LogOut,
+    Tag,
+    Shield,
+    Download,
+    Sparkles,
+    FolderOpen,
+  } from 'lucide-svelte';
 
   let {} = $props();
   let mobileMenuOpen = $state(false);
   let userMenuOpen = $state(false);
+  let mobileMenuButtonRef: HTMLButtonElement | undefined = $state();
+  let mobileNavRef: HTMLElement | undefined = $state();
+  let firstMobileLinkRef: HTMLAnchorElement | undefined = $state();
+  let lastFocusedElement: Element | null = null;
 
   function toggleMobileMenu() {
-    mobileMenuOpen = !mobileMenuOpen;
+    if (!mobileMenuOpen) {
+      // Opening menu - save focus and trap
+      lastFocusedElement = document.activeElement;
+      mobileMenuOpen = true;
+      // Focus first item after transition
+      setTimeout(() => {
+        firstMobileLinkRef?.focus();
+      }, 50);
+    } else {
+      closeMobileMenu();
+    }
   }
 
   function closeMobileMenu() {
     mobileMenuOpen = false;
+    // Return focus to hamburger button
+    setTimeout(() => {
+      mobileMenuButtonRef?.focus();
+    }, 50);
   }
 
   function toggleUserMenu() {
@@ -28,9 +58,65 @@
       closeUserMenu();
     }
   }
+
+  function handleBackdropClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (target.classList.contains('mobile-menu-backdrop')) {
+      closeMobileMenu();
+    }
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    // ESC key closes mobile menu
+    if (event.key === 'Escape' && mobileMenuOpen) {
+      event.preventDefault();
+      closeMobileMenu();
+      return;
+    }
+
+    // Trap focus in mobile menu
+    if (mobileMenuOpen && event.key === 'Tab') {
+      const focusableElements = mobileNavRef?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled])'
+      );
+      if (!focusableElements || focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (event.shiftKey) {
+        // Shift+Tab
+        if (document.activeElement === firstElement) {
+          event.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        // Tab
+        if (document.activeElement === lastElement) {
+          event.preventDefault();
+          firstElement.focus();
+        }
+      }
+    }
+  }
+
+  // Prevent body scroll when mobile menu is open
+  $effect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  });
 </script>
 
-<svelte:window onclick={handleClickOutside} />
+<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
+
+<!-- Skip navigation link -->
+<a href="#main-content" class="skip-link">Skip to main content</a>
 
 <header>
   <div class="container">
@@ -41,27 +127,30 @@
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 32 32"
         >
-          <rect width="32" height="32" rx="6" fill="#ff6b35" />
+          <rect width="32" height="32" rx="6" fill="#D96E48" />
           <path
             d="M16 6c-4.4 0-8 3.6-8 8v6c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-6c0-4.4-3.6-8-8-8z"
             fill="#fff"
           />
           <ellipse cx="16" cy="8" rx="6" ry="2" fill="#fff" />
-          <circle cx="12" cy="13" r="1.5" fill="#ff6b35" />
-          <circle cx="16" cy="15" r="1.5" fill="#ff6b35" />
-          <circle cx="20" cy="13" r="1.5" fill="#ff6b35" />
+          <circle cx="12" cy="13" r="1.5" fill="#D96E48" />
+          <circle cx="16" cy="15" r="1.5" fill="#D96E48" />
+          <circle cx="20" cy="13" r="1.5" fill="#D96E48" />
           <path d="M10 24h12v2H10z" fill="#fff" />
         </svg>
-        Recipe Manager
+        Tabella
       </a>
     </h1>
 
     {#if authStore.isAuthenticated}
       <!-- Mobile hamburger button -->
       <button
+        bind:this={mobileMenuButtonRef}
         class="mobile-menu-btn"
         onclick={toggleMobileMenu}
         aria-label="Toggle menu"
+        aria-expanded={mobileMenuOpen}
+        aria-controls="mobile-navigation"
       >
         <span class="hamburger" class:open={mobileMenuOpen}>
           <span></span>
@@ -104,6 +193,8 @@
             class:active={userMenuOpen || $page.url.pathname === '/profile' || $page.url.pathname === '/settings'}
             onclick={(e) => { e.stopPropagation(); toggleUserMenu(); }}
             aria-label="User menu"
+            aria-expanded={userMenuOpen}
+            aria-haspopup="true"
           >
             <span class="user-icon">
               {authStore.user?.displayName?.[0]?.toUpperCase() || authStore.user?.username?.[0]?.toUpperCase() || '?'}
@@ -116,26 +207,26 @@
           {#if userMenuOpen}
             <div class="user-dropdown">
               <a href="/tags" class:active={$page.url.pathname === '/tags'} onclick={closeUserMenu}>
-                <span class="dropdown-icon">🏷️</span>
+                <Tag size={18} />
                 Tags
               </a>
               <a href="/profile" class:active={$page.url.pathname === '/profile'} onclick={closeUserMenu}>
-                <span class="dropdown-icon">👤</span>
+                <User size={18} />
                 Profile
               </a>
               <a href="/settings" class:active={$page.url.pathname === '/settings'} onclick={closeUserMenu}>
-                <span class="dropdown-icon">⚙️</span>
+                <Settings size={18} />
                 Settings
               </a>
               <a href="/help" class:active={$page.url.pathname === '/help'} onclick={closeUserMenu}>
-                <span class="dropdown-icon">❓</span>
+                <HelpCircle size={18} />
                 Help
               </a>
 
               {#if authStore.isAdmin}
                 <div class="dropdown-divider"></div>
                 <a href="/admin" class="admin-item" class:active={$page.url.pathname.startsWith('/admin')} onclick={closeUserMenu}>
-                  <span class="dropdown-icon">🛠️</span>
+                  <Shield size={18} />
                   Admin
                 </a>
               {/if}
@@ -143,7 +234,7 @@
               <div class="dropdown-divider"></div>
 
               <button class="dropdown-logout" onclick={() => { authStore.logout(); closeUserMenu(); }}>
-                <span class="dropdown-icon">🚪</span>
+                <LogOut size={18} />
                 Log out
               </button>
             </div>
@@ -151,15 +242,31 @@
         </div>
       </nav>
 
+      <!-- Mobile menu backdrop -->
+      {#if mobileMenuOpen}
+        <div
+          class="mobile-menu-backdrop"
+          onclick={handleBackdropClick}
+          role="presentation"
+        ></div>
+      {/if}
+
       <!-- Mobile navigation (slide-out menu) -->
-      <nav class="mobile-nav" class:mobile-open={mobileMenuOpen}>
+      <nav
+        bind:this={mobileNavRef}
+        id="mobile-navigation"
+        class="mobile-nav"
+        class:mobile-open={mobileMenuOpen}
+        aria-label="Mobile navigation"
+      >
         <div class="mobile-section">
           <a
+            bind:this={firstMobileLinkRef}
             href="/"
             class:active={$page.url.pathname === '/'}
             onclick={closeMobileMenu}
           >
-            <span class="icon">📋</span>
+            <BookOpen size={22} />
             <span class="label">Recipes</span>
           </a>
           <a
@@ -167,7 +274,7 @@
             class:active={$page.url.pathname === '/recipe/import'}
             onclick={closeMobileMenu}
           >
-            <span class="icon">📥</span>
+            <Download size={22} />
             <span class="label">Import</span>
           </a>
           <a
@@ -175,7 +282,7 @@
             class:active={$page.url.pathname === '/generate'}
             onclick={closeMobileMenu}
           >
-            <span class="icon">✨</span>
+            <Sparkles size={22} />
             <span class="label">Recipe Ideas</span>
           </a>
           <a
@@ -183,7 +290,7 @@
             class:active={$page.url.pathname.startsWith('/collections')}
             onclick={closeMobileMenu}
           >
-            <span class="icon">📁</span>
+            <FolderOpen size={22} />
             <span class="label">Collections</span>
           </a>
         </div>
@@ -196,7 +303,7 @@
             class:active={$page.url.pathname === '/tags'}
             onclick={closeMobileMenu}
           >
-            <span class="icon">🏷️</span>
+            <Tag size={22} />
             <span class="label">Tags</span>
           </a>
         </div>
@@ -209,7 +316,7 @@
             class:active={$page.url.pathname === '/profile'}
             onclick={closeMobileMenu}
           >
-            <span class="icon">👤</span>
+            <User size={22} />
             <span class="label">Profile</span>
           </a>
           <a
@@ -217,7 +324,7 @@
             class:active={$page.url.pathname === '/settings'}
             onclick={closeMobileMenu}
           >
-            <span class="icon">⚙️</span>
+            <Settings size={22} />
             <span class="label">Settings</span>
           </a>
           <a
@@ -225,7 +332,7 @@
             class:active={$page.url.pathname === '/help'}
             onclick={closeMobileMenu}
           >
-            <span class="icon">❓</span>
+            <HelpCircle size={22} />
             <span class="label">Help</span>
           </a>
         </div>
@@ -239,7 +346,7 @@
               onclick={closeMobileMenu}
               class="admin-link"
             >
-              <span class="icon">🛠️</span>
+              <Shield size={22} />
               <span class="label">Admin</span>
             </a>
           </div>
@@ -253,7 +360,7 @@
             }}
             class="logout-btn"
           >
-            <span class="icon">🚪</span>
+            <LogOut size={22} />
             <span class="label">Log out</span>
           </button>
         </div>
@@ -263,10 +370,30 @@
 </header>
 
 <style>
+  /* Skip link styles */
+  .skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--color-primary);
+    color: white;
+    padding: var(--spacing-2) var(--spacing-4);
+    z-index: 1000;
+    text-decoration: none;
+    font-weight: var(--font-medium);
+    border-radius: 0 0 var(--radius-md) 0;
+    transition: top 0.2s;
+  }
+
+  .skip-link:focus {
+    top: 0;
+  }
+
   header {
     background: rgba(255, 255, 255, 0.95);
     border-bottom: 1px solid var(--color-border-light);
     padding: var(--spacing-4) 0;
+    padding-top: calc(var(--spacing-4) + env(safe-area-inset-top));
     position: sticky;
     top: 0;
     z-index: 100;
@@ -435,12 +562,6 @@
     background: #f5f3ff;
   }
 
-  .dropdown-icon {
-    font-size: var(--text-base);
-    width: 20px;
-    text-align: center;
-  }
-
   .dropdown-divider {
     height: 1px;
     background: var(--color-border);
@@ -465,9 +586,15 @@
     display: none;
   }
 
+  /* Mobile menu backdrop */
+  .mobile-menu-backdrop {
+    display: none;
+  }
+
   @media (max-width: 768px) {
     header {
       padding: var(--spacing-3) 0;
+      padding-top: calc(var(--spacing-3) + env(safe-area-inset-top));
     }
 
     .container {
@@ -533,6 +660,23 @@
       transform: rotate(-45deg) translate(6px, -6px);
     }
 
+    /* Mobile menu backdrop */
+    .mobile-menu-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 99;
+      opacity: 0;
+      animation: fadeIn 0.3s ease forwards;
+    }
+
+    @keyframes fadeIn {
+      to {
+        opacity: 1;
+      }
+    }
+
     /* Mobile nav slide-out */
     .mobile-nav {
       display: flex;
@@ -542,10 +686,13 @@
       right: -100%;
       width: 280px;
       height: 100vh;
+      height: calc(100vh - env(safe-area-inset-top));
+      height: calc(100dvh - env(safe-area-inset-top));
       background: var(--color-surface);
       box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
       transition: right 0.3s ease;
       padding: var(--spacing-16) var(--spacing-4) var(--spacing-4);
+      padding-top: calc(var(--spacing-16) + env(safe-area-inset-top));
       z-index: 100;
       overflow-y: auto;
     }
@@ -587,13 +734,6 @@
       background: var(--color-primary);
       color: white;
       font-weight: var(--font-semibold);
-    }
-
-    .mobile-section a .icon,
-    .mobile-section button .icon {
-      font-size: var(--text-xl);
-      width: 28px;
-      text-align: center;
     }
 
     .mobile-section-divider {

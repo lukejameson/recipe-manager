@@ -1,11 +1,23 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
+  import { apiClient } from '$lib/api/client';
   import Header from '$lib/components/Header.svelte';
   import RecipeCard from '$lib/components/RecipeCard.svelte';
-  import { apiClient } from '$lib/api/client';
   import { authStore } from '$lib/stores/auth.svelte';
+  import {
+    Camera,
+    Flame,
+    LayoutGrid,
+    List,
+    PanelTop,
+    Plus,
+    Search,
+    Tag,
+    Wine,
+  } from 'lucide-svelte';
   import { onMount } from 'svelte';
+  import LoadingSkeleton from '$lib/components/LoadingSkeleton.svelte';
 
   let recipes = $state<any[]>([]);
   let allTags = $state<any[]>([]);
@@ -24,7 +36,14 @@
   let photoInputRef = $state<HTMLInputElement | null>(null);
 
   // Tags that indicate a recipe is a drink/cocktail
-  const drinkTags = ['cocktail', 'mocktail', 'drink', 'beverage', 'cocktails', 'drinks'];
+  const drinkTags = [
+    'cocktail',
+    'mocktail',
+    'drink',
+    'beverage',
+    'cocktails',
+    'drinks',
+  ];
 
   onMount(() => {
     // Load saved preferences from localStorage
@@ -81,11 +100,16 @@
       // Filter by category based on drink-related tags
       if (category === 'cocktails') {
         recipes = allRecipes.filter((r: any) =>
-          r.tags?.some((t: any) => drinkTags.includes((t.name || t).toLowerCase()))
+          r.tags?.some((t: any) =>
+            drinkTags.includes((t.name || t).toLowerCase())
+          )
         );
       } else if (category === 'food') {
-        recipes = allRecipes.filter((r: any) =>
-          !r.tags?.some((t: any) => drinkTags.includes((t.name || t).toLowerCase()))
+        recipes = allRecipes.filter(
+          (r: any) =>
+            !r.tags?.some((t: any) =>
+              drinkTags.includes((t.name || t).toLowerCase())
+            )
         );
       } else {
         recipes = allRecipes;
@@ -191,8 +215,12 @@
       <h2>My Recipes</h2>
       <div class="header-actions">
         {#if hasPhotoExtraction}
-          <button class="btn-photo" onclick={triggerPhotoUpload} title="Import from photo">
-            <span class="icon">📷</span>
+          <button
+            class="btn-primary btn-md"
+            onclick={triggerPhotoUpload}
+            title="Import from photo"
+          >
+            <Camera size={18} />
             <span class="btn-text">Scan Recipe</span>
           </button>
           <input
@@ -204,8 +232,8 @@
             onchange={handlePhotoSelect}
           />
         {/if}
-        <a href="/recipe/new" class="btn-primary">
-          <span class="icon">➕</span>
+        <a href="/recipe/new" class="btn-primary btn-md">
+          <Plus size={18} />
           <span class="btn-text">New Recipe</span>
         </a>
       </div>
@@ -224,7 +252,7 @@
         class:active={category === 'food'}
         onclick={() => setCategory('food')}
       >
-        <span class="tab-icon">🍳</span>
+        <Flame size={16} />
         Food
       </button>
       <button
@@ -232,7 +260,7 @@
         class:active={category === 'cocktails'}
         onclick={() => setCategory('cocktails')}
       >
-        <span class="tab-icon">🍸</span>
+        <Wine size={16} />
         Cocktails
       </button>
     </div>
@@ -245,34 +273,37 @@
           placeholder="Search recipes..."
           onkeydown={e => e.key === 'Enter' && handleSearch()}
         />
-        <button onclick={handleSearch} class="btn-search">Search</button>
+        <button onclick={handleSearch} class="btn-primary btn-md">
+          <Search size={18} />
+          <span class="btn-text">Search</span>
+        </button>
       </div>
 
       <div class="controls">
         <div class="view-toggle desktop-only">
           <button
-            class="view-btn"
+            class="btn-icon"
             class:active={viewMode === 'grid'}
             onclick={() => setViewMode('grid')}
             title="Grid View"
           >
-            <span class="view-icon">⊞</span>
+            <LayoutGrid size={18} />
           </button>
           <button
-            class="view-btn"
+            class="btn-icon"
             class:active={viewMode === 'list'}
             onclick={() => setViewMode('list')}
             title="List View"
           >
-            <span class="view-icon">☰</span>
+            <List size={18} />
           </button>
           <button
-            class="view-btn"
+            class="btn-icon"
             class:active={viewMode === 'compact'}
             onclick={() => setViewMode('compact')}
             title="Compact View"
           >
-            <span class="view-icon">▤</span>
+            <PanelTop size={18} />
           </button>
         </div>
 
@@ -291,8 +322,8 @@
           </select>
         </div>
 
-        <a href="/tags" class="btn-tags desktop-only">
-          <span class="icon">🏷️</span>
+        <a href="/tags" class="btn-secondary btn-sm desktop-only">
+          <Tag size={16} />
           <span>Manage Tags</span>
         </a>
       </div>
@@ -315,7 +346,7 @@
       {#if allTags.length > 0}
         <details class="tag-filter-collapsible">
           <summary class="tag-filter-toggle">
-            <span>🏷️ Filter by tag</span>
+            <span>Filter by tag</span>
             <span class="tag-count-badge">{allTags.length}</span>
           </summary>
           <div class="tag-chips">
@@ -340,7 +371,7 @@
     {/if}
 
     {#if loading}
-      <div class="loading">Loading recipes...</div>
+      <LoadingSkeleton variant="card" count={6} {viewMode} />
     {:else if recipes.length === 0}
       <div class="empty">
         <p>No recipes found. Start by creating your first recipe!</p>
@@ -402,45 +433,6 @@
     display: none;
   }
 
-  .btn-photo,
-  .btn-primary {
-    padding: var(--spacing-2) var(--spacing-4);
-    border-radius: var(--radius-lg);
-    font-weight: var(--font-semibold);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-2);
-    transition: var(--transition-normal);
-    font-size: var(--text-sm);
-    text-decoration: none;
-    cursor: pointer;
-    border: none;
-    height: 40px;
-    box-sizing: border-box;
-  }
-
-  .btn-photo {
-    background: var(--color-surface);
-    color: var(--color-primary);
-    box-shadow: inset 0 0 0 2px var(--color-primary);
-  }
-
-  .btn-photo:hover {
-    background: var(--color-primary);
-    color: white;
-    box-shadow: none;
-  }
-
-  .btn-primary {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: var(--color-primary-dark);
-  }
-
   .filters-section {
     margin-bottom: var(--spacing-5);
   }
@@ -465,17 +457,6 @@
     border-color: var(--color-primary);
   }
 
-  .btn-search {
-    padding: var(--spacing-3) var(--spacing-4);
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: var(--radius-lg);
-    cursor: pointer;
-    font-size: var(--text-sm);
-    font-weight: var(--font-semibold);
-  }
-
   .controls {
     display: flex;
     gap: var(--spacing-3);
@@ -485,31 +466,7 @@
 
   .view-toggle {
     display: flex;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-  }
-
-  .view-btn {
-    padding: var(--spacing-2) var(--spacing-3);
-    background: var(--color-surface);
-    border: none;
-    border-right: 1px solid var(--color-border);
-    cursor: pointer;
-    color: var(--color-text-light);
-  }
-
-  .view-btn:last-child {
-    border-right: none;
-  }
-
-  .view-btn.active {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .view-icon {
-    font-size: 1rem;
+    gap: var(--spacing-1);
   }
 
   .sort-control {
@@ -524,19 +481,6 @@
     font-size: var(--text-sm);
     background: var(--color-surface);
     color: var(--color-text);
-  }
-
-  .btn-tags {
-    padding: var(--spacing-2) var(--spacing-3);
-    background: var(--color-surface);
-    color: var(--color-primary);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    text-decoration: none;
-    font-size: var(--text-sm);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-2);
   }
 
   /* Collapsible tag filter */
@@ -615,14 +559,14 @@
     gap: var(--spacing-2);
     flex-wrap: wrap;
     padding: var(--spacing-3);
-    background: #e0f2fe;
+    background: #e8f0ec;
     border-radius: var(--radius-md);
     margin-bottom: var(--spacing-4);
   }
 
   .filter-label {
     font-weight: var(--font-semibold);
-    color: #0369a1;
+    color: #5a7a66;
     font-size: var(--text-sm);
   }
 
@@ -632,9 +576,9 @@
     gap: var(--spacing-1);
     padding: var(--spacing-1) var(--spacing-2);
     background: white;
-    border: 1px solid #0284c7;
+    border: 1px solid #7aa089;
     border-radius: var(--radius-sm);
-    color: #0369a1;
+    color: #5a7a66;
     font-size: var(--text-xs);
   }
 
@@ -642,14 +586,14 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: #0369a1;
+    color: #5a7a66;
     padding: 0;
     line-height: 1;
   }
 
   .clear-btn {
     padding: var(--spacing-1) var(--spacing-2);
-    background: #0284c7;
+    background: #7aa089;
     color: white;
     border: none;
     border-radius: var(--radius-sm);
@@ -741,21 +685,9 @@
       display: none;
     }
 
-    .btn-primary,
-    .btn-photo {
-      padding: 0;
-      border-radius: var(--radius-full);
-      width: 44px;
-      height: 44px;
-    }
-
     .search-bar input {
       padding: var(--spacing-3);
       font-size: 16px; /* Prevents zoom on iOS */
-    }
-
-    .btn-search {
-      padding: var(--spacing-3);
     }
 
     .desktop-only {
@@ -778,11 +710,6 @@
       grid-template-columns: 1fr !important;
       gap: var(--spacing-4);
     }
-  }
-
-  .icon {
-    font-style: normal;
-    line-height: 1;
   }
 
   /* Category tabs */
@@ -819,10 +746,6 @@
   .tab.active {
     color: var(--color-primary);
     border-bottom-color: var(--color-primary);
-  }
-
-  .tab-icon {
-    font-size: var(--text-base);
   }
 
   @media (max-width: 640px) {

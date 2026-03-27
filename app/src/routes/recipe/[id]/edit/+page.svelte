@@ -382,7 +382,7 @@
   }
 
   .mode-toggle button.active {
-    background: var(--color-primary, #ff6b35);
+    background: var(--color-primary, #D96E48);
     color: white;
   }
 
@@ -461,7 +461,7 @@
 
   textarea:focus {
     outline: none;
-    border-color: var(--color-primary, #ff6b35);
+    border-color: var(--color-primary, #D96E48);
   }
 
   .form-actions {
@@ -481,7 +481,7 @@
   }
 
   .btn-primary {
-    background: var(--color-primary, #ff6b35);
+    background: var(--color-primary, #D96E48);
     color: white;
   }
 

@@ -21,32 +21,32 @@
 
 <style>
   :global(:root) {
-    /* Modern Food-Inspired Color Palette */
-    --color-primary: #ff6b35;
-    --color-primary-dark: #e85a2a;
-    --color-primary-light: #ff8557;
-    --color-secondary: #f7931e;
-    --color-accent: #2ec4b6;
-    --color-bg: #fefcf9;
-    --color-bg-subtle: #faf7f2;
+    /* Terra & Sage Color Palette - Brightened */
+    --color-primary: #E07A52;
+    --color-primary-dark: #C55A38;
+    --color-primary-light: #F0A080;
+    --color-secondary: #E07A52;
+    --color-accent: #6B9E7C;
+    --color-bg: #FDF9F3;
+    --color-bg-subtle: #F7F2EA;
     --color-surface: #ffffff;
-    --color-text: #1a1a1a;
-    --color-text-secondary: #475569;
-    --color-text-light: #64748b;
-    --color-border: #e2e8f0;
-    --color-border-light: #f1f5f9;
-    --color-shadow: rgba(15, 23, 42, 0.08);
-    --color-success: #10b981;
-    --color-warning: #f59e0b;
-    --color-error: #ef4444;
+    --color-text: #2D2D2D;
+    --color-text-secondary: #4A4A4A;
+    --color-text-light: #7A8B94;
+    --color-border: #D5D5D5;
+    --color-border-light: #E5E0D8;
+    --color-shadow: rgba(45, 45, 45, 0.08);
+    --color-success: #6B9E7C;
+    --color-warning: #D4A84B;
+    --color-error: #C84B4B;
 
     /* Enhanced Shadows */
-    --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
-    --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.1), 0 1px 2px rgba(15, 23, 42, 0.06);
-    --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.07), 0 2px 4px rgba(15, 23, 42, 0.06);
-    --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.1), 0 4px 6px rgba(15, 23, 42, 0.05);
-    --shadow-xl: 0 20px 25px rgba(15, 23, 42, 0.1), 0 8px 10px rgba(15, 23, 42, 0.04);
-    --shadow-2xl: 0 25px 50px rgba(15, 23, 42, 0.25);
+    --shadow-xs: 0 1px 2px rgba(45, 45, 45, 0.05);
+    --shadow-sm: 0 1px 3px rgba(45, 45, 45, 0.1), 0 1px 2px rgba(45, 45, 45, 0.06);
+    --shadow-md: 0 4px 6px rgba(45, 45, 45, 0.07), 0 2px 4px rgba(45, 45, 45, 0.06);
+    --shadow-lg: 0 10px 15px rgba(45, 45, 45, 0.1), 0 4px 6px rgba(45, 45, 45, 0.05);
+    --shadow-xl: 0 20px 25px rgba(45, 45, 45, 0.1), 0 8px 10px rgba(45, 45, 45, 0.04);
+    --shadow-2xl: 0 25px 50px rgba(45, 45, 45, 0.25);
 
     /* Modern Border Radius */
     --radius-xs: 4px;
@@ -110,6 +110,41 @@
     --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Button System */
+    /* Sizing - minimum 44px for accessibility */
+    --btn-height-sm: 36px;
+    --btn-height-md: 44px;
+    --btn-height-lg: 52px;
+
+    /* Padding */
+    --btn-padding-x: var(--spacing-4);
+    --btn-padding-y: 0; /* Height-controlled */
+
+    /* Radius */
+    --btn-radius: var(--radius-lg);
+    --btn-radius-icon: var(--radius-md);
+
+    /* Primary button */
+    --btn-primary-bg: var(--color-primary);
+    --btn-primary-bg-hover: var(--color-primary-dark);
+    --btn-primary-text: white;
+
+    /* Secondary button */
+    --btn-secondary-bg: transparent;
+    --btn-secondary-bg-hover: var(--color-primary-light);
+    --btn-secondary-border: var(--color-primary);
+    --btn-secondary-text: var(--color-primary);
+
+    /* Tertiary button */
+    --btn-tertiary-bg: transparent;
+    --btn-tertiary-bg-hover: var(--color-bg-subtle);
+    --btn-tertiary-text: var(--color-text-secondary);
+
+    /* Danger button */
+    --btn-danger-bg: var(--color-error);
+    --btn-danger-bg-hover: #B53F3F;
+    --btn-danger-text: white;
   }
 
   :global(body) {
@@ -188,6 +223,170 @@
   :global(a:focus) {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
+  }
+
+  /* Global button reset and base styles */
+  :global(button) {
+    font-family: inherit;
+  }
+
+  :global(.btn-primary),
+  :global(.btn-secondary),
+  :global(.btn-tertiary),
+  :global(.btn-danger) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
+    font-weight: var(--font-semibold);
+    text-decoration: none;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    border: none;
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  :global(.btn-primary:disabled),
+  :global(.btn-secondary:disabled),
+  :global(.btn-tertiary:disabled),
+  :global(.btn-danger:disabled) {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Icon-only button base */
+  :global(.btn-icon) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--btn-height-md);
+    height: var(--btn-height-md);
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: var(--btn-radius-icon);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  :global(.btn-icon:hover:not(:disabled)) {
+    background: var(--color-bg-subtle);
+    color: var(--color-text);
+    border-color: var(--color-primary);
+  }
+
+  :global(.btn-icon.active) {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+
+  /* Button variant colors */
+  :global(.btn-primary) {
+    background: transparent;
+    color: var(--color-text);
+    border: none;
+  }
+
+  :global(.btn-primary:hover:not(:disabled)) {
+    color: var(--color-primary);
+    transform: translateY(-1px);
+  }
+
+  :global(.btn-secondary) {
+    background: transparent;
+    color: var(--color-text);
+    border: none;
+  }
+
+  :global(.btn-secondary:hover:not(:disabled)) {
+    color: var(--color-primary);
+    transform: translateY(-1px);
+  }
+
+  :global(.btn-tertiary) {
+    background: var(--btn-tertiary-bg);
+    color: var(--btn-tertiary-text);
+    border: 2px solid transparent;
+  }
+
+  :global(.btn-tertiary:hover:not(:disabled)) {
+    background: var(--btn-tertiary-bg-hover);
+  }
+
+  :global(.btn-danger) {
+    background: var(--btn-danger-bg);
+    color: var(--btn-danger-text);
+    border: 2px solid var(--btn-danger-bg);
+  }
+
+  :global(.btn-danger:hover:not(:disabled)) {
+    background: var(--btn-danger-bg-hover);
+    border-color: var(--btn-danger-bg-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Button sizes */
+  :global(.btn-sm) {
+    height: var(--btn-height-sm);
+    padding: 0 var(--spacing-3);
+    border-radius: var(--btn-radius);
+    font-size: var(--text-xs);
+  }
+
+  :global(.btn-md) {
+    height: var(--btn-height-md);
+    padding: 0 var(--spacing-4);
+    border-radius: var(--btn-radius);
+    font-size: var(--text-sm);
+  }
+
+  :global(.btn-lg) {
+    height: var(--btn-height-lg);
+    padding: 0 var(--spacing-5);
+    border-radius: var(--btn-radius);
+    font-size: var(--text-base);
+  }
+
+  /* Icon button sizes */
+  :global(.btn-icon.btn-sm) {
+    width: var(--btn-height-sm);
+    height: var(--btn-height-sm);
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  :global(.btn-icon.btn-md) {
+    width: var(--btn-height-md);
+    height: var(--btn-height-md);
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  :global(.btn-icon.btn-lg) {
+    width: var(--btn-height-lg);
+    height: var(--btn-height-lg);
+    min-width: 52px;
+    min-height: 52px;
+  }
+
+  /* Mobile: ensure minimum touch target size for icon buttons */
+  @media (max-width: 640px) {
+    :global(.btn-icon.btn-sm) {
+      min-width: 44px;
+      min-height: 44px;
+    }
+  }
+
+  /* Body scroll lock for modals and sidebars */
+  :global(.body-scroll-lock) {
+    overflow: hidden;
+    touch-action: none;
   }
 
   .app {

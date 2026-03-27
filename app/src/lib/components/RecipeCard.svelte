@@ -1,5 +1,6 @@
 <script lang="ts">
   import { formatServings, formatTime } from '$lib/utils/format';
+  import { Star, Clock, Flame, Users } from 'lucide-svelte';
 
   interface Recipe {
     id: string;
@@ -45,7 +46,7 @@
       }}
       aria-label="Toggle favorite"
     >
-      {recipe.isFavorite ? '★' : '☆'}
+      <Star size={20} fill={recipe.isFavorite ? "currentColor" : "none"} />
     </button>
   {/if}
 
@@ -58,16 +59,20 @@
     {#if recipe.imageUrl}
       <div class="image" style="background-image: url({recipe.imageUrl})"></div>
     {:else}
-      <div class="image placeholder">🍽️</div>
+      <div class="image placeholder">
+        <span class="placeholder-text">No Image</span>
+      </div>
     {/if}
 
     <div class="content">
       <div class="title-row">
         <h3>{recipe.title}</h3>
         {#if recipe.rating}
-          <span class="rating"
-            >{'★'.repeat(recipe.rating)}{'☆'.repeat(5 - recipe.rating)}</span
-          >
+          <span class="rating">
+            {#each Array(5) as _, i}
+              <Star size={14} fill={i < recipe.rating! ? "currentColor" : "none"} />
+            {/each}
+          </span>
         {/if}
       </div>
 
@@ -77,13 +82,13 @@
 
       <div class="meta">
         {#if recipe.prepTime}
-          <span>⏱️ Prep: {formatTime(recipe.prepTime)}</span>
+          <span><Clock size={14} /> Prep: {formatTime(recipe.prepTime)}</span>
         {/if}
         {#if recipe.cookTime}
-          <span>🔥 Cook: {formatTime(recipe.cookTime)}</span>
+          <span><Flame size={14} /> Cook: {formatTime(recipe.cookTime)}</span>
         {/if}
         {#if recipe.servings}
-          <span>👥 {formatServings(recipe.servings)}</span>
+          <span><Users size={14} /> {formatServings(recipe.servings)}</span>
         {/if}
       </div>
 
@@ -337,7 +342,12 @@
       var(--color-bg-subtle) 0%,
       var(--color-border) 100%
     );
-    font-size: 5rem;
+  }
+
+  .placeholder-text {
+    font-size: var(--text-sm);
+    color: var(--color-text-light);
+    font-weight: var(--font-medium);
   }
 
   .content {
@@ -476,10 +486,6 @@
       height: 180px;
     }
 
-    .image.placeholder {
-      font-size: 3rem;
-    }
-
     .content {
       padding: var(--spacing-4);
     }
@@ -506,8 +512,8 @@
     }
 
     .favorite-btn {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       top: var(--spacing-3);
       right: var(--spacing-3);
     }

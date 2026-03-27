@@ -35,6 +35,29 @@
     await loadSessions();
   });
 
+  // Lock/unlock body scroll when mobile sidebar opens/closes
+  $effect(() => {
+    if (typeof document !== 'undefined') {
+      if (mobileOpen) {
+        document.body.classList.add('body-scroll-lock');
+      } else {
+        document.body.classList.remove('body-scroll-lock');
+      }
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('body-scroll-lock');
+      }
+    };
+  });
+
+  function handleBackdropClick(e: MouseEvent) {
+    // Only close if clicking the backdrop itself, not the sidebar
+    if (e.target === e.currentTarget && onMobileClose) {
+      onMobileClose();
+    }
+  }
+
   async function loadSessions() {
     try {
       loading = true;
@@ -158,7 +181,8 @@
   });
 </script>
 
-<div class="sidebar" class:mobile-open={mobileOpen}>
+<div class="sidebar-backdrop" class:open={mobileOpen} onclick={handleBackdropClick} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onMobileClose?.()} aria-label="Close sidebar">
+  <div class="sidebar" class:mobile-open={mobileOpen} onclick={(e) => e.stopPropagation()}>
   <div class="sidebar-header">
     <h2>Chat History</h2>
     {#if mobileOpen}
@@ -278,6 +302,7 @@
       {/if}
     {/if}
   </div>
+</div>
 </div>
 
 <style>
@@ -622,8 +647,33 @@
     color: var(--color-primary);
   }
 
-  /* Mobile Styles */
+  /* Mobile Backdrop */
+  .sidebar-backdrop {
+    display: none;
+  }
+
   @media (max-width: 768px) {
+    .sidebar-backdrop {
+      display: block;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 199;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      pointer-events: none;
+    }
+
+    .sidebar-backdrop.open {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
     .sidebar {
       position: fixed;
       top: 0;

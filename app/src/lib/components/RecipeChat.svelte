@@ -51,6 +51,19 @@
   let fileInput: HTMLInputElement;
   let savingRecipe = $state(false);
   let savingStatus = $state('');
+  let isMobile = $state(false);
+
+  // Check for mobile viewport
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      const checkMobile = () => {
+        isMobile = window.innerWidth < 640;
+      };
+      checkMobile();
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
+    }
+  });
 
   async function compressImage(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -266,7 +279,7 @@
   }
 </script>
 
-<div class="recipe-chat">
+<div class="recipe-chat" class:mobile={isMobile}>
   <div class="chat-header">
     <div class="header-left">
       <svg class="chat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -864,10 +877,37 @@
 
   @media (max-width: 640px) {
     .recipe-chat {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       max-height: none;
       height: 100%;
+      height: 100dvh;
       border-radius: 0;
       border: none;
+      z-index: 300;
+    }
+
+    .chat-header {
+      padding: var(--spacing-4);
+      padding-top: calc(var(--spacing-4) + env(safe-area-inset-top, 0px));
+    }
+
+    .chat-messages {
+      max-height: calc(100dvh - 160px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+      padding-bottom: var(--spacing-20);
+    }
+
+    .chat-input {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding-bottom: calc(var(--spacing-3) + env(safe-area-inset-bottom, 0px));
+      background: var(--color-surface);
+      z-index: 301;
     }
 
     .recipe-title {
@@ -876,6 +916,21 @@
 
     .quick-actions {
       max-width: 100%;
+    }
+
+    .btn-close {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-bg-subtle);
+      border-radius: 50%;
+    }
+
+    .btn-close svg {
+      width: 24px;
+      height: 24px;
     }
   }
 

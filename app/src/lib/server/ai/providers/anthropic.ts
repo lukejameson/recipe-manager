@@ -21,6 +21,30 @@ export class AnthropicProvider implements LLMProvider {
 	// Known Anthropic models with metadata
 	private readonly knownModels: ProviderModel[] = [
 		{
+			id: 'claude-opus-4-20250514',
+			name: 'Claude 4 Opus',
+			contextWindow: 200000,
+			supportsVision: true,
+			supportsJsonMode: true,
+			pricing: { input: 15.0, output: 75.0 }
+		},
+		{
+			id: 'claude-sonnet-4-20250514',
+			name: 'Claude 4 Sonnet',
+			contextWindow: 200000,
+			supportsVision: true,
+			supportsJsonMode: true,
+			pricing: { input: 3.0, output: 15.0 }
+		},
+		{
+			id: 'claude-3-7-sonnet-20250219',
+			name: 'Claude 3.7 Sonnet',
+			contextWindow: 200000,
+			supportsVision: true,
+			supportsJsonMode: true,
+			pricing: { input: 3.0, output: 15.0 }
+		},
+		{
 			id: 'claude-3-5-sonnet-20241022',
 			name: 'Claude 3.5 Sonnet',
 			contextWindow: 200000,
@@ -70,10 +94,29 @@ export class AnthropicProvider implements LLMProvider {
 			}
 
 			const data = await response.json();
-			const modelIds: string[] = data.data?.map((m: { id: string }) => m.id) || [];
+			const models = data.data || [];
 
-			// Map known models, filtering by what's available
-			return this.knownModels.filter((m) => modelIds.includes(m.id));
+			// Map all API-returned models, using known metadata when available
+			return models
+				.filter((m: { id: string }) => m.id.startsWith('claude-'))
+				.map((m: { id: string; display_name?: string }) => {
+					const known = this.knownModels.find((k) => k.id === m.id);
+					if (known) return known;
+
+					// For unknown models, create entry with sensible defaults
+					return {
+						id: m.id,
+						name: m.display_name || m.id,
+						contextWindow: 200000, // Claude models typically have 200k context
+						supportsVision: m.id.includes('vision') || !m.id.includes('claude-3-haiku'),
+						supportsJsonMode: true,
+						pricing: { input: 3.0, output: 15.0 } // Conservative defaults
+					};
+				})
+				.sort((a: ProviderModel, b: ProviderModel) => {
+					// Sort: newer models first (simple heuristic: reverse alphabetical by id)
+					return b.id.localeCompare(a.id);
+				});
 		} catch (error) {
 			console.warn('Error fetching Anthropic models:', error);
 			return this.knownModels;

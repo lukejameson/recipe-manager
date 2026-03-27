@@ -11,7 +11,7 @@ const LOCKOUT_DURATION_MINUTES = 15;
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
   try {
-    const { username, password } = await request.json();
+    const { username, password, rememberMe } = await request.json();
 
     if (!username || !password) {
       throw error(400, 'Username and password required');
@@ -71,11 +71,11 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
       .where(eq(users.id, user.id));
 
     // Generate token and create session
-    const token = await generateToken(user.id);
-    await createSession(user.id, token, request.headers.get('user-agent') || undefined, getClientAddress());
+    const token = await generateToken(user.id, rememberMe ? 90 : 1);
+    await createSession(user.id, token, request.headers.get('user-agent') || undefined, getClientAddress(), rememberMe);
 
-    // Set HTTP-only cookie
-    setAuthCookie(cookies, token);
+    // Set HTTP-only cookie with appropriate duration
+    setAuthCookie(cookies, token, rememberMe);
 
     // Get effective feature flags
     const featureFlags = user.featureFlags ?? DEFAULT_FEATURE_FLAGS;

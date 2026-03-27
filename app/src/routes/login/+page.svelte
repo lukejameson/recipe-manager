@@ -1,7 +1,7 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { apiClient } from '$lib/api/client';
   import { authStore } from '$lib/stores/auth.svelte';
-  import { goto } from '$app/navigation';
 
   // Form mode
   let mode = $state<'login' | 'register'>('login');
@@ -12,6 +12,9 @@
   let error = $state('');
   let loading = $state(false);
 
+  // Login-only fields
+  let rememberMe = $state(false);
+
   // Registration-only fields
   let inviteCode = $state('');
   let confirmPassword = $state('');
@@ -21,6 +24,7 @@
   function resetForm() {
     username = '';
     password = '';
+    rememberMe = false;
     inviteCode = '';
     confirmPassword = '';
     email = '';
@@ -38,7 +42,7 @@
     loading = true;
 
     try {
-      const result = await apiClient.login(username, password);
+      const result = await apiClient.login(username, password, rememberMe);
       // Token is set as HTTP-only cookie by the server
       authStore.setUser(result.user);
       goto('/');
@@ -67,7 +71,13 @@
     loading = true;
 
     try {
-      const result = await apiClient.register(username, password, inviteCode.toUpperCase(), email || undefined, displayName || undefined);
+      const result = await apiClient.register(
+        username,
+        password,
+        inviteCode.toUpperCase(),
+        email || undefined,
+        displayName || undefined
+      );
       // Token is set as HTTP-only cookie by the server
       authStore.setUser(result.user);
       goto('/');
@@ -89,7 +99,7 @@
 
 <div class="login-container">
   <div class="login-box">
-    <h1>Recipe Manager</h1>
+    <h1>Tabella</h1>
 
     <div class="mode-tabs">
       <button
@@ -114,7 +124,12 @@
       <div class="error">{error}</div>
     {/if}
 
-    <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+    <form
+      onsubmit={e => {
+        e.preventDefault();
+        handleSubmit();
+      }}
+    >
       {#if mode === 'register'}
         <div class="form-group">
           <label for="inviteCode">Invite Code</label>
@@ -145,13 +160,17 @@
           maxlength={mode === 'register' ? 50 : undefined}
         />
         {#if mode === 'register'}
-          <span class="hint">3-50 characters, letters, numbers, underscores, hyphens</span>
+          <span class="hint"
+            >3-50 characters, letters, numbers, underscores, hyphens</span
+          >
         {/if}
       </div>
 
       {#if mode === 'register'}
         <div class="form-group">
-          <label for="email">Email <span class="optional">(optional)</span></label>
+          <label for="email"
+            >Email <span class="optional">(optional)</span></label
+          >
           <input
             id="email"
             type="email"
@@ -162,7 +181,9 @@
         </div>
 
         <div class="form-group">
-          <label for="displayName">Display Name <span class="optional">(optional)</span></label>
+          <label for="displayName"
+            >Display Name <span class="optional">(optional)</span></label
+          >
           <input
             id="displayName"
             type="text"
@@ -204,7 +225,16 @@
         </div>
       {/if}
 
-      <button type="submit" disabled={loading}>
+      {#if mode === 'login'}
+        <div class="form-group checkbox-group">
+          <label class="checkbox-label align-center">
+            <input type="checkbox" bind:checked={rememberMe} />
+            <span>Remember Me</span>
+          </label>
+        </div>
+      {/if}
+
+      <button type="submit" class="btn-primary btn-lg" disabled={loading}>
         {#if loading}
           {mode === 'login' ? 'Logging in...' : 'Creating account...'}
         {:else}
@@ -277,14 +307,14 @@
   }
 
   .error {
-    background: #fef2f2;
+    background: #fdf2f2;
     color: var(--color-error);
     padding: var(--spacing-3);
     border-radius: var(--radius-lg);
     margin-bottom: var(--spacing-6);
     text-align: center;
     font-weight: var(--font-medium);
-    border: 1px solid #fecaca;
+    border: 1px solid #f5d5d5;
     font-size: var(--text-sm);
   }
 
@@ -330,36 +360,31 @@
   input:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    box-shadow: 0 0 0 3px rgba(217, 110, 72, 0.1);
   }
 
-  button[type='submit'] {
-    padding: var(--spacing-4);
-    background: var(--color-primary);
-    color: white;
-    border: 2px solid var(--color-primary);
-    border-radius: var(--radius-lg);
-    font-size: var(--text-lg);
-    font-weight: var(--font-semibold);
-    cursor: pointer;
+  .checkbox-group {
     margin-top: var(--spacing-2);
-    transition: var(--transition-normal);
-    box-shadow: var(--shadow-sm);
   }
 
-  button[type='submit']:hover:not(:disabled) {
-    background: var(--color-primary-dark);
-    border-color: var(--color-primary-dark);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-lg);
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    cursor: pointer;
+    font-weight: var(--font-normal);
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
   }
 
-  button[type='submit']:disabled {
-    background: var(--color-border);
-    border-color: var(--color-border);
-    color: var(--color-text-light);
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
+  .checkbox-label input[type='checkbox'] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+  }
+
+  .checkbox-label span {
+    user-select: none;
   }
 </style>

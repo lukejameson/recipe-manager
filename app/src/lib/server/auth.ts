@@ -19,18 +19,19 @@ function getSecret(): Uint8Array {
   return secretKey;
 }
 
-// Session duration (30 days)
-const SESSION_DURATION_DAYS = 30;
+// Session duration constants
+const SHORT_SESSION_DURATION_DAYS = 1; // 24 hours
+const LONG_SESSION_DURATION_DAYS = 90; // ~3 months
 
 // Cookie settings
 const isProduction = NODE_ENV === 'production';
-const COOKIE_OPTIONS = {
+const getCookieOptions = (rememberMe: boolean) => ({
   httpOnly: true,
   secure: isProduction,
   sameSite: 'lax' as const,
-  maxAge: 60 * 60 * 24 * SESSION_DURATION_DAYS,
+  maxAge: 60 * 60 * 24 * (rememberMe ? LONG_SESSION_DURATION_DAYS : SHORT_SESSION_DURATION_DAYS),
   path: '/',
-};
+});
 
 /**
  * Hash a token for secure storage comparison
@@ -57,11 +58,11 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 /**
  * Generate a JWT token for a user
  */
-export async function generateToken(userId: string): Promise<string> {
+export async function generateToken(userId: string, durationDays: number = SHORT_SESSION_DURATION_DAYS): Promise<string> {
   const token = await new jose.SignJWT({ userId })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime(`${SESSION_DURATION_DAYS}d`)
+    .setExpirationTime(`${durationDays}d`)
     .sign(getSecret());
 
   return token;
@@ -86,10 +87,11 @@ export async function createSession(
   userId: string,
   token: string,
   userAgent?: string,
-  ipAddress?: string
+  ipAddress?: string,
+  rememberMe: boolean = false
 ): Promise<void> {
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + SESSION_DURATION_DAYS);
+  expiresAt.setDate(expiresAt.getDate() + (rememberMe ? LONG_SESSION_DURATION_DAYS : SHORT_SESSION_DURATION_DAYS));
 
   const tokenHash = hashToken(token);
   const db = getDb();
@@ -100,6 +102,7 @@ export async function createSession(
     tokenHash,
     userAgent,
     ipAddress,
+    rememberMe,
     expiresAt,
     createdAt: new Date(),
     lastActiveAt: new Date(),
@@ -109,8 +112,8 @@ export async function createSession(
 /**
  * Set auth cookie on response
  */
-export function setAuthCookie(cookies: Cookies, token: string): void {
-  cookies.set('auth_token', token, COOKIE_OPTIONS);
+export function setAuthCookie(cookies: Cookies, token: string, rememberMe: boolean = false): void {
+  cookies.set('auth_token', token, getCookieOptions(rememberMe));
 }
 
 /**

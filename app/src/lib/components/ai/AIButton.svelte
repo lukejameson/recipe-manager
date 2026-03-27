@@ -84,7 +84,7 @@
 
   /* Primary variant - more prominent */
   .ai-btn.primary {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    background: linear-gradient(135deg, #7AA089, #8C99A4);
     color: white;
   }
 

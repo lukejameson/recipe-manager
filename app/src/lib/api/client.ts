@@ -23,10 +23,10 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 
 export const apiClient = {
   // Auth
-  login: (username: string, password: string) =>
+  login: (username: string, password: string, rememberMe?: boolean) =>
     api<{ success: boolean; user: User }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, rememberMe }),
     }),
 
   register: (username: string, password: string, inviteCode: string, email?: string, displayName?: string) =>

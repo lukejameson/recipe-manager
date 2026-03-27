@@ -49,6 +49,7 @@ export const sessions = pgTable('sessions', {
   tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the token for security
   userAgent: text('user_agent'),
   ipAddress: text('ip_address'),
+  rememberMe: boolean('remember_me').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

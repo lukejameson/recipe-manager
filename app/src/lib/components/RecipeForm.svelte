@@ -5,6 +5,7 @@
   import ImageSearchModal from './ImageSearchModal.svelte';
   import AIButton from './ai/AIButton.svelte';
   import TagSuggestionsPanel from './ai/TagSuggestionsPanel.svelte';
+  import { Sparkles, Search, X, Plus } from 'lucide-svelte';
 
   let {
     recipe = null,
@@ -415,9 +416,10 @@
       <label for="imageUrl">Image URL</label>
       <button
         type="button"
-        class="btn-search-image"
+        class="btn-secondary btn-sm"
         onclick={() => showImageSearch = true}
       >
+        <Search size={16} />
         Search Images
       </button>
     </div>
@@ -444,7 +446,7 @@
         <div class="ai-calculate-section">
           <button
             type="button"
-            class="btn-ai-calculate"
+            class="btn-secondary btn-sm"
             onclick={handleCalculateNutrition}
             disabled={calculatingNutrition}
           >
@@ -452,7 +454,7 @@
               <span class="spinner"></span>
               Calculating...
             {:else}
-              <span class="ai-icon">AI</span>
+              <Sparkles size={16} />
               Calculate with AI
             {/if}
           </button>
@@ -554,11 +556,11 @@
                   </label>
                   <button
                     type="button"
-                    class="btn-remove"
+                    class="btn-icon btn-sm"
                     onclick={() => handleRemoveComponent(index)}
                     title="Remove component"
                   >
-                    &times;
+                    <X size={16} />
                   </button>
                 </div>
               </div>
@@ -568,20 +570,21 @@
 
         <button
           type="button"
-          class="btn-add-component"
+          class="btn-secondary"
           onclick={() => showComponentModal = true}
         >
-          + Add Component Recipe
+          <Plus size={18} />
+          Add Component Recipe
         </button>
       </div>
     {/if}
   </div>
 
   <div class="form-actions">
-    <button type="submit" class="btn-primary" disabled={loading}>
+    <button type="submit" class="btn-primary btn-md" disabled={loading}>
       {loading ? 'Saving...' : recipe ? 'Update Recipe' : 'Create Recipe'}
     </button>
-    <button type="button" class="btn-secondary" onclick={onCancel}>Cancel</button>
+    <button type="button" class="btn-secondary btn-md" onclick={onCancel}>Cancel</button>
   </div>
 </form>
 
@@ -646,23 +649,6 @@
 
   .label-with-action label {
     margin-bottom: 0;
-  }
-
-  .btn-search-image {
-    padding: var(--spacing-1) var(--spacing-3);
-    background: var(--color-background);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--color-primary);
-    cursor: pointer;
-    transition: var(--transition-fast);
-  }
-
-  .btn-search-image:hover {
-    background: var(--color-surface);
-    border-color: var(--color-primary);
   }
 
   .field-error {
@@ -787,40 +773,6 @@
     margin-bottom: var(--spacing-4);
     padding-bottom: var(--spacing-4);
     border-bottom: 1px solid var(--color-border-light);
-  }
-
-  .btn-ai-calculate {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-2);
-    padding: var(--spacing-2) var(--spacing-4);
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    color: white;
-    border: none;
-    border-radius: var(--radius-lg);
-    font-weight: var(--font-semibold);
-    font-size: var(--text-sm);
-    cursor: pointer;
-    transition: var(--transition-fast);
-  }
-
-  .btn-ai-calculate:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
-  }
-
-  .btn-ai-calculate:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .ai-icon {
-    background: rgba(255, 255, 255, 0.2);
-    padding: 0.125rem 0.375rem;
-    border-radius: var(--radius-sm);
-    font-size: var(--text-xs);
-    font-weight: var(--font-bold);
   }
 
   .spinner {
@@ -971,65 +923,77 @@
     text-align: center;
   }
 
-  .btn-remove {
-    background: none;
-    border: none;
-    font-size: var(--text-xl);
-    color: var(--color-text-light);
-    cursor: pointer;
-    padding: var(--spacing-1);
-    line-height: 1;
-    transition: var(--transition-fast);
+  /* Responsive form row - better breakpoints */
+  @media (max-width: 768px) {
+    .form-row {
+      grid-template-columns: repeat(2, 1fr);
+    }
   }
 
-  .btn-remove:hover {
-    color: var(--color-error);
-  }
-
-  .btn-add-component {
-    width: 100%;
-    padding: var(--spacing-3);
-    background: var(--color-surface);
-    border: 2px dashed var(--color-border);
-    border-radius: var(--radius-lg);
-    font-size: var(--text-sm);
-    font-weight: var(--font-medium);
-    color: var(--color-primary);
-    cursor: pointer;
-    transition: var(--transition-fast);
-  }
-
-  .btn-add-component:hover {
-    background: rgba(255, 107, 53, 0.05);
-    border-color: var(--color-primary);
-  }
-
-  @media (max-width: 640px) {
-    .form-actions {
-      flex-direction: column;
-      gap: var(--spacing-3);
+  @media (max-width: 480px) {
+    .form-row {
+      grid-template-columns: 1fr;
     }
 
-    .btn-primary,
-    .btn-secondary {
-      padding: var(--spacing-4) var(--spacing-6);
-      font-size: var(--text-lg);
-      min-height: 52px;
+    .form-row .form-group {
+      margin-bottom: var(--spacing-4);
     }
 
+    .form-row .form-group:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  /* Nutrition row responsive */
+  @media (max-width: 768px) {
+    .nutrition-row {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 480px) {
     .nutrition-row {
       grid-template-columns: 1fr;
-      gap: var(--spacing-3);
     }
+  }
 
+  /* Component item mobile improvements */
+  @media (max-width: 640px) {
     .component-item {
       flex-direction: column;
       align-items: flex-start;
+      gap: var(--spacing-3);
     }
 
     .component-controls {
       width: 100%;
       justify-content: space-between;
+      align-items: center;
     }
+
+    .servings-label {
+      flex: 1;
+      justify-content: flex-start;
+    }
+
+    .servings-input {
+      width: 80px;
+      min-height: 44px;
+      padding: var(--spacing-3);
+      font-size: var(--text-base);
+    }
+
+    .component-controls .btn-icon {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      min-height: 44px;
+    }
+  }
+
+  /* Servings input larger touch target */
+  input#servings,
+  .servings-input {
+    min-height: 44px;
   }
 </style>

@@ -93,8 +93,8 @@ class AuthStore {
   /**
    * Login - calls server to set HTTP-only cookie
    */
-  async login(username: string, password: string) {
-    const response = await apiClient.login(username, password);
+  async login(username: string, password: string, rememberMe?: boolean) {
+    const response = await apiClient.login(username, password, rememberMe);
     this._user = response.user;
     return response;
   }
