@@ -1,1 +1,0 @@
-ALTER TABLE `recipes` ADD `improvement_ideas` text;

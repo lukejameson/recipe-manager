@@ -1,0 +1,193 @@
+import bcrypt from 'bcryptjs';
+import * as jose from 'jose';
+import { getDb } from '$lib/server/db/db';
+import { sessions, users } from '$lib/server/db/schema';
+import { eq, and, gt } from 'drizzle-orm';
+import crypto from 'crypto';
+import type { Cookies } from '@sveltejs/kit';
+import { JWT_SECRET, NODE_ENV } from '$env/static/private';
+
+let secretKey: Uint8Array | null = null;
+
+function getSecret(): Uint8Array {
+  if (secretKey) return secretKey;
+
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+  secretKey = new TextEncoder().encode(JWT_SECRET);
+  return secretKey;
+}
+
+// Session duration (30 days)
+const SESSION_DURATION_DAYS = 30;
+
+// Cookie settings
+const isProduction = NODE_ENV === 'production';
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'lax' as const,
+  maxAge: 60 * 60 * 24 * SESSION_DURATION_DAYS,
+  path: '/',
+};
+
+/**
+ * Hash a token for secure storage comparison
+ */
+export function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Hash a password using bcrypt
+ */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salt);
+}
+
+/**
+ * Verify a password against a hash
+ */
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
+}
+
+/**
+ * Generate a JWT token for a user
+ */
+export async function generateToken(userId: string): Promise<string> {
+  const token = await new jose.SignJWT({ userId })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(`${SESSION_DURATION_DAYS}d`)
+    .sign(getSecret());
+
+  return token;
+}
+
+/**
+ * Verify and decode a JWT token
+ */
+export async function verifyToken(token: string): Promise<{ userId: string }> {
+  try {
+    const { payload } = await jose.jwtVerify(token, getSecret());
+    return { userId: payload.userId as string };
+  } catch (error) {
+    throw new Error('Invalid or expired token');
+  }
+}
+
+/**
+ * Create a session for a user (stores hashed token)
+ */
+export async function createSession(
+  userId: string,
+  token: string,
+  userAgent?: string,
+  ipAddress?: string
+): Promise<void> {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + SESSION_DURATION_DAYS);
+
+  const tokenHash = hashToken(token);
+  const db = getDb();
+
+  await db.insert(sessions).values({
+    id: crypto.randomUUID(),
+    userId,
+    tokenHash,
+    userAgent,
+    ipAddress,
+    expiresAt,
+    createdAt: new Date(),
+    lastActiveAt: new Date(),
+  });
+}
+
+/**
+ * Set auth cookie on response
+ */
+export function setAuthCookie(cookies: Cookies, token: string): void {
+  cookies.set('auth_token', token, COOKIE_OPTIONS);
+}
+
+/**
+ * Clear auth cookie on response
+ */
+export function clearAuthCookie(cookies: Cookies): void {
+  cookies.delete('auth_token', { path: '/' });
+}
+
+/**
+ * Verify session and return user info
+ */
+export async function verifySession(token: string): Promise<{ userId: string; sessionId: string } | null> {
+  try {
+    const { userId } = await verifyToken(token);
+    const tokenHash = hashToken(token);
+    const db = getDb();
+
+    const session = await db.query.sessions.findFirst({
+      where: and(
+        eq(sessions.tokenHash, tokenHash),
+        gt(sessions.expiresAt, new Date())
+      ),
+    });
+
+    if (!session) {
+      return null;
+    }
+
+    await db.update(sessions)
+      .set({ lastActiveAt: new Date() })
+      .where(eq(sessions.id, session.id));
+
+    return { userId, sessionId: session.id };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get current user from session
+ */
+export async function getCurrentUser(token: string | undefined) {
+  if (!token) return null;
+
+  const session = await verifySession(token);
+  if (!session) return null;
+
+  const db = getDb();
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, session.userId),
+  });
+
+  if (!user) return null;
+
+  return {
+    userId: user.id,
+    id: user.id,
+    username: user.username,
+    isAdmin: user.isAdmin,
+    email: user.email,
+    displayName: user.displayName,
+    featureFlags: user.featureFlags,
+    sessionId: session.sessionId,
+  };
+}
+
+/**
+ * Require authentication - throws if not authenticated
+ */
+export async function requireAuth(cookies: Cookies) {
+  const token = cookies.get('auth_token');
+  const user = await getCurrentUser(token);
+
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+
+  return user;
+}

@@ -1,1 +1,0 @@
-ALTER TABLE `settings` ADD `pexels_api_key` text;
