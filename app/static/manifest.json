@@ -1,14 +1,14 @@
 {
-  "name": "Tabella",
-  "short_name": "Tabella",
-  "description": "Tabella - A beautiful and intuitive recipe collection to organize, browse, and cook your favorite recipes",
+  "name": "Marrow",
+  "short_name": "Marrow",
+  "description": "Marrow - A beautiful and intuitive recipe collection to organize, browse, and cook your favorite recipes",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F9F5EF",
-  "theme_color": "#D96E48",
+  "theme_color": "#8C4C3E",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23D96E48'/%3E%3Cpath d='M16 6c-4.4 0-8 3.6-8 8v6c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-6c0-4.4-3.6-8-8-8z' fill='%23fff'/%3E%3Cellipse cx='16' cy='8' rx='6' ry='2' fill='%23fff'/%3E%3Ccircle cx='12' cy='13' r='1.5' fill='%23D96E48'/%3E%3Ccircle cx='16' cy='15' r='1.5' fill='%23D96E48'/%3E%3Ccircle cx='20' cy='13' r='1.5' fill='%23D96E48'/%3E%3Cpath d='M10 24h12v2H10z' fill='%23fff'/%3E%3C/svg%3E",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%238C4C3E'/%3E%3Cpath d='M16 6c-4.4 0-8 3.6-8 8v6c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-6c0-4.4-3.6-8-8-8z' fill='%23fff'/%3E%3Cellipse cx='16' cy='8' rx='6' ry='2' fill='%23fff'/%3E%3Ccircle cx='12' cy='13' r='1.5' fill='%238C4C3E'/%3E%3Ccircle cx='16' cy='15' r='1.5' fill='%238C4C3E'/%3E%3Ccircle cx='20' cy='13' r='1.5' fill='%238C4C3E'/%3E%3Cpath d='M10 24h12v2H10z' fill='%23fff'/%3E%3C/svg%3E",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"

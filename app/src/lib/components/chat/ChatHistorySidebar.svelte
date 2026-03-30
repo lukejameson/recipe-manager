@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { apiClient } from '$lib/api/client';
   import { goto } from '$app/navigation';
+  import { Pencil, Search, X, Pin, MessageSquare, MoreVertical, Trash2, Check } from 'lucide-svelte';
 
   interface ChatSession {
     id: string;
@@ -23,19 +24,18 @@
   }
 
   let { currentSessionId = $bindable(null), onNewChat, onSessionSelect, mobileOpen = false, onMobileClose }: Props = $props();
-
+  
   let sessions = $state<ChatSession[]>([]);
   let loading = $state(true);
   let searchQuery = $state('');
-  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let isSearching = $state(false);
-  let showOnlyFavorites = $state(false);
+  let editingSessionId = $state<string | null>(null);
+  let editTitle = $state('');
+  let openMenuId = $state<string | null>(null);
 
   onMount(async () => {
     await loadSessions();
   });
 
-  // Lock/unlock body scroll when mobile sidebar opens/closes
   $effect(() => {
     if (typeof document !== 'undefined') {
       if (mobileOpen) {
@@ -51,19 +51,10 @@
     };
   });
 
-  function handleBackdropClick(e: MouseEvent) {
-    // Only close if clicking the backdrop itself, not the sidebar
-    if (e.target === e.currentTarget && onMobileClose) {
-      onMobileClose();
-    }
-  }
-
   async function loadSessions() {
     try {
       loading = true;
-      sessions = await apiClient.listChatSessions({
-        onlyFavorites: showOnlyFavorites || undefined,
-      });
+      sessions = await apiClient.listChatSessions();
     } catch (error) {
       console.error('Failed to load chat sessions:', error);
     } finally {
@@ -71,48 +62,10 @@
     }
   }
 
-  function toggleFavoritesFilter() {
-    showOnlyFavorites = !showOnlyFavorites;
-    loadSessions();
-  }
-
-  async function performSearch(query: string) {
-    if (query.length < 2) {
-      await loadSessions();
-      return;
+  function handleBackdropClick(e: MouseEvent) {
+    if (e.target === e.currentTarget && onMobileClose) {
+      onMobileClose();
     }
-
-    try {
-      isSearching = true;
-      sessions = await apiClient.searchChatSessions({
-        query,
-        searchIn: 'both',
-      });
-    } catch (error) {
-      console.error('Failed to search chat sessions:', error);
-    } finally {
-      isSearching = false;
-    }
-  }
-
-  function handleSearchInput(e: Event) {
-    const target = e.target as HTMLInputElement;
-    searchQuery = target.value;
-
-    // Clear existing timer
-    if (searchDebounceTimer) {
-      clearTimeout(searchDebounceTimer);
-    }
-
-    // Debounce search
-    searchDebounceTimer = setTimeout(() => {
-      performSearch(searchQuery);
-    }, 300);
-  }
-
-  function clearSearch() {
-    searchQuery = '';
-    loadSessions();
   }
 
   function handleNewChat() {
@@ -125,29 +78,98 @@
     if (onSessionSelect) {
       onSessionSelect(sessionId);
     } else {
-      // Default navigation
       goto(`/generate?session=${sessionId}`);
     }
   }
 
   async function toggleFavorite(sessionId: string, event: MouseEvent) {
-    event.stopPropagation(); // Prevent session selection
-
+    event.stopPropagation();
     try {
-      // Optimistic update
       sessions = sessions.map(s =>
         s.id === sessionId ? { ...s, isFavorite: !s.isFavorite } : s
       );
-
-      // Call API
       await apiClient.toggleFavoriteChat(sessionId);
-
-      // Reload to get correct sorting
-      await loadSessions();
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
-      // Reload on error to revert optimistic update
       await loadSessions();
+    }
+  }
+
+  function toggleMenu(sessionId: string, event: MouseEvent) {
+    event.stopPropagation();
+    openMenuId = openMenuId === sessionId ? null : sessionId;
+  }
+
+  function closeMenu() {
+    openMenuId = null;
+  }
+
+  function startEditing(session: ChatSession, event: MouseEvent) {
+    event.stopPropagation();
+    editingSessionId = session.id;
+    editTitle = session.title;
+    openMenuId = null;
+    setTimeout(() => {
+      const input = document.getElementById(`edit-input-${session.id}`) as HTMLInputElement;
+      input?.focus();
+      input?.select();
+    }, 0);
+  }
+
+  function cancelEditing(event?: MouseEvent) {
+    event?.stopPropagation();
+    editingSessionId = null;
+    editTitle = '';
+  }
+
+  async function saveRename(sessionId: string, event?: MouseEvent) {
+    event?.stopPropagation();
+    if (!editTitle.trim()) {
+      cancelEditing();
+      return;
+    }
+    try {
+      await apiClient.updateChatSession(sessionId, { title: editTitle.trim() });
+      sessions = sessions.map(s => 
+        s.id === sessionId ? { ...s, title: editTitle.trim() } : s
+      );
+      editingSessionId = null;
+    } catch (error) {
+      console.error('Failed to rename session:', error);
+      alert('Failed to rename chat');
+    }
+  }
+
+  function handleEditKeydown(e: KeyboardEvent, sessionId: string) {
+    if (e.key === 'Enter') {
+      saveRename(sessionId);
+    } else if (e.key === 'Escape') {
+      cancelEditing();
+    }
+  }
+
+  async function deleteSession(sessionId: string, event: MouseEvent) {
+    event.stopPropagation();
+    openMenuId = null;
+    
+    if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await apiClient.deleteChatSession(sessionId);
+      sessions = sessions.filter(s => s.id !== sessionId);
+      
+      if (sessionId === currentSessionId) {
+        if (onNewChat) {
+          onNewChat();
+        } else {
+          goto('/generate');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+      alert('Failed to delete chat');
     }
   }
 
@@ -163,17 +185,55 @@
     if (hours < 24) return `${hours}h ago`;
     if (days === 1) return 'Yesterday';
     if (days < 7) return `${days}d ago`;
-
-    // Format as date
+    
     const dateObj = new Date(date);
     return dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
-  // Separate favorites and regular sessions
-  let favoriteSessions = $derived(sessions.filter(s => s.isFavorite));
-  let regularSessions = $derived(sessions.filter(s => !s.isFavorite));
+  function getTimeGroup(date: Date): string {
+    const now = new Date();
+    const diff = now.getTime() - new Date(date).getTime();
+    const days = Math.floor(diff / 86400000);
 
-  // Refresh sessions when prop changes
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return 'Previous 7 Days';
+    return 'Older';
+  }
+
+  let filteredSessions = $derived(
+    searchQuery.trim() === '' 
+      ? sessions 
+      : sessions.filter(s => 
+          s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (s.lastMessagePreview?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+        )
+  );
+
+  let groupedSessions = $derived(() => {
+    const groups: Record<string, { favorites: ChatSession[], regular: ChatSession[] }> = {};
+    
+    filteredSessions.forEach(session => {
+      const group = getTimeGroup(session.updatedAt);
+      if (!groups[group]) {
+        groups[group] = { favorites: [], regular: [] };
+      }
+      if (session.isFavorite) {
+        groups[group].favorites.push(session);
+      } else {
+        groups[group].regular.push(session);
+      }
+    });
+
+    const groupOrder = ['Today', 'Yesterday', 'Previous 7 Days', 'Older'];
+    return groupOrder
+      .filter(g => groups[g] && (groups[g].favorites.length > 0 || groups[g].regular.length > 0))
+      .map(group => ({
+        name: group,
+        sessions: [...groups[group].favorites, ...groups[group].regular]
+      }));
+  });
+
   $effect(() => {
     if (currentSessionId !== undefined) {
       loadSessions();
@@ -181,15 +241,25 @@
   });
 </script>
 
-<!-- Desktop sidebar (always visible) -->
 <div class="sidebar desktop-sidebar">
   {@render SidebarContent()}
 </div>
 
-<!-- Mobile sidebar with backdrop -->
 {#if mobileOpen}
-  <div class="sidebar-backdrop" class:open={mobileOpen} onclick={handleBackdropClick} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onMobileClose?.()} aria-label="Close sidebar">
-    <div class="sidebar mobile-sidebar" class:mobile-open={mobileOpen} onclick={(e) => e.stopPropagation()}>
+  <div 
+    class="sidebar-backdrop" 
+    class:open={mobileOpen} 
+    onclick={handleBackdropClick} 
+    role="button" 
+    tabindex="0" 
+    onkeydown={(e) => e.key === 'Enter' && onMobileClose?.()} 
+    aria-label="Close sidebar"
+  >
+    <div 
+      class="sidebar mobile-sidebar" 
+      class:mobile-open={mobileOpen} 
+      onclick={(e) => e.stopPropagation()}
+    >
       {@render SidebarContent()}
     </div>
   </div>
@@ -197,129 +267,142 @@
 
 {#snippet SidebarContent()}
   <div class="sidebar-header">
-    <h2>Chat History</h2>
-    {#if mobileOpen}
-      <button class="btn-mobile-close" onclick={onMobileClose} title="Close sidebar" aria-label="Close sidebar">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    {/if}
-    <button class="btn-new-chat" onclick={handleNewChat} title="Start a new chat">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 5v14M5 12h14"/>
-      </svg>
-      New Chat
+    <button class="btn-new-chat" onclick={handleNewChat}>
+      <Pencil size={16} />
+      <span>New Chat</span>
     </button>
-
+    
     <div class="search-container">
       <div class="search-input-wrapper">
-        <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/>
-          <path d="m21 21-4.35-4.35"/>
-        </svg>
+        <Search size={16} class="search-icon" />
         <input
           type="text"
           class="search-input"
           placeholder="Search chats..."
-          value={searchQuery}
-          oninput={handleSearchInput}
+          bind:value={searchQuery}
         />
         {#if searchQuery}
-          <button class="clear-search-btn" onclick={clearSearch} title="Clear search">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 6L6 18M6 6l12 12"/>
-            </svg>
+          <button class="clear-search-btn" onclick={() => searchQuery = ''}>
+            <X size={14} />
           </button>
         {/if}
       </div>
-
-      <label class="filter-checkbox">
-        <input type="checkbox" bind:checked={showOnlyFavorites} onchange={toggleFavoritesFilter} />
-        <span>Favorites only</span>
-      </label>
     </div>
   </div>
 
-  <div class="sessions-list">
-    {#if loading || isSearching}
-      <!-- Loading skeleton -->
+  <div class="sessions-list" onclick={closeMenu}>
+    {#if loading}
       {#each [1, 2, 3, 4, 5] as _}
         <div class="session-skeleton"></div>
       {/each}
-    {:else if sessions.length === 0}
-      <!-- Empty state -->
+    {:else if filteredSessions.length === 0}
       <div class="empty-state">
         {#if searchQuery}
-          <div class="empty-icon">🔍</div>
+          <div class="empty-icon">
+            <Search size={32} />
+          </div>
           <p>No chats found for "{searchQuery}"</p>
-          <button class="clear-search-btn-inline" onclick={clearSearch}>Clear search</button>
         {:else}
-          <div class="empty-icon">💬</div>
+          <div class="empty-icon">
+            <MessageSquare size={32} />
+          </div>
           <p>No chat history yet</p>
           <p class="empty-hint">Start a conversation to see it here</p>
         {/if}
       </div>
     {:else}
-      {#if favoriteSessions.length > 0}
-        <div class="section-header">★ FAVORITES</div>
-        {#each favoriteSessions as session (session.id)}
-          <div
-            class="session-item"
-            class:active={session.id === currentSessionId}
-            onclick={() => handleSessionClick(session.id)}
-            role="button"
-            tabindex="0"
-            onkeydown={(e) => e.key === 'Enter' && handleSessionClick(session.id)}
-          >
-            <button
-              class="star-btn favorited"
-              onclick={(e) => toggleFavorite(session.id, e)}
-              title="Unstar"
+      {#each groupedSessions() as group}
+        <div class="time-group">
+          <div class="group-header">{group.name}</div>
+          {#each group.sessions as session (session.id)}
+            <div
+              class="session-item"
+              class:active={session.id === currentSessionId}
+              class:editing={editingSessionId === session.id}
+              onclick={() => handleSessionClick(session.id)}
+              role="button"
+              tabindex="0"
+              onkeydown={(e) => e.key === 'Enter' && handleSessionClick(session.id)}
             >
-              ⭐
-            </button>
-            <div class="session-content">
-              <div class="session-title">{session.title}</div>
+              <div class="session-content">
+                {#if editingSessionId === session.id}
+                  <div class="edit-row">
+                    <input
+                      id="edit-input-{session.id}"
+                      type="text"
+                      class="edit-input"
+                      bind:value={editTitle}
+                      onkeydown={(e) => handleEditKeydown(e, session.id)}
+                      onclick={(e) => e.stopPropagation()}
+                    />
+                    <button class="edit-btn save" onclick={(e) => saveRename(session.id, e)}>
+                      <Check size={14} />
+                    </button>
+                    <button class="edit-btn cancel" onclick={(e) => cancelEditing(e)}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                {:else}
+                  <div class="session-title-row">
+                    <div class="session-title">{session.title}</div>
+                    <div class="action-buttons">
+                      {#if session.isFavorite}
+                        <button
+                          class="pin-btn"
+                          onclick={(e) => toggleFavorite(session.id, e)}
+                          title="Unpin"
+                        >
+                          <Pin size={12} fill="currentColor" />
+                        </button>
+                      {:else}
+                        <button
+                          class="pin-btn hidden"
+                          onclick={(e) => toggleFavorite(session.id, e)}
+                          title="Pin to top"
+                        >
+                          <Pin size={12} />
+                        </button>
+                      {/if}
+                      <div class="menu-container">
+                        <button
+                          class="menu-btn hidden"
+                          onclick={(e) => toggleMenu(session.id, e)}
+                          title="More options"
+                        >
+                          <MoreVertical size={14} />
+                        </button>
+                        {#if openMenuId === session.id}
+                          <div class="dropdown-menu">
+                            <button class="dropdown-item" onclick={(e) => startEditing(session, e)}>
+                              <Pencil size={14} />
+                              <span>Rename</span>
+                            </button>
+                            <button class="dropdown-item delete" onclick={(e) => deleteSession(session.id, e)}>
+                              <Trash2 size={14} />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  </div>
+                  {#if session.lastMessagePreview}
+                    <div class="session-preview">{session.lastMessagePreview}</div>
+                  {/if}
+                {/if}
+              </div>
+              <div class="session-meta">{formatTimestamp(session.updatedAt)}</div>
             </div>
-          </div>
-        {/each}
-      {/if}
-
-      {#if regularSessions.length > 0}
-        {#if favoriteSessions.length > 0}
-          <div class="section-header">ALL CHATS</div>
-        {/if}
-        {#each regularSessions as session (session.id)}
-          <div
-            class="session-item"
-            class:active={session.id === currentSessionId}
-            onclick={() => handleSessionClick(session.id)}
-            role="button"
-            tabindex="0"
-            onkeydown={(e) => e.key === 'Enter' && handleSessionClick(session.id)}
-          >
-            <button
-              class="star-btn"
-              onclick={(e) => toggleFavorite(session.id, e)}
-              title="Star"
-            >
-              ☆
-            </button>
-            <div class="session-content">
-              <div class="session-title">{session.title}</div>
-            </div>
-          </div>
-        {/each}
-      {/if}
+          {/each}
+        </div>
+      {/each}
     {/if}
   </div>
 {/snippet}
 
 <style>
   .sidebar {
-    width: 240px;
+    width: 260px;
     height: 100%;
     background: var(--color-surface);
     border-right: 1px solid var(--color-border);
@@ -332,44 +415,34 @@
     padding-top: calc(var(--spacing-4) + env(safe-area-inset-top, 0px));
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
-    position: relative;
-  }
-
-  .sidebar-header h2 {
-    margin: 0 0 var(--spacing-3);
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--color-text);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
   }
 
   .btn-new-chat {
-    width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: var(--spacing-2);
-    padding: var(--spacing-2) var(--spacing-3);
-    background: var(--color-primary);
-    color: white;
-    border: none;
+    padding: var(--spacing-3) var(--spacing-4);
+    background: transparent;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     font-size: var(--text-sm);
     font-weight: 500;
     cursor: pointer;
-    transition: var(--transition-fast);
+    transition: all 0.15s ease;
   }
 
   .btn-new-chat:hover {
-    background: var(--color-primary-dark);
-    transform: translateY(-1px);
-  }
-
-  .btn-new-chat svg {
-    flex-shrink: 0;
+    background: var(--color-background);
+    border-color: var(--color-text);
   }
 
   .search-container {
-    margin-top: var(--spacing-3);
+    position: relative;
   }
 
   .search-input-wrapper {
@@ -378,7 +451,7 @@
     align-items: center;
   }
 
-  .search-icon {
+  :global(.search-icon) {
     position: absolute;
     left: var(--spacing-3);
     color: var(--color-text-light);
@@ -387,20 +460,21 @@
 
   .search-input {
     width: 100%;
-    padding: var(--spacing-2) var(--spacing-3);
-    padding-left: calc(var(--spacing-3) + 20px);
-    padding-right: calc(var(--spacing-3) + 20px);
+    padding: var(--spacing-2-5) var(--spacing-3);
+    padding-left: calc(var(--spacing-3) + 24px);
+    padding-right: calc(var(--spacing-3) + 24px);
     background: var(--color-background);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     font-size: var(--text-sm);
     color: var(--color-text);
-    transition: var(--transition-fast);
+    transition: all 0.15s ease;
   }
 
   .search-input:focus {
     outline: none;
     border-color: var(--color-primary);
+    background: var(--color-surface);
   }
 
   .search-input::placeholder {
@@ -419,50 +493,12 @@
     align-items: center;
     justify-content: center;
     border-radius: var(--radius-md);
-    transition: var(--transition-fast);
+    transition: all 0.15s ease;
   }
 
   .clear-search-btn:hover {
+    color: var(--color-text);
     background: var(--color-surface);
-    color: var(--color-text);
-  }
-
-  .clear-search-btn-inline {
-    margin-top: var(--spacing-2);
-    padding: var(--spacing-2) var(--spacing-3);
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: var(--radius-lg);
-    font-size: var(--text-sm);
-    cursor: pointer;
-    transition: var(--transition-fast);
-  }
-
-  .clear-search-btn-inline:hover {
-    background: var(--color-primary-dark);
-  }
-
-  .filter-checkbox {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-2);
-    margin-top: var(--spacing-2);
-    padding: var(--spacing-1);
-    font-size: var(--text-sm);
-    color: var(--color-text);
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .filter-checkbox input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-  }
-
-  .filter-checkbox:hover {
-    color: var(--color-primary);
   }
 
   .sessions-list {
@@ -471,105 +507,271 @@
     padding: var(--spacing-2);
   }
 
-  .section-header {
-    font-size: var(--text-xs);
-    font-weight: 600;
-    color: var(--color-text-light);
-    padding: var(--spacing-3) var(--spacing-2) var(--spacing-1);
-    margin-top: var(--spacing-2);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+  .time-group {
+    margin-bottom: var(--spacing-4);
   }
 
-  .section-header:first-child {
-    margin-top: 0;
+  .group-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-light);
+    padding: var(--spacing-2) var(--spacing-3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--spacing-1);
   }
 
   .session-item {
     position: relative;
     width: 100%;
-    padding: var(--spacing-2) var(--spacing-2);
-    padding-left: 32px;
+    padding: var(--spacing-3);
     margin-bottom: var(--spacing-1);
-    background: var(--color-background);
-    border: 1px solid var(--color-border);
-    border-left: 3px solid transparent;
-    border-radius: var(--radius-md);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-lg);
     text-align: left;
     cursor: pointer;
-    transition: var(--transition-fast);
-    height: 36px;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-2);
+  }
+
+  .session-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .session-title-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-2);
   }
 
-  .star-btn {
-    position: absolute;
-    left: 6px;
-    top: 50%;
-    transform: translateY(-50%);
+  .session-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  .session-preview {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.4;
+  }
+
+  .session-meta {
+    font-size: 11px;
+    color: var(--color-text-light);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .session-item:hover .action-buttons,
+  .session-item.active .action-buttons {
+    opacity: 1;
+  }
+
+  .pin-btn {
     background: none;
     border: none;
-    font-size: 14px;
+    color: var(--color-text-light);
     cursor: pointer;
     padding: 2px;
-    line-height: 1;
-    opacity: 0.3;
-    transition: var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
   }
 
-  .star-btn:hover {
+  .pin-btn:hover {
+    color: var(--color-primary);
+    background: var(--color-background);
+  }
+
+  .pin-btn:not(.hidden) {
     opacity: 1;
-    transform: translateY(-50%) scale(1.1);
+    color: var(--color-primary);
   }
 
-  .star-btn.favorited {
+  .session-item:hover .pin-btn.hidden {
+    opacity: 0.5;
+  }
+
+  .session-item:hover .pin-btn.hidden:hover {
     opacity: 1;
   }
 
-  .session-item:hover .star-btn {
-    opacity: 0.6;
+  .menu-container {
+    position: relative;
   }
 
-  .session-item:hover .star-btn.favorited {
+  .menu-btn {
+    background: none;
+    border: none;
+    color: var(--color-text-light);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: all 0.15s ease;
+  }
+
+  .menu-btn:hover {
+    color: var(--color-text);
+    background: var(--color-background);
+  }
+
+  .session-item:hover .menu-btn.hidden {
+    opacity: 0.5;
+  }
+
+  .session-item:hover .menu-btn.hidden:hover {
     opacity: 1;
+  }
+
+  .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    min-width: 140px;
+    padding: var(--spacing-1);
+    margin-top: 4px;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    width: 100%;
+    padding: var(--spacing-2) var(--spacing-3);
+    background: none;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: left;
+  }
+
+  .dropdown-item:hover {
+    background: var(--color-background);
+  }
+
+  .dropdown-item.delete {
+    color: var(--color-error);
+  }
+
+  .dropdown-item.delete:hover {
+    background: rgba(239, 68, 68, 0.1);
   }
 
   .session-item:hover {
-    background: var(--color-surface);
-    border-left-color: var(--color-primary-light);
-    transform: translateX(2px);
+    background: var(--color-background);
   }
 
   .session-item.active {
-    background: var(--color-surface);
-    border-left-color: var(--color-primary);
-    border-color: var(--color-border);
-    transform: translateX(2px);
+    background: var(--color-background);
   }
 
   .session-item.active .session-title {
     font-weight: 600;
   }
 
-  .session-content {
+  .session-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 20px;
+    background: var(--color-primary);
+    border-radius: 0 2px 2px 0;
+  }
+
+  .edit-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    width: 100%;
+  }
+
+  .edit-input {
     flex: 1;
+    padding: var(--spacing-1) var(--spacing-2);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 14px;
+    outline: none;
     min-width: 0;
   }
 
-  .session-title {
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--color-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    line-height: 1;
+  .edit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-1);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .edit-btn.save {
+    background: var(--color-success);
+    color: white;
+  }
+
+  .edit-btn.cancel {
+    background: var(--color-surface);
+    color: var(--color-text-light);
+  }
+
+  .edit-btn:hover {
+    transform: scale(1.1);
   }
 
   .session-skeleton {
-    height: 36px;
+    height: 56px;
     margin-bottom: var(--spacing-1);
+    margin-left: var(--spacing-2);
+    margin-right: var(--spacing-2);
     background: linear-gradient(
       90deg,
       var(--color-background) 25%,
@@ -595,13 +797,13 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-6) var(--spacing-4);
+    padding: var(--spacing-8) var(--spacing-4);
     text-align: center;
     color: var(--color-text-secondary);
   }
 
   .empty-icon {
-    font-size: 48px;
+    color: var(--color-text-light);
     margin-bottom: var(--spacing-3);
     opacity: 0.5;
   }
@@ -616,7 +818,6 @@
     color: var(--color-text-light);
   }
 
-  /* Scrollbar styling */
   .sessions-list::-webkit-scrollbar {
     width: 4px;
   }
@@ -634,32 +835,6 @@
     background: var(--color-text-light);
   }
 
-  /* Mobile Close Button */
-  .btn-mobile-close {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    width: 44px;
-    height: 44px;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: var(--color-background);
-    border: 1px solid var(--color-border);
-    border-radius: 50%;
-    color: var(--color-text);
-    cursor: pointer;
-    transition: var(--transition-fast);
-    z-index: 210; /* Above sidebar content */
-  }
-
-  .btn-mobile-close:hover {
-    background: var(--color-surface);
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-  }
-
-  /* Desktop sidebar */
   .desktop-sidebar {
     display: flex;
     height: 100%;
@@ -667,15 +842,26 @@
 
   .mobile-sidebar {
     display: none;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease-out;
   }
 
-  /* Mobile Backdrop */
+  .mobile-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
   .sidebar-backdrop {
-    display: block;
+    display: none;
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
     z-index: 199;
+    opacity: 0;
+    transition: opacity 0.25s ease-out;
+  }
+
+  .sidebar-backdrop.open {
+    opacity: 1;
   }
 
   @media (max-width: 768px) {
@@ -689,13 +875,6 @@
 
     .sidebar-backdrop {
       display: block;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 199;
     }
 
     .sidebar {
@@ -704,35 +883,50 @@
       left: 0;
       width: 280px;
       height: 100vh;
-      height: 100dvh; /* Dynamic viewport height for mobile */
+      height: 100dvh;
       z-index: 200;
-      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
-      overflow: hidden;
-      /* Ensure sidebar captures all clicks */
-      pointer-events: auto;
-    }
-
-    .btn-mobile-close {
-      display: flex;
+      box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
     }
 
     .sidebar-header {
-      padding-top: calc(var(--spacing-4) + env(safe-area-inset-top, 0px) + 60px);
+      padding-top: calc(var(--spacing-4) + env(safe-area-inset-top, 0px));
     }
 
     .sessions-list {
-      height: calc(100dvh - 180px - env(safe-area-inset-top, 0px));
+      height: calc(100dvh - 140px - env(safe-area-inset-top, 0px));
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
     }
 
-    /* Ensure session items have proper touch targets */
     .session-item {
-      min-height: 48px;
-      padding: var(--spacing-3);
-      /* Prevent text selection on session items for better touch experience */
+      min-height: 56px;
       user-select: none;
       -webkit-user-select: none;
+    }
+
+    .action-buttons {
+      opacity: 1;
+    }
+
+    .pin-btn.hidden,
+    .menu-btn.hidden {
+      opacity: 0.3;
+    }
+
+    .dropdown-menu {
+      position: fixed;
+      top: auto;
+      bottom: 100px;
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
+      min-width: 200px;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .dropdown-item {
+      padding: var(--spacing-3) var(--spacing-4);
+      font-size: 14px;
     }
   }
 </style>

@@ -716,7 +716,7 @@
   }
 
   .mode-toggle button.active {
-    background: #4a9eff;
+    background: var(--color-primary);
     color: white;
   }
 

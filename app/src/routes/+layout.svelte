@@ -25,31 +25,35 @@
 
 <style>
   :global(:root) {
-    /* Terra & Sage Color Palette - Brightened */
-    --color-primary: #E07A52;
-    --color-primary-dark: #C55A38;
-    --color-primary-light: #F0A080;
-    --color-secondary: #E07A52;
-    --color-accent: #6B9E7C;
-    --color-bg: #FDF9F3;
-    --color-bg-subtle: #F7F2EA;
+    /* Marrow & Earth Color Palette */
+    --color-primary: #8c4c3e;
+    --color-primary-dark: #7a3f33;
+    --color-primary-light: rgba(140, 76, 62, 0.15);
+    --color-secondary: #7b6f63;
+    --color-accent: #7aa089;
+    --color-bg: #f9f5ef;
+    --color-bg-subtle: rgba(123, 111, 99, 0.08);
     --color-surface: #ffffff;
-    --color-text: #2D2D2D;
-    --color-text-secondary: #4A4A4A;
-    --color-text-light: #7A8B94;
-    --color-border: #D5D5D5;
-    --color-border-light: #E5E0D8;
-    --color-shadow: rgba(45, 45, 45, 0.08);
-    --color-success: #6B9E7C;
-    --color-warning: #D4A84B;
-    --color-error: #C84B4B;
+    --color-text: #363636;
+    --color-text-secondary: #7b6f63;
+    --color-text-light: rgba(123, 111, 99, 0.6);
+    --color-border: rgba(123, 111, 99, 0.2);
+    --color-border-light: rgba(123, 111, 99, 0.12);
+    --color-shadow: rgba(54, 54, 54, 0.08);
+    --color-success: #6b9e7c;
+    --color-warning: #d4a84b;
+    --color-error: #c84b4b;
 
     /* Enhanced Shadows */
     --shadow-xs: 0 1px 2px rgba(45, 45, 45, 0.05);
-    --shadow-sm: 0 1px 3px rgba(45, 45, 45, 0.1), 0 1px 2px rgba(45, 45, 45, 0.06);
-    --shadow-md: 0 4px 6px rgba(45, 45, 45, 0.07), 0 2px 4px rgba(45, 45, 45, 0.06);
-    --shadow-lg: 0 10px 15px rgba(45, 45, 45, 0.1), 0 4px 6px rgba(45, 45, 45, 0.05);
-    --shadow-xl: 0 20px 25px rgba(45, 45, 45, 0.1), 0 8px 10px rgba(45, 45, 45, 0.04);
+    --shadow-sm: 0 1px 3px rgba(45, 45, 45, 0.1),
+      0 1px 2px rgba(45, 45, 45, 0.06);
+    --shadow-md: 0 4px 6px rgba(45, 45, 45, 0.07),
+      0 2px 4px rgba(45, 45, 45, 0.06);
+    --shadow-lg: 0 10px 15px rgba(45, 45, 45, 0.1),
+      0 4px 6px rgba(45, 45, 45, 0.05);
+    --shadow-xl: 0 20px 25px rgba(45, 45, 45, 0.1),
+      0 8px 10px rgba(45, 45, 45, 0.04);
     --shadow-2xl: 0 25px 50px rgba(45, 45, 45, 0.25);
 
     /* Modern Border Radius */
@@ -147,14 +151,21 @@
 
     /* Danger button */
     --btn-danger-bg: var(--color-error);
-    --btn-danger-bg-hover: #B53F3F;
+    --btn-danger-bg-hover: #b53f3f;
     --btn-danger-text: white;
   }
 
   :global(body) {
     margin: 0;
     padding: 0;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+    font-family:
+      'Inter',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      'Roboto',
+      'Helvetica Neue',
+      sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background: var(--color-bg);
@@ -232,6 +243,13 @@
   /* Global button reset and base styles */
   :global(button) {
     font-family: inherit;
+  }
+  :global(button:focus) {
+    outline: none;
+  }
+  :global(button:focus-visible) {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
   }
 
   :global(.btn-primary),
@@ -334,8 +352,6 @@
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
   }
-
-  /* Button sizes */
   :global(.btn-sm) {
     height: var(--btn-height-sm);
     padding: 0 var(--spacing-3);

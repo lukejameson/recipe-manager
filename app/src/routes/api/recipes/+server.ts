@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/db';
 import { recipes, tags, recipeTags, users, DEFAULT_FEATURE_FLAGS } from '$lib/server/db/schema';
 import { getCurrentUser } from '$lib/server/auth';
-import { eq, and, like, or, inArray, sql, desc } from 'drizzle-orm';
+import { eq, and, like, or, inArray, sql, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { normalizeRecipeData } from '$lib/utils/recipe-helpers';
@@ -113,18 +113,14 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
   try {
     const token = cookies.get('auth_token');
     const user = await getCurrentUser(token);
-
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-
     const search = url.searchParams.get('search');
     const tagFilter = url.searchParams.get('tag');
     const favoriteOnly = url.searchParams.get('favorite') === 'true';
-
+    const sortBy = url.searchParams.get('sortBy') || 'date-newest';
     let query = db.select().from(recipes).where(eq(recipes.userId, user.userId));
-
-    // Apply search filter
     if (search) {
       query = db.select().from(recipes).where(
         and(
@@ -136,8 +132,6 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
         )
       );
     }
-
-    // Apply favorite filter
     if (favoriteOnly) {
       query = db.select().from(recipes).where(
         and(
@@ -146,9 +140,29 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
         )
       );
     }
-
-    // Get all recipes
-    let allRecipes = await query.orderBy(desc(recipes.createdAt));
+    let allRecipes = query;
+    switch (sortBy) {
+      case 'date-newest':
+        allRecipes = await allRecipes.orderBy(desc(recipes.createdAt));
+        break;
+      case 'date-oldest':
+        allRecipes = await allRecipes.orderBy(asc(recipes.createdAt));
+        break;
+      case 'title-asc':
+        allRecipes = await allRecipes.orderBy(asc(recipes.title));
+        break;
+      case 'title-desc':
+        allRecipes = await allRecipes.orderBy(desc(recipes.title));
+        break;
+      case 'rating-high':
+        allRecipes = await allRecipes.orderBy(desc(recipes.rating)).orderBy(desc(recipes.createdAt));
+        break;
+      case 'cooked-most':
+        allRecipes = await allRecipes.orderBy(desc(recipes.timesCooked)).orderBy(desc(recipes.createdAt));
+        break;
+      default:
+        allRecipes = await allRecipes.orderBy(desc(recipes.createdAt));
+    }
 
     // Apply tag filter (post-query since we need to check tags)
     if (tagFilter) {

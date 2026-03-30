@@ -99,7 +99,7 @@
 
 <div class="login-container">
   <div class="login-box">
-    <h1>Tabella</h1>
+    <h1>Marrow</h1>
 
     <div class="mode-tabs">
       <button
@@ -360,7 +360,7 @@
   input:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(217, 110, 72, 0.1);
+    box-shadow: 0 0 0 3px rgba(140, 76, 62, 0.15);
   }
 
   .checkbox-group {

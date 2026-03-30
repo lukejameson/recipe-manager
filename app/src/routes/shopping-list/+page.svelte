@@ -406,7 +406,7 @@
   }
 
   .btn-generate {
-    background: var(--color-accent);
+    background: var(--color-primary);
   }
 
   .loading {

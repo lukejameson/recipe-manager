@@ -260,6 +260,8 @@
     transition: var(--transition-normal);
     box-shadow: var(--shadow-sm);
     backdrop-filter: blur(8px);
+    opacity: 0;
+    pointer-events: none;
   }
 
   .favorite-btn:hover {
@@ -268,9 +270,21 @@
   }
 
   .favorite-btn.is-favorite {
-    background: var(--color-secondary);
-    color: white;
-    border-color: var(--color-secondary);
+    background: transparent;
+    color: #FFD700;
+    border: none;
+    opacity: 1;
+    pointer-events: auto;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  .recipe-card:hover .favorite-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .favorite-btn:hover {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .difficulty-badge {
@@ -376,7 +390,7 @@
   }
 
   .rating {
-    color: var(--color-secondary);
+    color: var(--color-accent);
     font-size: 1rem;
     white-space: nowrap;
   }
@@ -416,13 +430,13 @@
   }
 
   .tag {
-    background: var(--color-bg-subtle);
-    color: var(--color-text);
+    background: rgba(122, 160, 137, 0.12);
+    color: #5A7D6A;
     padding: var(--spacing-1) var(--spacing-2-5);
     border-radius: var(--radius-full);
     font-size: var(--text-xs);
     font-weight: var(--font-medium);
-    border: 1px solid var(--color-border);
+    border: 1px solid rgba(122, 160, 137, 0.3);
   }
 
   .actions {
@@ -516,6 +530,24 @@
       height: 44px;
       top: var(--spacing-3);
       right: var(--spacing-3);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .favorite-btn.is-favorite {
+      background: transparent;
+      color: #FFD700;
+      border: none;
+      box-shadow: none;
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .recipe-card:hover .favorite-btn {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .favorite-btn:hover {
+      opacity: 1;
+      pointer-events: auto;
     }
 
     .difficulty-badge {

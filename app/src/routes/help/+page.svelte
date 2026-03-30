@@ -116,7 +116,7 @@
   <div class="container">
     <h1>Help & Guide</h1>
     <p class="intro">
-      Welcome to Tabella! This guide will help you get the most out of the app.
+      Welcome to Marrow! This guide will help you get the most out of the app.
     </p>
 
     <div class="sections">

@@ -556,7 +556,13 @@ export const apiClient = {
 
   toggleFavoriteChat: (id: string) =>
     api<any>(`/api/chat-history/${id}/favorite`, { method: 'POST' }),
-
+  deleteChatSession: (id: string) =>
+    api<{ success: boolean }>(`/api/chat-history/${id}`, { method: 'DELETE' }),
+  updateChatSession: (id: string, data: { title: string }) =>
+    api<import('$lib/server/db/schema').ChatSession>(`/api/chat-history/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
   // Admin
   getAdminUsers: () =>
     api<Array<{

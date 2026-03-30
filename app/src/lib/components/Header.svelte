@@ -48,18 +48,18 @@
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 32 32"
         >
-          <rect width="32" height="32" rx="6" fill="#D96E48" />
+          <rect width="32" height="32" rx="6" fill="#8C4C3E" />
           <path
             d="M16 6c-4.4 0-8 3.6-8 8v6c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-6c0-4.4-3.6-8-8-8z"
             fill="#fff"
           />
           <ellipse cx="16" cy="8" rx="6" ry="2" fill="#fff" />
-          <circle cx="12" cy="13" r="1.5" fill="#D96E48" />
-          <circle cx="16" cy="15" r="1.5" fill="#D96E48" />
-          <circle cx="20" cy="13" r="1.5" fill="#D96E48" />
+          <circle cx="12" cy="13" r="1.5" fill="#8C4C3E" />
+          <circle cx="16" cy="15" r="1.5" fill="#8C4C3E" />
+          <circle cx="20" cy="13" r="1.5" fill="#8C4C3E" />
           <path d="M10 24h12v2H10z" fill="#fff" />
         </svg>
-        Tabella
+        Marrow
       </a>
     </h1>
 
@@ -172,7 +172,7 @@
   }
 
   header {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(249, 245, 239, 0.98);
     border-bottom: 1px solid var(--color-border-light);
     padding: var(--spacing-4) 0;
     padding-top: calc(var(--spacing-4) + env(safe-area-inset-top));
@@ -245,7 +245,7 @@
 
   .desktop-nav > a.active {
     color: var(--color-primary);
-    background: var(--color-bg-subtle);
+    background: var(--color-primary-light);
     font-weight: var(--font-semibold);
   }
 
@@ -333,9 +333,15 @@
     background: var(--color-bg-subtle);
   }
 
-  .user-dropdown a.active {
+.user-dropdown a.active {
     background: var(--color-primary);
     color: white;
+  }
+  .user-dropdown a.active:hover {
+    background: var(--color-primary-dark);
+  }
+  .user-dropdown a.active:hover {
+    background: #6A8F79;
   }
 
   .user-dropdown a.active:hover {

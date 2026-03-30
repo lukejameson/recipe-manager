@@ -337,7 +337,7 @@
                 onclick={() => { setViewMode('grid'); showViewDropdown = false; }}
               >
                 <LayoutGrid size={18} />
-                <span>Grid View</span>
+                <span>Grid</span>
                 {#if viewMode === 'grid'}
                   <span class="check">✓</span>
                 {/if}
@@ -348,7 +348,7 @@
                 onclick={() => { setViewMode('list'); showViewDropdown = false; }}
               >
                 <List size={18} />
-                <span>List View</span>
+                <span>List</span>
                 {#if viewMode === 'list'}
                   <span class="check">✓</span>
                 {/if}
@@ -359,7 +359,7 @@
                 onclick={() => { setViewMode('compact'); showViewDropdown = false; }}
               >
                 <PanelTop size={18} />
-                <span>Compact View</span>
+                <span>Compact</span>
                 {#if viewMode === 'compact'}
                   <span class="check">✓</span>
                 {/if}

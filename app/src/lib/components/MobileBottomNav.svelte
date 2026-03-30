@@ -121,7 +121,7 @@
     position: relative;
   }
 
-  .center-button {
+.center-button {
     width: 56px;
     height: 56px;
     background: var(--color-primary);
@@ -133,6 +133,14 @@
     align-items: center;
     justify-content: center;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .center-button:hover {
+    transform: translateY(-14px);
+    box-shadow: 0 6px 16px rgba(224, 122, 82, 0.5);
+  }
+  .center-button:active {
+    transform: translateY(-10px);
+    box-shadow: 0 2px 8px rgba(224, 122, 82, 0.4);
   }
 
   .center-button:hover {

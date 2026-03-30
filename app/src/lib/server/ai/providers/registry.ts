@@ -1,64 +1,53 @@
 import type { LLMProvider } from './base.js';
+import { AnthropicProvider } from './anthropic.js';
+import { OpenAIProvider } from './openai.js';
+import { GoogleProvider } from './google.js';
+import { OpenRouterProvider } from './openrouter.js';
 
-/**
- * Registry for managing LLM providers
- */
 export class ProviderRegistry {
 	private providers = new Map<string, LLMProvider>();
+	private defaultsInitialized = false;
 
-	/**
-	 * Register a provider
-	 */
 	register(provider: LLMProvider): void {
 		this.providers.set(provider.id, provider);
 	}
 
-	/**
-	 * Get a provider by ID
-	 */
 	get(id: string): LLMProvider | undefined {
+		this.ensureDefaultsInitialized();
 		return this.providers.get(id);
 	}
 
-	/**
-	 * Get all registered providers
-	 */
 	getAll(): LLMProvider[] {
+		this.ensureDefaultsInitialized();
 		return Array.from(this.providers.values());
 	}
 
-	/**
-	 * Get providers that have valid API keys configured
-	 */
 	getAvailable(apiKeys: Record<string, string>): LLMProvider[] {
 		return this.getAll().filter((provider) => apiKeys[provider.id]);
 	}
 
-	/**
-	 * Unregister a provider by ID
-	 */
 	unregister(id: string): void {
 		this.providers.delete(id);
 	}
 
-	/**
-	 * Clear all registered providers
-	 */
 	clear(): void {
 		this.providers.clear();
+		this.defaultsInitialized = false;
+	}
+
+	private ensureDefaultsInitialized(): void {
+		if (!this.defaultsInitialized) {
+			initializeDefaultProviders();
+			this.defaultsInitialized = true;
+		}
 	}
 }
 
-/**
- * Singleton instance of the provider registry
- */
 export const providerRegistry = new ProviderRegistry();
 
-/**
- * Initialize default providers
- * Providers are registered by AIServiceV2 when it's initialized
- */
 export function initializeDefaultProviders(): void {
-	// Providers are registered by AIServiceV2 when it's initialized
-	// This function exists for future extensibility
+	providerRegistry.register(new AnthropicProvider());
+	providerRegistry.register(new OpenAIProvider());
+	providerRegistry.register(new GoogleProvider());
+	providerRegistry.register(new OpenRouterProvider());
 }

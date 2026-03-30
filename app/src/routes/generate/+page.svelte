@@ -1274,13 +1274,18 @@
     min-height: 0;
     height: 100%;
   }
+  @media (max-width: 768px) {
+    .main-content {
+      padding-left: 0;
+    }
+  }
 
   .container {
     flex: 1;
     display: flex;
     flex-direction: column;
     max-width: 900px;
-    width: 100%;
+    margin: 0 auto;
     padding: var(--spacing-4);
     min-height: 0;
     height: 100%;

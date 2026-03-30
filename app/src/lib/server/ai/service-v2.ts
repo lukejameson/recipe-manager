@@ -42,14 +42,8 @@ export class AIServiceV2 {
 	 */
 	private async initialize(): Promise<void> {
 		if (this.initialized) return;
-
-		// Register built-in providers
-		providerRegistry.register(new AnthropicProvider());
-		providerRegistry.register(new OpenAIProvider());
-		providerRegistry.register(new GoogleProvider());
-		providerRegistry.register(new OpenRouterProvider());
-
-		// Load custom provider configs and register OpenAI-compatible providers
+		// Default providers are auto-registered by providerRegistry on first access
+		// Only need to load custom OpenAI-compatible providers from database
 		const configs = await db.query.providerConfigs?.findMany({
 			where: eq(providerConfigs.providerId, 'openai-compatible')
 		});
