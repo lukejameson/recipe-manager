@@ -15,34 +15,7 @@
   } from 'lucide-svelte';
 
   let {} = $props();
-  let mobileMenuOpen = $state(false);
   let userMenuOpen = $state(false);
-  let mobileMenuButtonRef: HTMLButtonElement | undefined = $state();
-  let mobileNavRef: HTMLElement | undefined = $state();
-  let firstMobileLinkRef: HTMLAnchorElement | undefined = $state();
-  let lastFocusedElement: Element | null = null;
-
-  function toggleMobileMenu() {
-    if (!mobileMenuOpen) {
-      // Opening menu - save focus and trap
-      lastFocusedElement = document.activeElement;
-      mobileMenuOpen = true;
-      // Focus first item after transition
-      setTimeout(() => {
-        firstMobileLinkRef?.focus();
-      }, 50);
-    } else {
-      closeMobileMenu();
-    }
-  }
-
-  function closeMobileMenu() {
-    mobileMenuOpen = false;
-    // Return focus to hamburger button
-    setTimeout(() => {
-      mobileMenuButtonRef?.focus();
-    }, 50);
-  }
 
   function toggleUserMenu() {
     userMenuOpen = !userMenuOpen;
@@ -59,61 +32,9 @@
     }
   }
 
-  function handleBackdropClick(event: MouseEvent) {
-    const target = event.target as HTMLElement;
-    if (target.classList.contains('mobile-menu-backdrop')) {
-      closeMobileMenu();
-    }
-  }
-
-  function handleKeydown(event: KeyboardEvent) {
-    // ESC key closes mobile menu
-    if (event.key === 'Escape' && mobileMenuOpen) {
-      event.preventDefault();
-      closeMobileMenu();
-      return;
-    }
-
-    // Trap focus in mobile menu
-    if (mobileMenuOpen && event.key === 'Tab') {
-      const focusableElements = mobileNavRef?.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled])'
-      );
-      if (!focusableElements || focusableElements.length === 0) return;
-
-      const firstElement = focusableElements[0];
-      const lastElement = focusableElements[focusableElements.length - 1];
-
-      if (event.shiftKey) {
-        // Shift+Tab
-        if (document.activeElement === firstElement) {
-          event.preventDefault();
-          lastElement.focus();
-        }
-      } else {
-        // Tab
-        if (document.activeElement === lastElement) {
-          event.preventDefault();
-          firstElement.focus();
-        }
-      }
-    }
-  }
-
-  // Prevent body scroll when mobile menu is open
-  $effect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  });
 </script>
 
-<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
+<svelte:window onclick={handleClickOutside} />
 
 <!-- Skip navigation link -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -121,7 +42,7 @@
 <header>
   <div class="container">
     <h1>
-      <a href="/" onclick={closeMobileMenu}>
+      <a href="/">
         <svg
           class="logo"
           xmlns="http://www.w3.org/2000/svg"
@@ -143,22 +64,6 @@
     </h1>
 
     {#if authStore.isAuthenticated}
-      <!-- Mobile hamburger button -->
-      <button
-        bind:this={mobileMenuButtonRef}
-        class="mobile-menu-btn"
-        onclick={toggleMobileMenu}
-        aria-label="Toggle menu"
-        aria-expanded={mobileMenuOpen}
-        aria-controls="mobile-navigation"
-      >
-        <span class="hamburger" class:open={mobileMenuOpen}>
-          <span></span>
-          <span></span>
-          <span></span>
-        </span>
-      </button>
-
       <!-- Desktop navigation -->
       <nav class="desktop-nav">
         <a
@@ -242,129 +147,6 @@
         </div>
       </nav>
 
-      <!-- Mobile menu backdrop -->
-      {#if mobileMenuOpen}
-        <div
-          class="mobile-menu-backdrop"
-          onclick={handleBackdropClick}
-          role="presentation"
-        ></div>
-      {/if}
-
-      <!-- Mobile navigation (slide-out menu) -->
-      <nav
-        bind:this={mobileNavRef}
-        id="mobile-navigation"
-        class="mobile-nav"
-        class:mobile-open={mobileMenuOpen}
-        aria-label="Mobile navigation"
-      >
-        <div class="mobile-section">
-          <a
-            bind:this={firstMobileLinkRef}
-            href="/"
-            class:active={$page.url.pathname === '/'}
-            onclick={closeMobileMenu}
-          >
-            <BookOpen size={22} />
-            <span class="label">Recipes</span>
-          </a>
-          <a
-            href="/recipe/import"
-            class:active={$page.url.pathname === '/recipe/import'}
-            onclick={closeMobileMenu}
-          >
-            <Download size={22} />
-            <span class="label">Import</span>
-          </a>
-          <a
-            href="/generate"
-            class:active={$page.url.pathname === '/generate'}
-            onclick={closeMobileMenu}
-          >
-            <Sparkles size={22} />
-            <span class="label">Recipe Ideas</span>
-          </a>
-          <a
-            href="/collections"
-            class:active={$page.url.pathname.startsWith('/collections')}
-            onclick={closeMobileMenu}
-          >
-            <FolderOpen size={22} />
-            <span class="label">Collections</span>
-          </a>
-        </div>
-
-        <div class="mobile-section-divider"></div>
-
-        <div class="mobile-section">
-          <a
-            href="/tags"
-            class:active={$page.url.pathname === '/tags'}
-            onclick={closeMobileMenu}
-          >
-            <Tag size={22} />
-            <span class="label">Tags</span>
-          </a>
-        </div>
-
-        <div class="mobile-section-divider"></div>
-
-        <div class="mobile-section">
-          <a
-            href="/profile"
-            class:active={$page.url.pathname === '/profile'}
-            onclick={closeMobileMenu}
-          >
-            <User size={22} />
-            <span class="label">Profile</span>
-          </a>
-          <a
-            href="/settings"
-            class:active={$page.url.pathname === '/settings'}
-            onclick={closeMobileMenu}
-          >
-            <Settings size={22} />
-            <span class="label">Settings</span>
-          </a>
-          <a
-            href="/help"
-            class:active={$page.url.pathname === '/help'}
-            onclick={closeMobileMenu}
-          >
-            <HelpCircle size={22} />
-            <span class="label">Help</span>
-          </a>
-        </div>
-
-        {#if authStore.isAdmin}
-          <div class="mobile-section-divider"></div>
-          <div class="mobile-section">
-            <a
-              href="/admin"
-              class:active={$page.url.pathname.startsWith('/admin')}
-              onclick={closeMobileMenu}
-              class="admin-link"
-            >
-              <Shield size={22} />
-              <span class="label">Admin</span>
-            </a>
-          </div>
-        {/if}
-
-        <div class="mobile-section mobile-logout-section">
-          <button
-            onclick={() => {
-              authStore.logout();
-              closeMobileMenu();
-            }}
-            class="logout-btn"
-          >
-            <LogOut size={22} />
-            <span class="label">Log out</span>
-          </button>
-        </div>
-      </nav>
     {/if}
   </div>
 </header>
@@ -582,21 +364,6 @@
     background: #fef2f2 !important;
   }
 
-  /* Mobile menu button */
-  .mobile-menu-btn {
-    display: none;
-  }
-
-  /* Mobile navigation - hidden by default */
-  .mobile-nav {
-    display: none;
-  }
-
-  /* Mobile menu backdrop */
-  .mobile-menu-backdrop {
-    display: none;
-  }
-
   @media (max-width: 768px) {
     header {
       padding: var(--spacing-3) 0;
@@ -620,154 +387,6 @@
     /* Hide desktop nav on mobile */
     .desktop-nav {
       display: none;
-    }
-
-    /* Show mobile menu button */
-    .mobile-menu-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: none;
-      border: none;
-      padding: var(--spacing-2);
-      cursor: pointer;
-      z-index: 101;
-      min-height: 44px;
-      min-width: 44px;
-    }
-
-    .hamburger {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      width: 24px;
-      height: 20px;
-      position: relative;
-    }
-
-    .hamburger span {
-      display: block;
-      height: 3px;
-      width: 100%;
-      background: var(--color-text);
-      border-radius: 2px;
-      transition: all 0.3s ease;
-    }
-
-    .hamburger.open span:nth-child(1) {
-      transform: rotate(45deg) translate(6px, 6px);
-    }
-
-    .hamburger.open span:nth-child(2) {
-      opacity: 0;
-    }
-
-    .hamburger.open span:nth-child(3) {
-      transform: rotate(-45deg) translate(6px, -6px);
-    }
-
-    /* Mobile menu backdrop */
-    .mobile-menu-backdrop {
-      display: block;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 99;
-      opacity: 0;
-      animation: fadeIn 0.3s ease forwards;
-    }
-
-    @keyframes fadeIn {
-      to {
-        opacity: 1;
-      }
-    }
-
-    /* Mobile nav slide-out */
-    .mobile-nav {
-      display: flex;
-      flex-direction: column;
-      position: fixed;
-      top: 0;
-      right: -100%;
-      width: 280px;
-      height: 100vh;
-      height: calc(100vh - env(safe-area-inset-top));
-      height: calc(100dvh - env(safe-area-inset-top));
-      background: var(--color-surface);
-      box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
-      transition: right 0.3s ease;
-      padding: var(--spacing-16) var(--spacing-4) var(--spacing-4);
-      padding-top: calc(var(--spacing-16) + env(safe-area-inset-top));
-      z-index: 100;
-      overflow-y: auto;
-    }
-
-    .mobile-nav.mobile-open {
-      right: 0;
-    }
-
-    .mobile-section {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .mobile-section a,
-    .mobile-section button {
-      width: 100%;
-      padding: var(--spacing-4);
-      text-align: left;
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-4);
-      min-height: 52px;
-      border-radius: var(--radius-lg);
-      font-size: var(--text-base);
-      color: var(--color-text);
-      text-decoration: none;
-      background: none;
-      border: none;
-      cursor: pointer;
-      transition: var(--transition-fast);
-    }
-
-    .mobile-section a:hover,
-    .mobile-section button:hover {
-      background: var(--color-bg-subtle);
-    }
-
-    .mobile-section a.active {
-      background: var(--color-primary);
-      color: white;
-      font-weight: var(--font-semibold);
-    }
-
-    .mobile-section-divider {
-      height: 1px;
-      background: var(--color-border);
-      margin: var(--spacing-3) var(--spacing-4);
-    }
-
-    .mobile-logout-section {
-      margin-top: auto;
-      padding-top: var(--spacing-4);
-      border-top: 1px solid var(--color-border);
-    }
-
-    .logout-btn {
-      color: var(--color-error) !important;
-    }
-
-    .logout-btn:hover {
-      background: #fef2f2 !important;
-    }
-
-    .admin-link {
-      color: #7c3aed !important;
-    }
-
-    .admin-link:hover {
-      background: #f5f3ff !important;
     }
   }
 </style>

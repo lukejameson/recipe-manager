@@ -406,6 +406,7 @@
 
   .app {
     min-height: 100vh;
+    min-height: 100dvh; /* Dynamic viewport for iOS Safari */
     display: flex;
     flex-direction: column;
     background: var(--color-bg);

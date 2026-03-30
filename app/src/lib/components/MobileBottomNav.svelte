@@ -82,6 +82,7 @@
     left: 0;
     right: 0;
     height: 64px;
+    height: calc(64px + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
     background: white;
     border-top: 1px solid var(--color-border-light);
@@ -89,7 +90,8 @@
     z-index: 100;
     display: flex;
     justify-content: space-around;
-    align-items: center;
+    align-items: flex-start;
+    padding-top: 8px;
   }
 
   .nav-item {
@@ -97,7 +99,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100%;
+    height: 48px;
     background: none;
     border: none;
     color: var(--color-text-light);
