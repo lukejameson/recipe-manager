@@ -2,6 +2,8 @@
   import AIBadge from './AIBadge.svelte';
   import AIButton from './AIButton.svelte';
   import { apiClient } from '$lib/api/client';
+  import { getItemTexts } from '$lib/utils/recipe-helpers';
+  import type { RecipeItemList } from '$lib/server/db/schema';
 
   type AdaptationType =
     | 'vegan'
@@ -31,8 +33,8 @@
     recipe: {
       id: string;
       title: string;
-      ingredients: string[];
-      instructions: string[];
+      ingredients: RecipeItemList;
+      instructions: RecipeItemList;
     };
     onClose: () => void;
     onSaveAsCopy: (adapted: AdaptedRecipe) => void;
@@ -68,8 +70,8 @@
       const result = await apiClient.adaptRecipe({
         recipe: {
           title: recipe.title,
-          ingredients: recipe.ingredients,
-          instructions: recipe.instructions,
+          ingredients: getItemTexts(recipe.ingredients),
+          instructions: getItemTexts(recipe.instructions),
         },
         adaptationType: selectedType,
       });

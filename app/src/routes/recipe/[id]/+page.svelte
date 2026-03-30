@@ -8,6 +8,8 @@
   import RecipeComponentView from '$lib/components/RecipeComponentView.svelte';
   import { formatTime, formatServings, parseDurationFromText, formatTimerDisplay } from '$lib/utils/format';
   import { scaleRecipe } from '$lib/utils/recipe-scaling';
+  import { getItemTexts } from '$lib/utils/recipe-helpers';
+  import type { RecipeItem } from '$lib/server/db/schema';
   import AIButton from '$lib/components/ai/AIButton.svelte';
   import SubstitutionModal from '$lib/components/ai/SubstitutionModal.svelte';
   import ImprovementModal from '$lib/components/ai/ImprovementModal.svelte';
@@ -57,6 +59,18 @@
   let showMoreMenu = $state(false);
   let generatingPdf = $state(false);
 
+  // Derived: sorted text arrays from structured recipe items
+  const ingredientTexts = $derived(
+    recipe?.ingredients?.items
+      ?.toSorted((a: RecipeItem, b: RecipeItem) => (a.order ?? 0) - (b.order ?? 0))
+      .map((i: RecipeItem) => i.text) ?? []
+  );
+  const instructionTexts = $derived(
+    recipe?.instructions?.items
+      ?.toSorted((a: RecipeItem, b: RecipeItem) => (a.order ?? 0) - (b.order ?? 0))
+      .map((i: RecipeItem) => i.text) ?? []
+  );
+
   function closeMoreMenu() {
     showMoreMenu = false;
   }
@@ -98,7 +112,7 @@
 
           <h2 style="font-size: 20px; margin: 25px 0 15px; color: #333; border-bottom: 2px solid #e0e0e0; padding-bottom: 8px;">Instructions</h2>
           <ol style="margin: 0; padding-left: 20px; line-height: 1.8;">
-            ${recipe.instructions.map((inst: string) => `<li style="margin-bottom: 12px;">${inst}</li>`).join('')}
+            ${instructionTexts.map((inst: string) => `<li style="margin-bottom: 12px;">${inst}</li>`).join('')}
           </ol>
 
           ${recipe.notes ? `
@@ -154,7 +168,7 @@
 
     try {
       const nutrition = await apiClient.calculateNutrition({
-        ingredients: recipe.ingredients,
+        ingredients: ingredientTexts,
         servings: recipe.servings || 1,
         title: recipe.title,
       });
@@ -312,8 +326,8 @@
 
   // Get duration for current step
   const currentStepDuration = $derived(
-    recipe?.instructions?.[currentStep]
-      ? parseDurationFromText(recipe.instructions[currentStep])
+    instructionTexts[currentStep]
+      ? parseDurationFromText(instructionTexts[currentStep])
       : null
   );
 
@@ -405,7 +419,7 @@
   }
 
   function nextStep() {
-    if (currentStep < (recipe?.instructions?.length || 0) - 1) {
+    if (currentStep < instructionTexts.length - 1) {
       currentStep++;
     }
   }
@@ -418,8 +432,8 @@
 
   const scaledIngredients = $derived(
     recipe && scaledServings !== '' && recipe.servings
-      ? scaleRecipe(recipe.ingredients, recipe.servings, Number(scaledServings))
-      : recipe?.ingredients || []
+      ? scaleRecipe(ingredientTexts, recipe.servings, Number(scaledServings))
+      : ingredientTexts
   );
 
   async function handleDelete() {
@@ -449,9 +463,9 @@
     if (recipe.cookTime) jsonLd["cookTime"] = `PT${recipe.cookTime}M`;
     if (recipe.totalTime) jsonLd["totalTime"] = `PT${recipe.totalTime}M`;
     if (recipe.servings) jsonLd["recipeYield"] = `${recipe.servings} servings`;
-    if (recipe.ingredients?.length) jsonLd["recipeIngredient"] = recipe.ingredients;
-    if (recipe.instructions?.length) {
-      jsonLd["recipeInstructions"] = recipe.instructions.map((step: string, i: number) => ({
+    if (ingredientTexts.length) jsonLd["recipeIngredient"] = ingredientTexts;
+    if (instructionTexts.length) {
+      jsonLd["recipeInstructions"] = instructionTexts.map((step: string, i: number) => ({
         "@type": "HowToStep",
         "position": i + 1,
         "text": step
@@ -516,13 +530,20 @@
     }
   }
 
+  // Helper to convert string[] from AI modals to { items: RecipeItem[] }
+  function stringsToItemList(items: string[]): { items: RecipeItem[] } {
+    return {
+      items: items.map((text, i) => ({ id: crypto.randomUUID(), text, order: i }))
+    };
+  }
+
   async function handleSaveAdaptedAsCopy(adapted: any) {
     try {
       const newRecipe = await apiClient.createRecipe({
         title: adapted.title,
         description: recipe.description,
-        ingredients: adapted.ingredients,
-        instructions: adapted.instructions,
+        ingredients: stringsToItemList(adapted.ingredients),
+        instructions: stringsToItemList(adapted.instructions),
         prepTime: recipe.prepTime,
         cookTime: recipe.cookTime,
         totalTime: recipe.totalTime,
@@ -542,8 +563,8 @@
     try {
       await apiClient.updateRecipe(recipe.id, {
         title: adapted.title,
-        ingredients: adapted.ingredients,
-        instructions: adapted.instructions,
+        ingredients: stringsToItemList(adapted.ingredients),
+        instructions: stringsToItemList(adapted.instructions),
       });
       showAdaptModal = false;
       await loadRecipe();
@@ -556,8 +577,8 @@
     try {
       await apiClient.updateRecipe(recipe.id, {
         title: improved.title,
-        ingredients: improved.ingredients,
-        instructions: improved.instructions,
+        ingredients: stringsToItemList(improved.ingredients),
+        instructions: stringsToItemList(improved.instructions),
         // Clear saved improvement ideas since they've been applied
         improvementIdeas: undefined,
       });
@@ -656,7 +677,7 @@
         <!-- Cooking Mode View -->
         <div class="cooking-mode">
           <div class="cooking-header">
-            <h2>Step {currentStep + 1} of {recipe.instructions.length}</h2>
+            <h2>Step {currentStep + 1} of {instructionTexts.length}</h2>
             <button onclick={handleMarkAsCooked} class="btn-mark-cooked">
               <span class="icon">✓</span>
               <span>Mark as Cooked</span>
@@ -665,7 +686,7 @@
 
           <div class="cooking-step">
             <div class="step-number">{currentStep + 1}</div>
-            <p class="step-text">{recipe.instructions[currentStep]}</p>
+            <p class="step-text">{instructionTexts[currentStep]}</p>
           </div>
 
           <!-- Timer Section -->
@@ -731,7 +752,7 @@
               <span class="icon">←</span>
               <span>Previous</span>
             </button>
-            <button onclick={nextStep} disabled={currentStep === recipe.instructions.length - 1} class="btn-nav">
+            <button onclick={nextStep} disabled={currentStep === instructionTexts.length - 1} class="btn-nav">
               <span>Next</span>
               <span class="icon">→</span>
             </button>
@@ -804,7 +825,7 @@
                 <span class="ingredient-text">{ingredient}</span>
                 <button
                   class="btn-substitute"
-                  onclick={() => openSubstitutionModal(recipe.ingredients[i])}
+                  onclick={() => openSubstitutionModal(ingredientTexts[i])}
                   title="Find substitutes"
                 >
                   <span class="sub-icon">↔</span>
@@ -817,7 +838,7 @@
         <section class="instructions">
           <h2>Instructions</h2>
           <ol>
-            {#each recipe.instructions as instruction}
+            {#each instructionTexts as instruction}
               <li>{instruction}</li>
             {/each}
           </ol>

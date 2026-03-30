@@ -86,7 +86,18 @@ export const inviteCodes = pgTable('invite_codes', {
     .defaultNow(),
 });
 
-// Nutrition type for storing per-serving nutritional information
+// Recipe item type for structured ingredients/instructions with ordering
+export type RecipeItem = {
+  id: string;
+  text: string;
+  order: number;
+  checked?: boolean;
+};
+
+// Recipe items container for JSONB storage
+export type RecipeItemList = {
+  items: RecipeItem[];
+};
 export type NutritionInfo = {
   calories?: number;       // kcal
   protein?: number;        // grams
@@ -117,8 +128,8 @@ export const recipes = pgTable('recipes', {
   cookTime: integer('cook_time'), // in minutes
   totalTime: integer('total_time'), // in minutes
   servings: integer('servings'),
-  ingredients: jsonb('ingredients').notNull().$type<string[]>(),
-  instructions: jsonb('instructions').notNull().$type<string[]>(),
+  ingredients: jsonb('ingredients').notNull().$type<RecipeItemList>(),
+  instructions: jsonb('instructions').notNull().$type<RecipeItemList>(),
   imageUrl: text('image_url'),
   sourceUrl: text('source_url'),
   isFavorite: boolean('is_favorite').notNull().default(false),
@@ -315,16 +326,16 @@ export type ReferencedRecipe = {
   id: string;
   title: string;
   description?: string;
-  ingredients: string[];
-  instructions: string[];
+  ingredients: RecipeItemList;
+  instructions: RecipeItemList;
 };
 
 // Generated recipe type from AI
 export type GeneratedRecipe = {
   title: string;
   description?: string;
-  ingredients: string[];
-  instructions: string[];
+  ingredients: RecipeItemList;
+  instructions: RecipeItemList;
   prepTime?: number;
   cookTime?: number;
   servings?: number;

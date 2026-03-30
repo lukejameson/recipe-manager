@@ -33,6 +33,12 @@
   let error = $state('');
   let convertToMetric = $state(true);
 
+  // Duplicate detection state
+  let showDuplicateModal = $state(false);
+  let existingRecipe = $state<any>(null);
+  let isCheckingDuplicate = $state(false);
+  let duplicateCheckError = $state('');
+
   // Photo import state
   let photoStep = $state<PhotoStep>('upload');
   let photos = $state<string[]>([]);
@@ -144,12 +150,74 @@
     loading = true;
     try {
       fetchedRecipe = await apiClient.fetchFromUrl(url.trim(), convertToMetric);
-      mode = 'preview';
+
+      // Check for duplicates
+      await checkForDuplicate(fetchedRecipe.title, fetchedRecipe.sourceUrl);
     } catch (err: any) {
       error = err.message || 'Failed to fetch recipe from URL';
     } finally {
       loading = false;
     }
+  }
+
+  async function checkForDuplicate(title: string, sourceUrl?: string) {
+    isCheckingDuplicate = true;
+    duplicateCheckError = '';
+
+    try {
+      const result = await apiClient.checkDuplicateRecipe(title, sourceUrl);
+
+      if (result.exists && result.recipe) {
+        existingRecipe = result.recipe;
+        showDuplicateModal = true;
+      } else {
+        // No duplicate found, proceed to preview
+        mode = 'preview';
+      }
+    } catch (err: any) {
+      // If the check fails, still allow the user to proceed
+      console.warn('Duplicate check failed:', err);
+      mode = 'preview';
+    } finally {
+      isCheckingDuplicate = false;
+    }
+  }
+
+  function handleDuplicateChoice(choice: 'update' | 'new' | 'cancel') {
+    if (choice === 'cancel') {
+      showDuplicateModal = false;
+      existingRecipe = null;
+      fetchedRecipe = null;
+      mode = 'url';
+      return;
+    }
+
+    if (choice === 'update') {
+      // Update the existing recipe
+      if (existingRecipe) {
+        // Merge the fetched data with the existing recipe ID
+        fetchedRecipe = {
+          ...fetchedRecipe,
+          id: existingRecipe.id,
+          // Preserve certain fields from the existing recipe if desired
+          isFavorite: existingRecipe.isFavorite,
+          rating: existingRecipe.rating,
+          timesCooked: existingRecipe.timesCooked,
+          notes: existingRecipe.notes,
+        };
+      }
+    }
+
+    // For 'new', we'll modify the title to make it unique
+    if (choice === 'new') {
+      // Add a suffix to make the title unique
+      const baseTitle = fetchedRecipe.title;
+      fetchedRecipe.title = `${baseTitle} (Imported)`;
+    }
+
+    showDuplicateModal = false;
+    existingRecipe = null;
+    mode = 'preview';
   }
 
   async function handleImportJsonLd() {
@@ -171,7 +239,13 @@
   }
 
   async function handleSaveRecipe(data: any) {
-    await apiClient.createRecipe(data);
+    if (data.id) {
+      // Updating existing recipe
+      await apiClient.updateRecipe(data.id, data);
+    } else {
+      // Creating new recipe
+      await apiClient.createRecipe(data);
+    }
     goto('/');
   }
 
@@ -551,6 +625,53 @@
     {/if}
   </div>
 </main>
+
+<!-- Duplicate Recipe Modal -->
+{#if showDuplicateModal}
+  <div class="modal-overlay" onclick={() => handleDuplicateChoice('cancel')}>
+    <div class="modal" onclick={(e) => e.stopPropagation()}>
+      <div class="modal-header">
+        <h3>Recipe Already Exists</h3>
+        <button class="modal-close" onclick={() => handleDuplicateChoice('cancel')}>×</button>
+      </div>
+      <div class="modal-content">
+        <p>
+          You already have a recipe titled <strong>"{existingRecipe?.title}"</strong> in your collection.
+        </p>
+        {#if existingRecipe?.sourceUrl}
+          <p class="modal-source">
+            Source: <a href={existingRecipe.sourceUrl} target="_blank" rel="noopener">{existingRecipe.sourceUrl}</a>
+          </p>
+        {/if}
+        <p>What would you like to do?</p>
+
+        <div class="modal-actions">
+          <button
+            type="button"
+            class="btn-primary"
+            onclick={() => handleDuplicateChoice('update')}
+          >
+            Update Existing Recipe
+          </button>
+          <button
+            type="button"
+            class="btn-secondary"
+            onclick={() => handleDuplicateChoice('new')}
+          >
+            Create as New Recipe
+          </button>
+          <button
+            type="button"
+            class="btn-cancel"
+            onclick={() => handleDuplicateChoice('cancel')}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   main {
@@ -1014,5 +1135,145 @@
     .mode-toggle button {
       flex: 1;
     }
+  }
+
+  /* Modal styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+
+  .modal {
+    background: white;
+    border-radius: 12px;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    animation: modal-appear 0.2s ease-out;
+  }
+
+  @keyframes modal-appear {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #111827;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+
+  .modal-close:hover {
+    background: #f3f4f6;
+    color: #111827;
+  }
+
+  .modal-content {
+    padding: 1.5rem;
+  }
+
+  .modal-content p {
+    margin: 0 0 1rem;
+    color: #4b5563;
+    line-height: 1.5;
+  }
+
+  .modal-source {
+    font-size: 0.875rem;
+    color: #6b7280;
+    word-break: break-all;
+  }
+
+  .modal-source a {
+    color: #4a9eff;
+    text-decoration: none;
+  }
+
+  .modal-source a:hover {
+    text-decoration: underline;
+  }
+
+  .modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  .modal-actions button {
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+
+  .modal-actions .btn-primary {
+    background: #4a9eff;
+    color: white;
+  }
+
+  .modal-actions .btn-primary:hover {
+    background: #3a8eef;
+  }
+
+  .modal-actions .btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  .modal-actions .btn-secondary:hover {
+    background: #e5e7eb;
+  }
+
+  .modal-actions .btn-cancel {
+    background: white;
+    color: #6b7280;
+    border: 1px solid #d1d5db;
+  }
+
+  .modal-actions .btn-cancel:hover {
+    background: #f9fafb;
   }
 </style>

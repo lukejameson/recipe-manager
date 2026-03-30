@@ -5,6 +5,31 @@ import { recipes, tags, recipeTags } from '$lib/server/db/schema';
 import { getCurrentUser } from '$lib/server/auth';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
+
+// Recipe item schema for structured ingredients/instructions
+const recipeItemSchema = z.object({
+  id: z.string().uuid(),
+  text: z.string().min(1, 'Item cannot be empty'),
+  order: z.number().int().min(0),
+});
+
+const recipeItemListSchema = z.object({
+  items: z.array(recipeItemSchema)
+});
+
+// Nutrition schema
+const nutritionSchema = z.object({
+  calories: z.number().min(0).optional(),
+  protein: z.number().min(0).optional(),
+  carbohydrates: z.number().min(0).optional(),
+  fat: z.number().min(0).optional(),
+  saturatedFat: z.number().min(0).optional(),
+  fiber: z.number().min(0).optional(),
+  sugar: z.number().min(0).optional(),
+  sodium: z.number().min(0).optional(),
+  cholesterol: z.number().min(0).optional(),
+});
 
 const bulkCreateSchema = z.object({
   recipes: z.array(z.object({
@@ -14,8 +39,8 @@ const bulkCreateSchema = z.object({
     cookTime: z.number().optional(),
     totalTime: z.number().optional(),
     servings: z.number().optional(),
-    ingredients: z.array(z.string()),
-    instructions: z.array(z.string()),
+    ingredients: recipeItemListSchema,
+    instructions: recipeItemListSchema,
     imageUrl: z.string().optional(),
     sourceUrl: z.string().optional(),
     tags: z.array(z.string()).optional(),
@@ -23,6 +48,7 @@ const bulkCreateSchema = z.object({
     rating: z.number().min(1).max(5).optional(),
     notes: z.string().optional(),
     difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+    nutrition: nutritionSchema.optional(),
   })),
 });
 

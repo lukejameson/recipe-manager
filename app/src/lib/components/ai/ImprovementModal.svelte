@@ -2,6 +2,8 @@
   import AIBadge from './AIBadge.svelte';
   import AIButton from './AIButton.svelte';
   import { apiClient } from '$lib/api/client';
+  import { getItemTexts } from '$lib/utils/recipe-helpers';
+  import type { RecipeItemList } from '$lib/server/db/schema';
 
   interface ImprovementSuggestion {
     category: string;
@@ -22,8 +24,8 @@
       id: string;
       title: string;
       description?: string;
-      ingredients: string[];
-      instructions: string[];
+      ingredients: RecipeItemList;
+      instructions: RecipeItemList;
       prepTime?: number;
       cookTime?: number;
     };
@@ -72,7 +74,13 @@
     saved = false;
 
     try {
-      const result = await apiClient.suggestImprovements({ recipe });
+      const result = await apiClient.suggestImprovements({
+        recipe: {
+          ...recipe,
+          ingredients: getItemTexts(recipe.ingredients),
+          instructions: getItemTexts(recipe.instructions),
+        }
+      });
       suggestions = result;
     } catch (err: any) {
       error = err.message || 'Failed to get suggestions';
@@ -139,8 +147,8 @@
       const result = await apiClient.applyImprovements({
         recipe: {
           title: recipe.title,
-          ingredients: recipe.ingredients,
-          instructions: recipe.instructions,
+          ingredients: getItemTexts(recipe.ingredients),
+          instructions: getItemTexts(recipe.instructions),
         },
         improvements: selectedSuggestions.map(s => s.suggestion),
       });

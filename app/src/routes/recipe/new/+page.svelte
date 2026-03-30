@@ -35,7 +35,7 @@
 <style>
   main {
     flex: 1;
-    padding: var(--spacing-12) 0;
+    padding: var(--spacing-6) 0;
   }
 
   .container {
@@ -45,10 +45,25 @@
   }
 
   h2 {
-    margin: 0 0 var(--spacing-8);
-    font-size: var(--text-3xl);
+    margin: 0 0 var(--spacing-5);
+    font-size: var(--text-2xl);
     color: var(--color-text);
-    font-weight: var(--font-extrabold);
+    font-weight: var(--font-bold);
     letter-spacing: -0.025em;
+  }
+
+  @media (max-width: 640px) {
+    main {
+      padding: var(--spacing-4) 0;
+    }
+
+    .container {
+      padding: 0 var(--spacing-4);
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      margin-bottom: var(--spacing-4);
+    }
   }
 </style>

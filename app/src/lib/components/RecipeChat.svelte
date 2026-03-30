@@ -3,6 +3,8 @@
   import { apiClient } from '$lib/api/client';
   import { authStore } from '$lib/stores/auth.svelte';
   import Markdown from '$lib/components/Markdown.svelte';
+  import { getItemTexts } from '$lib/utils/recipe-helpers';
+  import type { RecipeItemList } from '$lib/server/db/schema';
 
   interface GeneratedRecipe {
     title: string;
@@ -25,8 +27,8 @@
   interface Recipe {
     title: string;
     description?: string;
-    ingredients: string[];
-    instructions: string[];
+    ingredients: RecipeItemList;
+    instructions: RecipeItemList;
     prepTime?: number;
     cookTime?: number;
     servings?: number;
@@ -216,8 +218,8 @@
         recipe: {
           title: recipe.title,
           description: recipe.description,
-          ingredients: recipe.ingredients,
-          instructions: recipe.instructions,
+          ingredients: getItemTexts(recipe.ingredients),
+          instructions: getItemTexts(recipe.instructions),
           prepTime: recipe.prepTime,
           cookTime: recipe.cookTime,
           servings: recipe.servings,

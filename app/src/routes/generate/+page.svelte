@@ -811,7 +811,8 @@
       mobileOpen={sidebarMobileOpen}
       onMobileClose={closeSidebar}
     />
-    <div class="container">
+    <div class="main-content">
+      <div class="container">
     <div class="chat-container">
       {#if messages.length === 0}
         <div class="welcome-state">
@@ -1117,6 +1118,7 @@
       <p class="hint">Press Enter to send, Shift+Enter for new line. Type @ to reference a recipe from your collection.</p>
     </div>
     </div>
+    </div>
   </div>
 </main>
 {:else}
@@ -1257,12 +1259,20 @@
 
   .page-layout {
     flex: 1;
-    display: grid;
-    grid-template-columns: auto 1fr;
+    display: flex;
     min-height: 0;
     height: 100%;
     overflow: hidden;
     position: relative;
+  }
+
+  .main-content {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    overflow: hidden;
+    min-height: 0;
+    height: 100%;
   }
 
   .container {
@@ -1271,7 +1281,6 @@
     flex-direction: column;
     max-width: 900px;
     width: 100%;
-    margin: 0 auto;
     padding: var(--spacing-4);
     min-height: 0;
     height: 100%;
@@ -2473,10 +2482,13 @@
     }
 
     .page-layout {
-      grid-template-columns: 1fr;
-      /* Remove fixed positioning */
+      flex-direction: column;
       position: relative;
       height: 100%;
+    }
+
+    .main-content {
+      width: 100%;
     }
 
     .container {

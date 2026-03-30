@@ -4,6 +4,7 @@ import { db } from '$lib/server/db/db';
 import { recipes, recipeComponents } from '$lib/server/db/schema';
 import { getCurrentUser } from '$lib/server/auth';
 import { eq, and } from 'drizzle-orm';
+import { normalizeRecipeData } from '$lib/utils/recipe-helpers';
 
 /**
  * GET /api/recipes/[id]/hierarchy - Get recipe component hierarchy
@@ -28,7 +29,7 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
       throw error(404, 'Recipe not found');
     }
 
-    // Get components with their details
+    // Get components with their details (including ingredients and instructions)
     const components = await db
       .select({
         id: recipeComponents.id,
@@ -39,6 +40,11 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
           id: recipes.id,
           title: recipes.title,
           servings: recipes.servings,
+          ingredients: recipes.ingredients,
+          instructions: recipes.instructions,
+          description: recipes.description,
+          prepTime: recipes.prepTime,
+          cookTime: recipes.cookTime,
         },
       })
       .from(recipeComponents)
@@ -46,7 +52,13 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
       .where(eq(recipeComponents.parentRecipeId, params.id))
       .orderBy(recipeComponents.sortOrder);
 
-    return json(components);
+    // Normalize child recipe data to ensure proper structure
+    const normalizedComponents = components.map(comp => ({
+      ...comp,
+      childRecipe: normalizeRecipeData(comp.childRecipe)
+    }));
+
+    return json(normalizedComponents);
   } catch (e) {
     if (e instanceof Error && 'status' in e) throw e;
     console.error('Get recipe hierarchy error:', e);

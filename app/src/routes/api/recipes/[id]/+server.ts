@@ -5,6 +5,31 @@ import { recipes, tags, recipeTags, recipeComponents } from '$lib/server/db/sche
 import { getCurrentUser } from '$lib/server/auth';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { normalizeRecipeData } from '$lib/utils/recipe-helpers';
+
+// Recipe item schema for structured ingredients/instructions
+const recipeItemSchema = z.object({
+  id: z.string().uuid(),
+  text: z.string().min(1, 'Item cannot be empty'),
+  order: z.number().int().min(0),
+});
+
+const recipeItemListSchema = z.object({
+  items: z.array(recipeItemSchema)
+});
+
+// Nutrition schema
+const nutritionSchema = z.object({
+  calories: z.number().min(0).optional(),
+  protein: z.number().min(0).optional(),
+  carbohydrates: z.number().min(0).optional(),
+  fat: z.number().min(0).optional(),
+  saturatedFat: z.number().min(0).optional(),
+  fiber: z.number().min(0).optional(),
+  sugar: z.number().min(0).optional(),
+  sodium: z.number().min(0).optional(),
+  cholesterol: z.number().min(0).optional(),
+});
 
 // Validation schema
 const recipeInputSchema = z.object({
@@ -14,8 +39,8 @@ const recipeInputSchema = z.object({
   cookTime: z.number().min(0).optional(),
   totalTime: z.number().min(0).optional(),
   servings: z.number().min(1).optional(),
-  ingredients: z.array(z.string()).min(1).optional(),
-  instructions: z.array(z.string()).min(1).optional(),
+  ingredients: recipeItemListSchema.optional(),
+  instructions: recipeItemListSchema.optional(),
   imageUrl: z.string().url().optional().or(z.literal('')),
   sourceUrl: z.string().url().optional().or(z.literal('')),
   tags: z.array(z.string()).optional(),
@@ -25,6 +50,7 @@ const recipeInputSchema = z.object({
   difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
   timesCooked: z.number().min(0).optional(),
   lastCookedAt: z.string().datetime().optional().nullable(),
+  nutrition: nutritionSchema.optional(),
 });
 
 /**
@@ -104,8 +130,11 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
       .from(recipeComponents)
       .where(eq(recipeComponents.parentRecipeId, recipe.id));
 
+    // Normalize recipe data to ensure proper structure
+    const normalizedRecipe = normalizeRecipeData(recipe);
+
     return json({
-      ...recipe,
+      ...normalizedRecipe,
       tags: recipeTagNames,
       components,
     });

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { apiClient } from '$lib/api/client';
   import Header from '$lib/components/Header.svelte';
+  import { getItemCount } from '$lib/utils/recipe-helpers';
 
   let items = $state<any[]>([]);
   let allRecipes = $state<any[]>([]);
@@ -260,7 +261,7 @@
                           <div class="recipe-title">{recipe.title}</div>
                           {#if recipe.ingredients}
                             <div class="ingredient-count">
-                              {recipe.ingredients.length} ingredients
+                              {getItemCount(recipe.ingredients)} ingredients
                             </div>
                           {/if}
                         </div>

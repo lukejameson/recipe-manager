@@ -4,6 +4,7 @@
   import Header from '$lib/components/Header.svelte';
   import AIButton from '$lib/components/ai/AIButton.svelte';
   import AIBadge from '$lib/components/ai/AIBadge.svelte';
+  import { getItemTexts } from '$lib/utils/recipe-helpers';
 
   interface MatchedRecipe {
     recipeId: string;
@@ -56,18 +57,21 @@
       // Pre-filter recipes by keyword matching (reduces AI API calls)
       const lowerIngredients = ingredients.map((i) => i.toLowerCase());
       const candidateRecipes = allRecipes
-        .map((r: any) => ({
-          id: r.id,
-          title: r.title,
-          ingredients: r.ingredients,
-          imageUrl: r.imageUrl,
-          prepTime: r.prepTime,
-          cookTime: r.cookTime,
-          // Simple keyword match score for pre-filtering
-          preScore: r.ingredients.filter((ing: string) =>
-            lowerIngredients.some((li) => ing.toLowerCase().includes(li))
-          ).length,
-        }))
+        .map((r: any) => {
+          const ingredientTexts = getItemTexts(r.ingredients);
+          return {
+            id: r.id,
+            title: r.title,
+            ingredients: ingredientTexts,
+            imageUrl: r.imageUrl,
+            prepTime: r.prepTime,
+            cookTime: r.cookTime,
+            // Simple keyword match score for pre-filtering
+            preScore: ingredientTexts.filter((ing: string) =>
+              lowerIngredients.some((li) => ing.toLowerCase().includes(li))
+            ).length,
+          };
+        })
         .filter((r: any) => r.preScore > 0)
         .sort((a: any, b: any) => b.preScore - a.preScore)
         .slice(0, 50); // Top 50 candidates for AI scoring
@@ -77,7 +81,7 @@
         const sampleRecipes = allRecipes.slice(0, 30).map((r: any) => ({
           id: r.id,
           title: r.title,
-          ingredients: r.ingredients,
+          ingredients: getItemTexts(r.ingredients),
           imageUrl: r.imageUrl,
           prepTime: r.prepTime,
           cookTime: r.cookTime,

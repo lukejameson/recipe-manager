@@ -13,8 +13,11 @@
     PanelTop,
     Plus,
     Search,
+    SlidersHorizontal,
     Tag,
     Wine,
+    ArrowDownUp,
+    X,
   } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import LoadingSkeleton from '$lib/components/LoadingSkeleton.svelte';
@@ -28,6 +31,15 @@
   let sortBy = $state<string>('date-newest');
   let viewMode = $state<'grid' | 'list' | 'compact'>('grid');
   let category = $state<'all' | 'food' | 'cocktails'>('all');
+
+  // Mobile filter/sort sheets
+  let showMobileSort = $state(false);
+  let showMobileFilter = $state(false);
+
+  // Desktop dropdowns
+  let showViewDropdown = $state(false);
+  let showSortDropdown = $state(false);
+  let showFilterDropdown = $state(false);
 
   // Feature flags
   let hasPhotoExtraction = $derived(authStore.hasFeature('photoExtraction'));
@@ -43,6 +55,15 @@
     'beverage',
     'cocktails',
     'drinks',
+  ];
+
+  const sortOptions = [
+    { value: 'date-newest', label: 'Newest' },
+    { value: 'date-oldest', label: 'Oldest' },
+    { value: 'title-asc', label: 'A-Z' },
+    { value: 'title-desc', label: 'Z-A' },
+    { value: 'rating-high', label: 'Top Rated' },
+    { value: 'cooked-most', label: 'Most Cooked' },
   ];
 
   onMount(() => {
@@ -160,14 +181,13 @@
 
   function clearFilters() {
     selectedTags = [];
-    searchTerm = '';
-    sortBy = 'date-newest';
     loadRecipes();
   }
 
-  function handleSortChange() {
-    // Save to localStorage
+  function handleSortChange(newSort: string) {
+    sortBy = newSort;
     localStorage.setItem('recipeSortBy', sortBy);
+    showMobileSort = false;
     loadRecipes();
   }
 
@@ -204,6 +224,20 @@
 
     // Reset input so same file can be selected again
     input.value = '';
+  }
+
+  function closeMobileSort() {
+    showMobileSort = false;
+  }
+
+  function closeMobileFilter() {
+    showMobileFilter = false;
+  }
+
+  function handleBackdropClick(event: MouseEvent, closeFn: () => void) {
+    if (event.target === event.currentTarget) {
+      closeFn();
+    }
   }
 </script>
 
@@ -266,66 +300,164 @@
     </div>
 
     <div class="filters-section">
-      <div class="search-bar">
-        <input
-          type="search"
-          bind:value={searchTerm}
-          placeholder="Search recipes..."
-          onkeydown={e => e.key === 'Enter' && handleSearch()}
-        />
-        <button onclick={handleSearch} class="btn-primary btn-md">
-          <Search size={18} />
-          <span class="btn-text">Search</span>
+      <!-- Unified search row -->
+      <div class="search-row">
+        <div class="search-input-wrapper">
+          <Search size={18} class="search-icon" />
+          <input
+            type="search"
+            bind:value={searchTerm}
+            placeholder="Search recipes..."
+            onkeydown={e => e.key === 'Enter' && handleSearch()}
+          />
+        </div>
+
+        <!-- Desktop: Dropdown menus under buttons -->
+        <div class="desktop-menu-wrapper">
+          <button
+            class="filter-btn"
+            class:active={showViewDropdown}
+            onclick={() => { showViewDropdown = !showViewDropdown; showSortDropdown = false; showFilterDropdown = false; }}
+            aria-label="View options"
+            aria-expanded={showViewDropdown}
+          >
+            {#if viewMode === 'grid'}
+              <LayoutGrid size={20} />
+            {:else if viewMode === 'list'}
+              <List size={20} />
+            {:else}
+              <PanelTop size={20} />
+            {/if}
+          </button>
+          {#if showViewDropdown}
+            <div class="dropdown-menu">
+              <button
+                class="dropdown-item"
+                class:active={viewMode === 'grid'}
+                onclick={() => { setViewMode('grid'); showViewDropdown = false; }}
+              >
+                <LayoutGrid size={18} />
+                <span>Grid View</span>
+                {#if viewMode === 'grid'}
+                  <span class="check">✓</span>
+                {/if}
+              </button>
+              <button
+                class="dropdown-item"
+                class:active={viewMode === 'list'}
+                onclick={() => { setViewMode('list'); showViewDropdown = false; }}
+              >
+                <List size={18} />
+                <span>List View</span>
+                {#if viewMode === 'list'}
+                  <span class="check">✓</span>
+                {/if}
+              </button>
+              <button
+                class="dropdown-item"
+                class:active={viewMode === 'compact'}
+                onclick={() => { setViewMode('compact'); showViewDropdown = false; }}
+              >
+                <PanelTop size={18} />
+                <span>Compact View</span>
+                {#if viewMode === 'compact'}
+                  <span class="check">✓</span>
+                {/if}
+              </button>
+            </div>
+          {/if}
+        </div>
+
+        <div class="desktop-menu-wrapper">
+          <button
+            class="filter-btn"
+            class:active={showSortDropdown}
+            onclick={() => { showSortDropdown = !showSortDropdown; showViewDropdown = false; showFilterDropdown = false; }}
+            aria-label="Sort"
+            aria-expanded={showSortDropdown}
+          >
+            <ArrowDownUp size={20} />
+          </button>
+          {#if showSortDropdown}
+            <div class="dropdown-menu">
+              {#each sortOptions as option}
+                <button
+                  class="dropdown-item"
+                  class:active={sortBy === option.value}
+                  onclick={() => { handleSortChange(option.value); showSortDropdown = false; }}
+                >
+                  <span>{option.label}</span>
+                  {#if sortBy === option.value}
+                    <span class="check">✓</span>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <div class="desktop-menu-wrapper">
+          <button
+            class="filter-btn"
+            class:active={selectedTags.length > 0 || showFilterDropdown}
+            onclick={() => { showFilterDropdown = !showFilterDropdown; showViewDropdown = false; showSortDropdown = false; }}
+            aria-label="Filter by tag"
+            aria-expanded={showFilterDropdown}
+          >
+            <SlidersHorizontal size={20} />
+          </button>
+          {#if showFilterDropdown}
+            <div class="dropdown-menu filter-menu">
+              {#if selectedTags.length > 0}
+                <div class="dropdown-section">
+                  <span class="dropdown-label">Selected</span>
+                  <div class="selected-tags-list">
+                    {#each selectedTags as tag}
+                      <button class="selected-tag-chip" onclick={() => toggleTag(tag)}>
+                        {tag}
+                        <X size={14} />
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+                <div class="dropdown-divider"></div>
+              {/if}
+              <div class="dropdown-section">
+                <span class="dropdown-label">All Tags</span>
+                <div class="tag-options">
+                  {#each allTags as tag (tag.id)}
+                    <button
+                      class="tag-option-item"
+                      class:active={selectedTags.includes(tag.name)}
+                      onclick={() => toggleTag(tag.name)}
+                    >
+                      {tag.name}
+                      <span class="count">({tag.recipeCount})</span>
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Mobile: Sheet triggers -->
+        <button
+          class="filter-btn mobile-only"
+          class:active={showMobileSort}
+          onclick={() => showMobileSort = true}
+          aria-label="Sort"
+        >
+          <ArrowDownUp size={20} />
         </button>
-      </div>
-
-      <div class="controls">
-        <div class="view-toggle desktop-only">
-          <button
-            class="btn-icon"
-            class:active={viewMode === 'grid'}
-            onclick={() => setViewMode('grid')}
-            title="Grid View"
-          >
-            <LayoutGrid size={18} />
-          </button>
-          <button
-            class="btn-icon"
-            class:active={viewMode === 'list'}
-            onclick={() => setViewMode('list')}
-            title="List View"
-          >
-            <List size={18} />
-          </button>
-          <button
-            class="btn-icon"
-            class:active={viewMode === 'compact'}
-            onclick={() => setViewMode('compact')}
-            title="Compact View"
-          >
-            <PanelTop size={18} />
-          </button>
-        </div>
-
-        <div class="sort-control">
-          <select
-            id="sort-select"
-            bind:value={sortBy}
-            onchange={handleSortChange}
-          >
-            <option value="date-newest">Newest</option>
-            <option value="date-oldest">Oldest</option>
-            <option value="title-asc">A-Z</option>
-            <option value="title-desc">Z-A</option>
-            <option value="rating-high">Top Rated</option>
-            <option value="cooked-most">Most Cooked</option>
-          </select>
-        </div>
-
-        <a href="/tags" class="btn-secondary btn-sm desktop-only">
-          <Tag size={16} />
-          <span>Manage Tags</span>
-        </a>
+        <button
+          class="filter-btn mobile-only"
+          class:active={selectedTags.length > 0}
+          onclick={() => showMobileFilter = true}
+          aria-label="Filter by tag"
+        >
+          <SlidersHorizontal size={20} />
+        </button>
       </div>
 
       {#if selectedTags.length > 0}
@@ -334,35 +466,11 @@
           {#each selectedTags as tag}
             <span class="active-tag">
               {tag}
-              <button onclick={() => toggleTag(tag)} class="remove-tag"
-                >✕</button
-              >
+              <button onclick={() => toggleTag(tag)} class="remove-tag">✕</button>
             </span>
           {/each}
           <button onclick={clearFilters} class="clear-btn">Clear</button>
         </div>
-      {/if}
-
-      {#if allTags.length > 0}
-        <details class="tag-filter-collapsible">
-          <summary class="tag-filter-toggle">
-            <span>Filter by tag</span>
-            <span class="tag-count-badge">{allTags.length}</span>
-          </summary>
-          <div class="tag-chips">
-            {#each allTags as tag (tag.id)}
-              <button
-                class="tag-chip {selectedTags.includes(tag.name)
-                  ? 'active'
-                  : ''}"
-                onclick={() => toggleTag(tag.name)}
-              >
-                {tag.name}
-                <span class="tag-count">({tag.recipeCount})</span>
-              </button>
-            {/each}
-          </div>
-        </details>
       {/if}
     </div>
 
@@ -396,6 +504,90 @@
     {/if}
   </div>
 </main>
+
+<!-- Mobile Sort Sheet -->
+{#if showMobileSort}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="mobile-sheet-backdrop"
+    onclick={(e) => handleBackdropClick(e, closeMobileSort)}
+    role="presentation"
+  >
+    <div class="mobile-sheet" role="dialog" aria-modal="true" aria-label="Sort options">
+      <div class="sheet-handle">
+        <div class="handle-bar"></div>
+      </div>
+      <div class="sheet-header">
+        <h3>Sort By</h3>
+        <button class="sheet-close" onclick={closeMobileSort} aria-label="Close">
+          <X size={20} />
+        </button>
+      </div>
+      <div class="sheet-content">
+        {#each sortOptions as option}
+          <button
+            class="sheet-option"
+            class:active={sortBy === option.value}
+            onclick={() => handleSortChange(option.value)}
+          >
+            {option.label}
+            {#if sortBy === option.value}
+              <span class="check">✓</span>
+            {/if}
+          </button>
+        {/each}
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Mobile Filter Sheet -->
+{#if showMobileFilter}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="mobile-sheet-backdrop"
+    onclick={(e) => handleBackdropClick(e, closeMobileFilter)}
+    role="presentation"
+  >
+    <div class="mobile-sheet" role="dialog" aria-modal="true" aria-label="Filter by tag">
+      <div class="sheet-handle">
+        <div class="handle-bar"></div>
+      </div>
+      <div class="sheet-header">
+        <h3>Filter by Tag</h3>
+        <button class="sheet-close" onclick={closeMobileFilter} aria-label="Close">
+          <X size={20} />
+        </button>
+      </div>
+      <div class="sheet-content">
+        {#if selectedTags.length > 0}
+          <div class="selected-tags">
+            {#each selectedTags as tag}
+              <button class="selected-tag" onclick={() => toggleTag(tag)}>
+                {tag}
+                <X size={14} />
+              </button>
+            {/each}
+          </div>
+        {/if}
+        <div class="tag-list">
+          {#each allTags as tag (tag.id)}
+            <button
+              class="tag-option"
+              class:active={selectedTags.includes(tag.name)}
+              onclick={() => toggleTag(tag.name)}
+            >
+              {tag.name}
+              <span class="tag-count">({tag.recipeCount})</span>
+            </button>
+          {/each}
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   main {
@@ -667,51 +859,6 @@
     }
   }
 
-  /* Mobile styles */
-  @media (max-width: 640px) {
-    main {
-      padding: var(--spacing-4) 0;
-    }
-
-    .header {
-      margin-bottom: var(--spacing-4);
-    }
-
-    h2 {
-      font-size: var(--text-xl);
-    }
-
-    .btn-text {
-      display: none;
-    }
-
-    .search-bar input {
-      padding: var(--spacing-3);
-      font-size: 16px; /* Prevents zoom on iOS */
-    }
-
-    .desktop-only {
-      display: none !important;
-    }
-
-    .sort-control select {
-      padding: var(--spacing-3);
-      font-size: 16px;
-    }
-
-    .tag-chip {
-      padding: var(--spacing-2) var(--spacing-3);
-      min-height: 44px;
-      display: flex;
-      align-items: center;
-    }
-
-    .recipe-grid {
-      grid-template-columns: 1fr !important;
-      gap: var(--spacing-4);
-    }
-  }
-
   /* Category tabs */
   .category-tabs {
     display: flex;
@@ -748,15 +895,498 @@
     border-bottom-color: var(--color-primary);
   }
 
+  /* Unified search row (desktop + mobile) */
+  .search-row {
+    display: flex;
+    gap: var(--spacing-2);
+    align-items: center;
+    margin-bottom: var(--spacing-4);
+  }
+
+  .search-input-wrapper {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-input-wrapper :global(.search-icon) {
+    position: absolute;
+    left: var(--spacing-3);
+    color: var(--color-text-light);
+    pointer-events: none;
+  }
+
+  .search-input-wrapper input {
+    width: 100%;
+    padding: var(--spacing-3) var(--spacing-3) var(--spacing-3) var(--spacing-10);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    background: var(--color-surface);
+    min-height: 44px;
+  }
+
+  .search-input-wrapper input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+
+  .filter-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-light);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .filter-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .filter-btn.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+  }
+
+  .mobile-only {
+    display: none;
+  }
+
+  /* Desktop menu wrapper with dropdown */
+  .desktop-menu-wrapper {
+    position: relative;
+  }
+
+  .dropdown-menu {
+    position: absolute;
+    top: calc(100% + var(--spacing-2));
+    right: 0;
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    min-width: 180px;
+    padding: var(--spacing-2);
+    z-index: 150;
+    animation: dropdownFade 0.15s ease;
+  }
+
+  @keyframes dropdownFade {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    width: 100%;
+    padding: var(--spacing-2) var(--spacing-3);
+    background: none;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+  }
+
+  .dropdown-item:hover {
+    background: var(--color-bg-subtle);
+  }
+
+  .dropdown-item.active {
+    background: var(--color-primary);
+    color: white;
+    font-weight: var(--font-semibold);
+  }
+
+  .dropdown-item .check {
+    margin-left: auto;
+    font-weight: var(--font-bold);
+  }
+
+  /* Filter dropdown specific */
+  .filter-menu {
+    min-width: 220px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .dropdown-section {
+    padding: var(--spacing-2);
+  }
+
+  .dropdown-label {
+    display: block;
+    font-size: var(--text-xs);
+    font-weight: var(--font-semibold);
+    color: var(--color-text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--spacing-2);
+  }
+
+  .dropdown-divider {
+    height: 1px;
+    background: var(--color-border-light);
+    margin: var(--spacing-1) 0;
+  }
+
+  .selected-tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-1);
+  }
+
+  .selected-tag-chip {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    padding: var(--spacing-1) var(--spacing-2);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    cursor: pointer;
+  }
+
+  .tag-options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1);
+  }
+
+  .tag-option-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: var(--spacing-2) var(--spacing-3);
+    background: none;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+  }
+
+  .tag-option-item:hover {
+    background: var(--color-bg-subtle);
+  }
+
+  .tag-option-item.active {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .tag-option-item .count {
+    font-size: var(--text-xs);
+    color: var(--color-text-light);
+  }
+
+  .tag-option-item.active .count {
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  /* Sheets (mobile only) */
+  .mobile-sheet-backdrop {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 200;
+    align-items: flex-end;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .mobile-sheet {
+    width: 100%;
+    max-width: 600px;
+    max-height: 70vh;
+    background: white;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    animation: slideUp 0.3s ease;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .sheet-handle {
+    display: flex;
+    justify-content: center;
+    padding: var(--spacing-3) 0;
+  }
+
+  .handle-bar {
+    width: 40px;
+    height: 4px;
+    background: var(--color-border);
+    border-radius: 2px;
+  }
+
+  .sheet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 var(--spacing-5) var(--spacing-3);
+    border-bottom: 1px solid var(--color-border-light);
+  }
+
+  .sheet-header h3 {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: var(--font-semibold);
+  }
+
+  .sheet-close {
+    background: none;
+    border: none;
+    padding: var(--spacing-2);
+    color: var(--color-text-light);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .sheet-close:hover {
+    background: var(--color-bg-subtle);
+    color: var(--color-text);
+  }
+
+  .sheet-content {
+    padding: var(--spacing-3) var(--spacing-5) var(--spacing-6);
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .sheet-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: var(--spacing-3) var(--spacing-4);
+    margin-bottom: var(--spacing-1);
+    background: none;
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    color: var(--color-text);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+  }
+
+  .sheet-option:hover {
+    background: var(--color-bg-subtle);
+  }
+
+  .sheet-option.active {
+    background: var(--color-primary);
+    color: white;
+    font-weight: var(--font-semibold);
+  }
+
+  .sheet-option .check {
+    font-weight: var(--font-bold);
+  }
+
+  .selected-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-4);
+    padding-bottom: var(--spacing-3);
+    border-bottom: 1px solid var(--color-border-light);
+  }
+
+  .selected-tag {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    padding: var(--spacing-1) var(--spacing-3);
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .tag-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1);
+  }
+
+  .tag-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: var(--spacing-3) var(--spacing-4);
+    background: none;
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    color: var(--color-text);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+  }
+
+  .tag-option:hover {
+    background: var(--color-bg-subtle);
+  }
+
+  .tag-option.active {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .tag-option .tag-count {
+    font-size: var(--text-sm);
+    color: var(--color-text-light);
+  }
+
+  .tag-option.active .tag-count {
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  /* Mobile styles */
   @media (max-width: 640px) {
+    main {
+      padding: var(--spacing-4) 0;
+    }
+
+    .header {
+      margin-bottom: var(--spacing-4);
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+    }
+
+    .btn-text {
+      display: none;
+    }
+
+    .desktop-only {
+      display: none !important;
+    }
+
+    .mobile-only {
+      display: flex;
+    }
+
+    /* Hide view button on mobile */
+    .desktop-menu-wrapper {
+      display: none;
+    }
+
     .category-tabs {
       justify-content: stretch;
+      margin-bottom: var(--spacing-3);
     }
 
     .tab {
       flex: 1;
       justify-content: center;
-      padding: var(--spacing-3) var(--spacing-2);
+      padding: var(--spacing-2) var(--spacing-2);
+      font-size: var(--text-xs);
     }
+
+    /* Compact filters section on mobile */
+    .filters-section {
+      margin-bottom: var(--spacing-3);
+    }
+
+    .search-row {
+      margin-bottom: var(--spacing-3);
+    }
+
+    .search-input-wrapper input {
+      padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-10);
+      font-size: var(--text-sm);
+      min-height: 44px;
+    }
+
+    .active-filters {
+      padding: var(--spacing-2);
+      margin-bottom: var(--spacing-3);
+    }
+
+    .filter-label {
+      font-size: var(--text-xs);
+    }
+
+    .active-tag {
+      padding: 0.125rem var(--spacing-2);
+      font-size: var(--text-xs);
+    }
+
+    .recipe-grid {
+      grid-template-columns: 1fr !important;
+      gap: var(--spacing-4);
+    }
+  }
+
+  /* Hide header actions on mobile */
+  @media (max-width: 768px) {
+    .header-actions {
+      display: none;
+    }
+
+    .header h2 {
+      display: none;
+    }
+
+    .header {
+      margin-bottom: 0;
+    }
+  }
+
+  /* Remove old components */
+  .search-bar,
+  .controls,
+  .tag-filter-collapsible,
+  .view-toggle,
+  .sort-control {
+    display: none;
   }
 </style>

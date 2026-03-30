@@ -5,7 +5,12 @@
   import ImageSearchModal from './ImageSearchModal.svelte';
   import AIButton from './ai/AIButton.svelte';
   import TagSuggestionsPanel from './ai/TagSuggestionsPanel.svelte';
+  import ExpandableSection from './ExpandableSection.svelte';
+  import DynamicListInput from './DynamicListInput.svelte';
+  import type { RecipeItem } from '$lib/server/db/schema';
   import { Sparkles, Search, X, Plus } from 'lucide-svelte';
+
+  type TimeUnit = 'minutes' | 'hours';
 
   let {
     recipe = null,
@@ -17,19 +22,58 @@
     onCancel: () => void;
   } = $props();
 
+  // Helper to convert old format to new format
+  function toItemList(items: string[] | { items: RecipeItem[] } | undefined): RecipeItem[] {
+    if (!items) return [{ id: crypto.randomUUID(), text: '', order: 0 }];
+    if (Array.isArray(items)) {
+      return items.filter(s => s.trim()).map((text, i) => ({
+        id: crypto.randomUUID(),
+        text,
+        order: i
+      }));
+    }
+    return items.items.length > 0 ? items.items : [{ id: crypto.randomUUID(), text: '', order: 0 }];
+  }
+
+  // Core fields (always visible)
   let title = $state(recipe?.title || '');
+  let ingredients = $state<RecipeItem[]>(toItemList(recipe?.ingredients));
+  let instructions = $state<RecipeItem[]>(toItemList(recipe?.instructions));
+
+  // Additional fields (in expandable section)
   let description = $state(recipe?.description || '');
   let prepTime = $state(recipe?.prepTime || '');
   let cookTime = $state(recipe?.cookTime || '');
   let totalTime = $state(recipe?.totalTime || '');
   let servings = $state(recipe?.servings || '');
+
+  // Time unit preferences (minutes or hours)
+  let prepTimeUnit = $state<TimeUnit>('minutes');
+  let cookTimeUnit = $state<TimeUnit>('minutes');
+  let totalTimeUnit = $state<TimeUnit>('minutes');
+
+  // Track if total time was manually edited
+  let totalTimeManuallyEdited = $state(false);
   let imageUrl = $state(recipe?.imageUrl || '');
   let sourceUrl = $state(recipe?.sourceUrl || '');
-  let ingredients = $state(recipe?.ingredients?.join('\n') || '');
-  let instructions = $state(recipe?.instructions?.join('\n') || '');
   let tags = $state(recipe?.tags?.map((t: any) => t.name).join(', ') || '');
+
+  // UI state
   let loading = $state(false);
   let error = $state('');
+  let detailsExpanded = $state(false);
+
+  // Check if we should auto-expand details (if editing with additional data)
+  $effect(() => {
+    if (recipe?.id) {
+      const hasAdditionalData = description || prepTime || cookTime || totalTime || servings || imageUrl || sourceUrl || tags;
+      const hasNutrition = recipe?.nutrition;
+      const hasComponents = components.length > 0;
+      if (hasAdditionalData || hasNutrition || hasComponents) {
+        detailsExpanded = true;
+      }
+    }
+  });
 
   // Components for compound recipes
   let showComponents = $state(false);
@@ -105,8 +149,7 @@
 
   async function handleCalculateNutrition() {
     const ingredientList = ingredients
-      .split('\n')
-      .map((i: string) => i.trim())
+      .map((i) => i.text.trim())
       .filter(Boolean);
 
     if (ingredientList.length === 0) {
@@ -147,13 +190,11 @@
 
   async function handleSuggestTags() {
     const ingredientList = ingredients
-      .split('\n')
-      .map((i: string) => i.trim())
+      .map((i) => i.text.trim())
       .filter(Boolean);
 
     const instructionList = instructions
-      .split('\n')
-      .map((i: string) => i.trim())
+      .map((i) => i.text.trim())
       .filter(Boolean);
 
     if (!title.trim() && ingredientList.length === 0) {
@@ -202,6 +243,17 @@
     tagSuggestions = [];
   }
 
+  // Auto-calculate total time when prep or cook time changes (only if not manually edited)
+  $effect(() => {
+    if (totalTimeManuallyEdited) return;
+
+    const prep = parseInt(prepTime) || 0;
+    const cook = parseInt(cookTime) || 0;
+    if (prep > 0 || cook > 0) {
+      totalTime = (prep + cook).toString();
+    }
+  });
+
   // Sync form fields when recipe prop changes (for JSON-LD update feature)
   $effect(() => {
     // Access recipe to track it
@@ -218,8 +270,8 @@
       servings = r.servings || '';
       imageUrl = r.imageUrl || '';
       sourceUrl = r.sourceUrl || '';
-      ingredients = r.ingredients?.join('\n') || '';
-      instructions = r.instructions?.join('\n') || '';
+      ingredients = toItemList(r.ingredients);
+      instructions = toItemList(r.instructions);
       tags = r.tags?.map((t: any) => typeof t === 'string' ? t : t.name).join(', ') || '';
 
       // Update nutrition fields
@@ -248,9 +300,8 @@
     }
 
     const ingredientList = ingredients
-      .split('\n')
-      .map((i: string) => i.trim())
-      .filter(Boolean);
+      .filter((i) => i.text.trim())
+      .map((i, idx) => ({ ...i, order: idx }));
 
     if (ingredientList.length === 0) {
       error = 'At least one ingredient is required';
@@ -258,9 +309,8 @@
     }
 
     const instructionList = instructions
-      .split('\n')
-      .map((i: string) => i.trim())
-      .filter(Boolean);
+      .filter((i) => i.text.trim())
+      .map((i, idx) => ({ ...i, order: idx }));
 
     if (instructionList.length === 0) {
       error = 'At least one instruction is required';
@@ -291,17 +341,17 @@
       }
     }
 
-    const data = {
+    const data: any = {
       title: title.trim(),
       description: description.trim() || undefined,
       prepTime: prepTime ? parseInt(prepTime) : undefined,
       cookTime: cookTime ? parseInt(cookTime) : undefined,
       totalTime: totalTime ? parseInt(totalTime) : undefined,
-      servings: servings ? parseInt(servings) : undefined,
+      servings: servings ? parseFloat(servings) : undefined,
       imageUrl: imageUrl.trim() || undefined,
       sourceUrl: sourceUrl.trim() || undefined,
-      ingredients: ingredientList,
-      instructions: instructionList,
+      ingredients: { items: ingredientList },
+      instructions: { items: instructionList },
       tags: tagList,
       nutrition,
       // Include components data for the parent to handle
@@ -310,6 +360,11 @@
         servingsNeeded: typeof c.servingsNeeded === 'number' ? c.servingsNeeded : parseFloat(c.servingsNeeded) || 1,
       })),
     };
+
+    // Include recipe ID if editing/updating
+    if (recipe?.id) {
+      data.id = recipe.id;
+    }
 
     loading = true;
     try {
@@ -326,110 +381,261 @@
     <div class="error">{error}</div>
   {/if}
 
-  <div class="form-group">
-    <label for="title">Title *</label>
-    <input id="title" type="text" bind:value={title} required maxlength="200" />
-  </div>
-
-  <div class="form-group">
-    <label for="description">Description</label>
-    <textarea id="description" bind:value={description} rows="3" maxlength="1000"></textarea>
-  </div>
-
-  <div class="form-row">
+  <!-- Core Recipe Section (Always Visible) -->
+  <section class="core-section">
     <div class="form-group">
-      <label for="prepTime">Prep Time (minutes)</label>
-      <input id="prepTime" type="number" bind:value={prepTime} min="0" />
-    </div>
-
-    <div class="form-group">
-      <label for="cookTime">Cook Time (minutes)</label>
-      <input id="cookTime" type="number" bind:value={cookTime} min="0" />
-    </div>
-
-    <div class="form-group">
-      <label for="totalTime">Total Time (minutes)</label>
-      <input id="totalTime" type="number" bind:value={totalTime} min="0" />
-    </div>
-
-    <div class="form-group">
-      <label for="servings">Servings</label>
-      <input id="servings" type="number" bind:value={servings} min="1" />
-    </div>
-  </div>
-
-  <div class="form-group">
-    <label for="ingredients">Ingredients * (one per line)</label>
-    <textarea
-      id="ingredients"
-      bind:value={ingredients}
-      rows="8"
-      required
-      placeholder="2 cups flour&#10;1 cup sugar&#10;1 tsp vanilla"
-    ></textarea>
-  </div>
-
-  <div class="form-group">
-    <label for="instructions">Instructions * (one per line)</label>
-    <textarea
-      id="instructions"
-      bind:value={instructions}
-      rows="10"
-      required
-      placeholder="Preheat oven to 350°F&#10;Mix dry ingredients&#10;Bake for 30 minutes"
-    ></textarea>
-  </div>
-
-  <div class="form-group">
-    <div class="label-with-action">
-      <label for="tags">Tags (comma-separated)</label>
-      <AIButton
-        onclick={handleSuggestTags}
-        loading={loadingTagSuggestions}
-        label="Suggest Tags"
-        loadingLabel="Suggesting..."
-        size="sm"
-        variant="subtle"
+      <label for="title">Title *</label>
+      <input
+        id="title"
+        type="text"
+        bind:value={title}
+        required
+        maxlength="200"
+        placeholder="Recipe name (e.g., Grandma's Apple Pie)"
       />
     </div>
-    <input
-      id="tags"
-      type="text"
-      bind:value={tags}
-      placeholder="dessert, chocolate, cookies"
-    />
-    {#if tagSuggestionsError}
-      <span class="field-error">{tagSuggestionsError}</span>
-    {/if}
-    {#if tagSuggestions.length > 0}
-      <TagSuggestionsPanel
-        suggestions={tagSuggestions}
-        selectedTags={tags.split(',').map((t: string) => t.trim()).filter(Boolean)}
-        onSelect={handleSelectSuggestedTag}
-        onDismiss={dismissTagSuggestions}
+
+    <div class="form-group">
+      <DynamicListInput
+        label="Ingredients"
+        required={true}
+        items={ingredients}
+        placeholder="e.g., 2 cups flour"
+        onChange={(newItems) => ingredients = newItems}
       />
-    {/if}
-  </div>
-
-  <div class="form-group">
-    <div class="label-with-action">
-      <label for="imageUrl">Image URL</label>
-      <button
-        type="button"
-        class="btn-secondary btn-sm"
-        onclick={() => showImageSearch = true}
-      >
-        <Search size={16} />
-        Search Images
-      </button>
     </div>
-    <input id="imageUrl" type="url" bind:value={imageUrl} placeholder="https://example.com/image.jpg" />
-  </div>
 
-  <div class="form-group">
-    <label for="sourceUrl">Source URL</label>
-    <input id="sourceUrl" type="url" bind:value={sourceUrl} />
-  </div>
+    <div class="form-group">
+      <DynamicListInput
+        label="Instructions"
+        required={true}
+        items={instructions}
+        placeholder="e.g., Preheat oven to 350°F"
+        onChange={(newItems) => instructions = newItems}
+      />
+    </div>
+  </section>
+
+  <!-- Quick Stats Row (Mobile) / Desktop Time Row -->
+  <section class="quick-stats-section">
+    <div class="form-row quick-stats">
+      <div class="form-group time-field desktop-only">
+        <div class="label-with-toggle">
+          <label for="prepTime">Prep</label>
+          <div class="unit-toggle">
+            <button
+              type="button"
+              class="unit-btn"
+              class:active={prepTimeUnit === 'minutes'}
+              onclick={() => prepTimeUnit = 'minutes'}
+            >min</button>
+            <button
+              type="button"
+              class="unit-btn"
+              class:active={prepTimeUnit === 'hours'}
+              onclick={() => prepTimeUnit = 'hours'}
+            >hr</button>
+          </div>
+        </div>
+        <input
+          id="prepTime"
+          type="number"
+          bind:value={prepTime}
+          min="0"
+          step={prepTimeUnit === 'hours' ? '0.1' : '1'}
+          placeholder={prepTimeUnit === 'hours' ? '0.5' : '30'}
+        />
+      </div>
+
+      <div class="form-group time-field desktop-only">
+        <div class="label-with-toggle">
+          <label for="cookTime">Cook</label>
+          <div class="unit-toggle">
+            <button
+              type="button"
+              class="unit-btn"
+              class:active={cookTimeUnit === 'minutes'}
+              onclick={() => cookTimeUnit = 'minutes'}
+            >min</button>
+            <button
+              type="button"
+              class="unit-btn"
+              class:active={cookTimeUnit === 'hours'}
+              onclick={() => cookTimeUnit = 'hours'}
+            >hr</button>
+          </div>
+        </div>
+        <input
+          id="cookTime"
+          type="number"
+          bind:value={cookTime}
+          min="0"
+          step={cookTimeUnit === 'hours' ? '0.1' : '1'}
+          placeholder={cookTimeUnit === 'hours' ? '0.5' : '30'}
+        />
+      </div>
+
+      <div class="form-group">
+        <div class="label-with-toggle">
+          <label for="totalTime">Total Time</label>
+          <div class="unit-toggle">
+            <button
+              type="button"
+              class="unit-btn"
+              class:active={totalTimeUnit === 'minutes'}
+              onclick={() => { totalTimeUnit = 'minutes'; totalTimeManuallyEdited = true; }}
+            >min</button>
+            <button
+              type="button"
+              class="unit-btn"
+              class:active={totalTimeUnit === 'hours'}
+              onclick={() => { totalTimeUnit = 'hours'; totalTimeManuallyEdited = true; }}
+            >hr</button>
+          </div>
+        </div>
+        <input
+          id="totalTime"
+          type="number"
+          bind:value={totalTime}
+          oninput={() => totalTimeManuallyEdited = true}
+          min="0"
+          step={totalTimeUnit === 'hours' ? '0.1' : '1'}
+          placeholder={totalTimeUnit === 'hours' ? '1.5' : '90'}
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="servings">Servings</label>
+        <input id="servings" type="number" bind:value={servings} min="0.1" step="0.1" />
+      </div>
+    </div>
+  </section>
+
+  <!-- Additional Details Expandable Section -->
+  <ExpandableSection title="Add Details" bind:expanded={detailsExpanded}>
+    <div class="details-content">
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea
+          id="description"
+          bind:value={description}
+          rows="2"
+          maxlength="1000"
+          placeholder="A brief description of your recipe..."
+        ></textarea>
+      </div>
+
+      <!-- Prep/Cook time for mobile -->
+      <div class="form-row mobile-time-row">
+        <div class="form-group">
+          <div class="label-with-toggle">
+            <label for="prepTimeMobile">Prep Time</label>
+            <div class="unit-toggle">
+              <button
+                type="button"
+                class="unit-btn"
+                class:active={prepTimeUnit === 'minutes'}
+                onclick={() => prepTimeUnit = 'minutes'}
+              >min</button>
+              <button
+                type="button"
+                class="unit-btn"
+                class:active={prepTimeUnit === 'hours'}
+                onclick={() => prepTimeUnit = 'hours'}
+              >hr</button>
+            </div>
+          </div>
+          <input
+            id="prepTimeMobile"
+            type="number"
+            bind:value={prepTime}
+            min="0"
+            step={prepTimeUnit === 'hours' ? '0.1' : '1'}
+            placeholder={prepTimeUnit === 'hours' ? '0.5' : '30'}
+          />
+        </div>
+
+        <div class="form-group">
+          <div class="label-with-toggle">
+            <label for="cookTimeMobile">Cook Time</label>
+            <div class="unit-toggle">
+              <button
+                type="button"
+                class="unit-btn"
+                class:active={cookTimeUnit === 'minutes'}
+                onclick={() => cookTimeUnit = 'minutes'}
+              >min</button>
+              <button
+                type="button"
+                class="unit-btn"
+                class:active={cookTimeUnit === 'hours'}
+                onclick={() => cookTimeUnit = 'hours'}
+              >hr</button>
+            </div>
+          </div>
+          <input
+            id="cookTimeMobile"
+            type="number"
+            bind:value={cookTime}
+            min="0"
+            step={cookTimeUnit === 'hours' ? '0.1' : '1'}
+            placeholder={cookTimeUnit === 'hours' ? '0.5' : '30'}
+          />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="label-with-action">
+          <label for="tags">Tags</label>
+          <AIButton
+            onclick={handleSuggestTags}
+            loading={loadingTagSuggestions}
+            label="Suggest"
+            loadingLabel="..."
+            size="sm"
+            variant="subtle"
+          />
+        </div>
+        <input
+          id="tags"
+          type="text"
+          bind:value={tags}
+          placeholder="dessert, chocolate, cookies"
+        />
+        {#if tagSuggestionsError}
+          <span class="field-error">{tagSuggestionsError}</span>
+        {/if}
+        {#if tagSuggestions.length > 0}
+          <TagSuggestionsPanel
+            suggestions={tagSuggestions}
+            selectedTags={tags.split(',').map((t: string) => t.trim()).filter(Boolean)}
+            onSelect={handleSelectSuggestedTag}
+            onDismiss={dismissTagSuggestions}
+          />
+        {/if}
+      </div>
+
+      <div class="form-group">
+        <div class="label-with-action">
+          <label for="imageUrl">Image URL</label>
+          <button
+            type="button"
+            class="btn-secondary btn-sm"
+            onclick={() => showImageSearch = true}
+          >
+            <Search size={16} />
+            <span class="btn-label">Search</span>
+          </button>
+        </div>
+        <input id="imageUrl" type="url" bind:value={imageUrl} placeholder="https://example.com/image.jpg" />
+      </div>
+
+      <div class="form-group">
+        <label for="sourceUrl">Source URL</label>
+        <input id="sourceUrl" type="url" bind:value={sourceUrl} placeholder="Where did this recipe come from?" />
+      </div>
+    </div>
+  </ExpandableSection>
 
   <!-- Nutrition Section -->
   <div class="nutrition-section">
@@ -438,7 +644,8 @@
       class="nutrition-toggle"
       onclick={() => showNutrition = !showNutrition}
     >
-      {showNutrition ? '▼' : '▶'} Nutrition Information (per serving)
+      <span class="toggle-icon">{showNutrition ? '▼' : '▶'}</span>
+      <span>Nutrition Information (per serving)</span>
     </button>
 
     {#if showNutrition}
@@ -473,7 +680,7 @@
             <input id="protein" type="number" bind:value={protein} min="0" step="0.1" />
           </div>
           <div class="form-group">
-            <label for="carbohydrates">Carbohydrates (g)</label>
+            <label for="carbohydrates">Carbs (g)</label>
             <input id="carbohydrates" type="number" bind:value={carbohydrates} min="0" step="0.1" />
           </div>
         </div>
@@ -484,7 +691,7 @@
             <input id="fat" type="number" bind:value={fat} min="0" step="0.1" />
           </div>
           <div class="form-group">
-            <label for="saturatedFat">Saturated Fat (g)</label>
+            <label for="saturatedFat">Sat Fat (g)</label>
             <input id="saturatedFat" type="number" bind:value={saturatedFat} min="0" step="0.1" />
           </div>
           <div class="form-group">
@@ -500,11 +707,11 @@
           </div>
           <div class="form-group">
             <label for="sodium">Sodium (mg)</label>
-            <input id="sodium" type="number" bind:value={sodium} min="0" step="1" />
+            <input id="sodium" type="number" bind:value={sodium} min="0" step="0.1" />
           </div>
           <div class="form-group">
             <label for="cholesterol">Cholesterol (mg)</label>
-            <input id="cholesterol" type="number" bind:value={cholesterol} min="0" step="1" />
+            <input id="cholesterol" type="number" bind:value={cholesterol} min="0" step="0.1" />
           </div>
         </div>
       </div>
@@ -518,7 +725,8 @@
       class="components-toggle"
       onclick={() => showComponents = !showComponents}
     >
-      {showComponents ? '▼' : '▶'} Components (Compound Recipe)
+      <span class="toggle-icon">{showComponents ? '▼' : '▶'}</span>
+      <span>Components (Compound Recipe)</span>
       {#if components.length > 0}
         <span class="component-count">{components.length}</span>
       {/if}
@@ -582,7 +790,7 @@
 
   <div class="form-actions">
     <button type="submit" class="btn-primary btn-md" disabled={loading}>
-      {loading ? 'Saving...' : recipe ? 'Update Recipe' : 'Create Recipe'}
+      {loading ? 'Saving...' : recipe?.id ? 'Update Recipe' : 'Create Recipe'}
     </button>
     <button type="button" class="btn-secondary btn-md" onclick={onCancel}>Cancel</button>
   </div>
@@ -622,14 +830,17 @@
     font-size: var(--text-sm);
   }
 
+  /* Core section styling */
+  .core-section {
+    margin-bottom: var(--spacing-5);
+  }
+
   .form-group {
     margin-bottom: var(--spacing-5);
   }
 
-  .form-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: var(--spacing-4);
+  .form-group:last-child {
+    margin-bottom: 0;
   }
 
   label {
@@ -640,22 +851,10 @@
     font-size: var(--text-sm);
   }
 
-  .label-with-action {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--spacing-2);
-  }
-
-  .label-with-action label {
-    margin-bottom: 0;
-  }
-
-  .field-error {
-    display: block;
-    color: var(--color-error);
-    font-size: var(--text-sm);
-    margin-top: var(--spacing-1);
+  .hint {
+    font-weight: var(--font-normal);
+    color: var(--color-text-light);
+    font-size: var(--text-xs);
   }
 
   input,
@@ -669,6 +868,7 @@
     background: var(--color-surface);
     color: var(--color-text);
     transition: var(--transition-normal);
+    min-height: 48px;
   }
 
   textarea {
@@ -679,13 +879,112 @@
   textarea:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    box-shadow: 0 0 0 3px rgba(224, 122, 82, 0.1);
   }
 
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-text-light);
+    opacity: 0.6;
+  }
+
+  /* Quick stats row */
+  .quick-stats-section {
+    margin-bottom: var(--spacing-5);
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: var(--spacing-4);
+  }
+
+  .quick-stats {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .mobile-time-row {
+    display: none;
+  }
+
+  /* Details section */
+  .details-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-4);
+  }
+
+  .label-with-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-2);
+  }
+
+  .label-with-action label {
+    margin-bottom: 0;
+  }
+
+  .label-with-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-2);
+  }
+
+  .label-with-toggle label {
+    margin-bottom: 0;
+  }
+
+  .unit-toggle {
+    display: flex;
+    gap: 0;
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-md);
+    padding: 2px;
+  }
+
+  .unit-btn {
+    padding: var(--spacing-1) var(--spacing-2);
+    font-size: var(--text-xs);
+    font-weight: var(--font-medium);
+    border: none;
+    background: transparent;
+    color: var(--color-text-light);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: var(--transition-fast);
+    min-width: 32px;
+  }
+
+  .unit-btn.active {
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .unit-btn:hover:not(.active) {
+    color: var(--color-text);
+  }
+
+  .unit-btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  .field-error {
+    display: block;
+    color: var(--color-error);
+    font-size: var(--text-sm);
+    margin-top: var(--spacing-1);
+  }
+
+  /* Form actions */
   .form-actions {
     display: flex;
     gap: var(--spacing-4);
     margin-top: var(--spacing-8);
+    padding-bottom: var(--spacing-4);
   }
 
   .btn-primary,
@@ -697,6 +996,11 @@
     cursor: pointer;
     border: 2px solid transparent;
     transition: var(--transition-normal);
+    min-height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
   }
 
   .btn-primary {
@@ -736,6 +1040,12 @@
     box-shadow: var(--shadow-md);
   }
 
+  .btn-sm {
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: var(--text-sm);
+    min-height: 36px;
+  }
+
   /* Nutrition section styles */
   .nutrition-section {
     margin-bottom: var(--spacing-5);
@@ -755,10 +1065,18 @@
     color: var(--color-text);
     cursor: pointer;
     transition: var(--transition-normal);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
   }
 
   .nutrition-toggle:hover {
     background: var(--color-border-light);
+  }
+
+  .toggle-icon {
+    display: inline-block;
+    transition: transform 0.2s ease;
   }
 
   .nutrition-fields {
@@ -851,6 +1169,7 @@
     font-weight: var(--font-bold);
     min-width: 20px;
     text-align: center;
+    margin-left: auto;
   }
 
   .components-content {
@@ -923,42 +1242,92 @@
     text-align: center;
   }
 
-  /* Responsive form row - better breakpoints */
-  @media (max-width: 768px) {
-    .form-row {
-      grid-template-columns: repeat(2, 1fr);
-    }
+  /* Desktop only */
+  .desktop-only {
+    display: block;
   }
 
-  @media (max-width: 480px) {
-    .form-row {
-      grid-template-columns: 1fr;
+  /* Button icon */
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .btn-icon:hover {
+    background: var(--color-bg-subtle);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .btn-icon.btn-sm {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 768px) {
+    .recipe-form {
+      padding: var(--spacing-2);
     }
 
-    .form-row .form-group {
+    .form-group {
       margin-bottom: var(--spacing-4);
     }
 
-    .form-row .form-group:last-child {
-      margin-bottom: 0;
+    .form-row {
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--spacing-3);
     }
-  }
 
-  /* Nutrition row responsive */
-  @media (max-width: 768px) {
+    .quick-stats {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .desktop-only {
+      display: none;
+    }
+
+    .mobile-time-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--spacing-3);
+    }
+
     .nutrition-row {
       grid-template-columns: repeat(2, 1fr);
     }
-  }
 
-  @media (max-width: 480px) {
-    .nutrition-row {
-      grid-template-columns: 1fr;
+    input,
+    textarea {
+      font-size: 16px; /* Prevent iOS zoom on focus */
     }
   }
 
-  /* Component item mobile improvements */
   @media (max-width: 640px) {
+    .form-actions {
+      position: sticky;
+      bottom: calc(64px + env(safe-area-inset-bottom));
+      background: var(--color-bg);
+      padding: var(--spacing-4) 0;
+      margin-top: var(--spacing-4);
+      border-top: 1px solid var(--color-border);
+      z-index: 10;
+    }
+
+    .nutrition-row {
+      grid-template-columns: 1fr;
+    }
+
     .component-item {
       flex-direction: column;
       align-items: flex-start;
@@ -983,17 +1352,55 @@
       font-size: var(--text-base);
     }
 
-    .component-controls .btn-icon {
-      width: 44px;
-      height: 44px;
-      min-width: 44px;
-      min-height: 44px;
+    .btn-label {
+      display: none;
     }
   }
 
-  /* Servings input larger touch target */
-  input#servings,
+  @media (max-width: 480px) {
+    .form-row,
+    .quick-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .mobile-time-row {
+      grid-template-columns: 1fr;
+    }
+
+    .form-row .form-group,
+    .quick-stats .form-group {
+      margin-bottom: var(--spacing-3);
+    }
+
+    .form-row .form-group:last-child,
+    .quick-stats .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .nutrition-fields,
+    .components-content {
+      padding: var(--spacing-3);
+    }
+
+    .nutrition-toggle,
+    .components-toggle {
+      padding: var(--spacing-3);
+      font-size: var(--text-sm);
+    }
+  }
+
+  /* Touch target improvements */
+  input[type="number"],
   .servings-input {
-    min-height: 44px;
+    min-height: 48px;
+  }
+
+  /* Ensure safe area padding for sticky actions */
+  @supports (padding-bottom: env(safe-area-inset-bottom)) {
+    @media (max-width: 640px) {
+      .form-actions {
+        padding-bottom: calc(var(--spacing-4) + env(safe-area-inset-bottom));
+      }
+    }
   }
 </style>

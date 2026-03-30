@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { getItemTexts, getSortedItems } from '$lib/utils/recipe-helpers';
+  import type { RecipeItemList } from '$lib/server/db/schema';
+
   interface ComponentData {
     id: string;
     childRecipeId: string;
@@ -8,8 +11,8 @@
       id: string;
       title: string;
       servings?: number | null;
-      ingredients: string[];
-      instructions: string[];
+      ingredients: RecipeItemList;
+      instructions: RecipeItemList;
       tags?: { id: string; name: string }[];
       components?: ComponentData[];
     };
@@ -87,8 +90,8 @@
       <div class="component-ingredients">
         <h5>Ingredients:</h5>
         <ul>
-          {#each component.childRecipe.ingredients as ingredient}
-            <li>{scaleIngredient(ingredient, scale)}</li>
+          {#each getSortedItems(component.childRecipe.ingredients) as item (item.id)}
+            <li>{scaleIngredient(item.text, scale)}</li>
           {/each}
         </ul>
       </div>
@@ -97,8 +100,8 @@
       <div class="component-instructions">
         <h5>Instructions:</h5>
         <ol>
-          {#each component.childRecipe.instructions as instruction}
-            <li>{instruction}</li>
+          {#each getSortedItems(component.childRecipe.instructions) as item (item.id)}
+            <li>{item.text}</li>
           {/each}
         </ol>
       </div>

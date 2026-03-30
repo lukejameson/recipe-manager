@@ -5,17 +5,19 @@ import { sessions, users } from '$lib/server/db/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import crypto from 'crypto';
 import type { Cookies } from '@sveltejs/kit';
-import { JWT_SECRET, NODE_ENV } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 
 let secretKey: Uint8Array | null = null;
 
 function getSecret(): Uint8Array {
   if (secretKey) return secretKey;
 
-  if (!JWT_SECRET) {
+  const jwtSecret = env?.JWT_SECRET || process.env.JWT_SECRET;
+
+  if (!jwtSecret) {
     throw new Error('JWT_SECRET environment variable is required');
   }
-  secretKey = new TextEncoder().encode(JWT_SECRET);
+  secretKey = new TextEncoder().encode(jwtSecret);
   return secretKey;
 }
 
@@ -24,10 +26,12 @@ const SHORT_SESSION_DURATION_DAYS = 1; // 24 hours
 const LONG_SESSION_DURATION_DAYS = 90; // ~3 months
 
 // Cookie settings
-const isProduction = NODE_ENV === 'production';
+function isProduction(): boolean {
+  return (env?.NODE_ENV || process.env.NODE_ENV) === 'production';
+}
 const getCookieOptions = (rememberMe: boolean) => ({
   httpOnly: true,
-  secure: isProduction,
+  secure: isProduction(),
   sameSite: 'lax' as const,
   maxAge: 60 * 60 * 24 * (rememberMe ? LONG_SESSION_DURATION_DAYS : SHORT_SESSION_DURATION_DAYS),
   path: '/',

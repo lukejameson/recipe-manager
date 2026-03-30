@@ -1,0 +1,25 @@
+services:
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://recipe_user:recipe_pass@localhost:5432/recipe_manager}
+      - JWT_SECRET=${JWT_SECRET:-local-dev-secret-change-in-production}
+      - PORT=5173
+      - NODE_ENV=production
+    ports:
+      - "5173:5173"
+    restart: unless-stopped
+    networks:
+      - docker_manga_network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5173/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  docker_manga_network:
+    external: true

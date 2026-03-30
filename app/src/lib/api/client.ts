@@ -99,6 +99,9 @@ export const apiClient = {
       body: JSON.stringify(data),
     }),
 
+  checkDuplicateRecipe: (title: string, sourceUrl?: string) =>
+    api<{ exists: boolean; recipe?: import('$lib/server/db/schema').Recipe & { tags: string[] } }>(`/api/recipes/check-duplicate?title=${encodeURIComponent(title)}${sourceUrl ? `&sourceUrl=${encodeURIComponent(sourceUrl)}` : ''}`),
+
   deleteRecipe: (id: string) =>
     api<{ success: boolean }>(`/api/recipes/${id}`, { method: 'DELETE' }),
 

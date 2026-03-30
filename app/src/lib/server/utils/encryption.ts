@@ -1,8 +1,16 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
-import { JWT_SECRET } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 
 // Derive a 32-byte encryption key from JWT_SECRET using scrypt
-const ENCRYPTION_KEY = scryptSync(JWT_SECRET, 'recipe-manager-encryption-salt', 32);
+function getEncryptionKey(): Buffer {
+  const jwtSecret = env?.JWT_SECRET || process.env.JWT_SECRET;
+
+  if (!jwtSecret) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+
+  return scryptSync(jwtSecret, 'recipe-manager-encryption-salt', 32);
+}
 
 /**
  * Encrypt a plaintext string using AES-256-GCM
@@ -10,7 +18,7 @@ const ENCRYPTION_KEY = scryptSync(JWT_SECRET, 'recipe-manager-encryption-salt', 
  */
 export function encrypt(text: string): string {
 	const iv = randomBytes(16);
-	const cipher = createCipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
+	const cipher = createCipheriv('aes-256-gcm', getEncryptionKey(), iv);
 	let encrypted = cipher.update(text, 'utf8', 'hex');
 	encrypted += cipher.final('hex');
 	const authTag = cipher.getAuthTag();
@@ -28,7 +36,7 @@ export function decrypt(encryptedText: string): string {
 	const [ivHex, authTagHex, encrypted] = parts;
 	const iv = Buffer.from(ivHex, 'hex');
 	const authTag = Buffer.from(authTagHex, 'hex');
-	const decipher = createDecipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
+	const decipher = createDecipheriv('aes-256-gcm', getEncryptionKey(), iv);
 	decipher.setAuthTag(authTag);
 	let decrypted = decipher.update(encrypted, 'hex', 'utf8');
 	decrypted += decipher.final('utf8');

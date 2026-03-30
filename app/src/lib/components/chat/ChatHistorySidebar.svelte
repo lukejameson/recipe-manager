@@ -181,8 +181,21 @@
   });
 </script>
 
-<div class="sidebar-backdrop" class:open={mobileOpen} onclick={handleBackdropClick} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onMobileClose?.()} aria-label="Close sidebar">
-  <div class="sidebar" class:mobile-open={mobileOpen} onclick={(e) => e.stopPropagation()}>
+<!-- Desktop sidebar (always visible) -->
+<div class="sidebar desktop-sidebar">
+  {@render SidebarContent()}
+</div>
+
+<!-- Mobile sidebar with backdrop -->
+{#if mobileOpen}
+  <div class="sidebar-backdrop" class:open={mobileOpen} onclick={handleBackdropClick} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onMobileClose?.()} aria-label="Close sidebar">
+    <div class="sidebar mobile-sidebar" class:mobile-open={mobileOpen} onclick={(e) => e.stopPropagation()}>
+      {@render SidebarContent()}
+    </div>
+  </div>
+{/if}
+
+{#snippet SidebarContent()}
   <div class="sidebar-header">
     <h2>Chat History</h2>
     {#if mobileOpen}
@@ -302,8 +315,7 @@
       {/if}
     {/if}
   </div>
-</div>
-</div>
+{/snippet}
 
 <style>
   .sidebar {
@@ -647,12 +659,34 @@
     color: var(--color-primary);
   }
 
-  /* Mobile Backdrop */
-  .sidebar-backdrop {
+  /* Desktop sidebar */
+  .desktop-sidebar {
+    display: flex;
+    height: 100%;
+  }
+
+  .mobile-sidebar {
     display: none;
   }
 
+  /* Mobile Backdrop */
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 199;
+  }
+
   @media (max-width: 768px) {
+    .desktop-sidebar {
+      display: none;
+    }
+
+    .mobile-sidebar {
+      display: flex;
+    }
+
     .sidebar-backdrop {
       display: block;
       position: fixed;
@@ -662,35 +696,20 @@
       bottom: 0;
       background: rgba(0, 0, 0, 0.5);
       z-index: 199;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
-      pointer-events: none;
-    }
-
-    .sidebar-backdrop.open {
-      opacity: 1;
-      visibility: visible;
-      pointer-events: auto;
     }
 
     .sidebar {
       position: fixed;
       top: 0;
-      left: -100%;
+      left: 0;
       width: 280px;
       height: 100vh;
       height: 100dvh; /* Dynamic viewport height for mobile */
       z-index: 200;
       box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
-      transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       overflow: hidden;
       /* Ensure sidebar captures all clicks */
       pointer-events: auto;
-    }
-
-    .sidebar.mobile-open {
-      left: 0;
     }
 
     .btn-mobile-close {

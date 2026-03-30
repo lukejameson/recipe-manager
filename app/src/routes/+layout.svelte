@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import MobileBottomNav from '$lib/components/MobileBottomNav.svelte';
 
   let { children } = $props();
 
@@ -16,7 +17,10 @@
 </script>
 
 <div class="app">
-  {@render children()}
+  <main class="main-content">
+    {@render children()}
+  </main>
+  <MobileBottomNav />
 </div>
 
 <style>
@@ -387,6 +391,17 @@
   :global(.body-scroll-lock) {
     overflow: hidden;
     touch-action: none;
+  }
+
+  .main-content {
+    flex: 1;
+  }
+
+  /* Mobile bottom nav content padding */
+  @media (max-width: 768px) {
+    .main-content {
+      padding-bottom: calc(64px + env(safe-area-inset-bottom));
+    }
   }
 
   .app {

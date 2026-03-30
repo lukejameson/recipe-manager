@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { randomUUID } from 'crypto';
 
 const generateSchema = z.object({
   prompt: z.string().min(1),
@@ -12,6 +13,26 @@ const generateSchema = z.object({
   difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
   maxTime: z.number().optional(),
 });
+
+interface RecipeItem {
+  id: string;
+  text: string;
+  order: number;
+  checked?: boolean;
+}
+
+function stringsToItemList(strings: string[]): { items: RecipeItem[] } {
+  return {
+    items: strings
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .map((text, i) => ({
+        id: randomUUID(),
+        text,
+        order: i
+      }))
+  };
+}
 
 // POST /api/ai/generate - Generate a recipe from prompt
 export const POST: RequestHandler = async ({ request, cookies }) => {
@@ -105,8 +126,8 @@ Important:
       recipe: {
         title: String(recipeData.title),
         description: String(recipeData.description || ''),
-        ingredients: recipeData.ingredients as string[],
-        instructions: recipeData.instructions as string[],
+        ingredients: stringsToItemList(recipeData.ingredients as string[]),
+        instructions: stringsToItemList(recipeData.instructions as string[]),
         prepTime: typeof recipeData.prepTime === 'number' ? recipeData.prepTime : undefined,
         cookTime: typeof recipeData.cookTime === 'number' ? recipeData.cookTime : undefined,
         servings: typeof recipeData.servings === 'number' ? recipeData.servings : undefined,

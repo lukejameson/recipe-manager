@@ -122,10 +122,17 @@ export class AIServiceV2 {
 		feature: AIFeature,
 		options: Omit<GenerationOptions, 'model' | 'apiKey'>
 	): Promise<GenerationResult> {
-		const config = await this.getFeatureConfig(feature);
+		let config = await this.getFeatureConfig(feature);
 
 		if (!config) {
-			throw new Error(`No configuration found for feature: ${feature}`);
+			// Fallback: find any existing feature config to use as template
+			const allFeatureConfigs = await db.select().from(featureModelConfigs).limit(1);
+			if (allFeatureConfigs.length === 0) {
+				throw new Error('No AI feature configurations found. Please configure features in Settings.');
+			}
+			// Use the first available config as fallback template
+			config = allFeatureConfigs[0];
+			console.warn(`[AIServiceV2] No config for ${feature}, using config from ${config.featureId} as fallback`);
 		}
 
 		const provider = providerRegistry.get(config.providerId);

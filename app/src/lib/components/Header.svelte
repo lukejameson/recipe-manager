@@ -440,6 +440,12 @@
     align-items: center;
   }
 
+  @media (min-width: 769px) {
+    .desktop-nav {
+      display: flex !important;
+    }
+  }
+
   .desktop-nav > a {
     color: var(--color-text-secondary);
     text-decoration: none;

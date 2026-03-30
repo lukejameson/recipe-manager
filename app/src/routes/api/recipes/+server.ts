@@ -5,6 +5,32 @@ import { recipes, tags, recipeTags, users, DEFAULT_FEATURE_FLAGS } from '$lib/se
 import { getCurrentUser } from '$lib/server/auth';
 import { eq, and, like, or, inArray, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
+import { normalizeRecipeData } from '$lib/utils/recipe-helpers';
+
+// Recipe item schema for structured ingredients/instructions
+const recipeItemSchema = z.object({
+  id: z.string().uuid(),
+  text: z.string().min(1, 'Item cannot be empty'),
+  order: z.number().int().min(0),
+});
+
+const recipeItemListSchema = z.object({
+  items: z.array(recipeItemSchema)
+});
+
+// Nutrition schema
+const nutritionSchema = z.object({
+  calories: z.number().min(0).optional(),
+  protein: z.number().min(0).optional(),
+  carbohydrates: z.number().min(0).optional(),
+  fat: z.number().min(0).optional(),
+  saturatedFat: z.number().min(0).optional(),
+  fiber: z.number().min(0).optional(),
+  sugar: z.number().min(0).optional(),
+  sodium: z.number().min(0).optional(),
+  cholesterol: z.number().min(0).optional(),
+});
 
 // Validation schema
 const recipeInputSchema = z.object({
@@ -13,9 +39,9 @@ const recipeInputSchema = z.object({
   prepTime: z.number().min(0).optional(),
   cookTime: z.number().min(0).optional(),
   totalTime: z.number().min(0).optional(),
-  servings: z.number().min(1).optional(),
-  ingredients: z.array(z.string()).min(1),
-  instructions: z.array(z.string()).min(1),
+  servings: z.number().min(0).optional(),
+  ingredients: recipeItemListSchema,
+  instructions: recipeItemListSchema,
   imageUrl: z.string().url().optional().or(z.literal('')),
   sourceUrl: z.string().url().optional().or(z.literal('')),
   tags: z.array(z.string()).optional(),
@@ -23,6 +49,7 @@ const recipeInputSchema = z.object({
   rating: z.number().min(1).max(5).optional(),
   notes: z.string().optional(),
   difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
+  nutrition: nutritionSchema.optional(),
 });
 
 /**
@@ -141,10 +168,16 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
     // Get tags for all recipes
     const tagsByRecipe = await getRecipesTags(allRecipes.map(r => r.id));
 
-    return json(allRecipes.map(recipe => ({
-      ...recipe,
-      tags: tagsByRecipe[recipe.id] || [],
-    })));
+    // Normalize each recipe to ensure proper data structure
+    const normalizedRecipes = allRecipes.map(recipe => {
+      const normalized = normalizeRecipeData(recipe);
+      return {
+        ...normalized,
+        tags: tagsByRecipe[recipe.id] || [],
+      };
+    });
+
+    return json(normalizedRecipes);
   } catch (e) {
     if (e instanceof Error && 'status' in e) throw e;
     console.error('List recipes error:', e);

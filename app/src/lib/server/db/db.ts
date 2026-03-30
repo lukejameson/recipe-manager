@@ -1,19 +1,26 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.js';
-import { DATABASE_URL } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 
 let dbInstance: ReturnType<typeof drizzle<typeof schema>> | null = null;
 let poolInstance: Pool | null = null;
 
+function getDatabaseUrl(): string {
+  // Try dynamic env first (SvelteKit runtime), then process.env (fallback)
+  const url = env?.DATABASE_URL || process.env.DATABASE_URL;
+
+  if (!url) {
+    throw new Error('DATABASE_URL environment variable is required');
+  }
+
+  return url;
+}
+
 function getPool(): Pool {
   if (poolInstance) return poolInstance;
 
-  const connectionString = DATABASE_URL;
-
-  if (!connectionString) {
-    throw new Error('DATABASE_URL environment variable is required');
-  }
+  const connectionString = getDatabaseUrl();
 
   poolInstance = new Pool({
     connectionString,

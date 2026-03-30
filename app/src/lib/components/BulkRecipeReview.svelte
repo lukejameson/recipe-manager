@@ -3,6 +3,17 @@
   import { apiClient } from '$lib/api/client';
   import RecipeForm from './RecipeForm.svelte';
 
+  interface RecipeItem {
+    id: string;
+    text: string;
+    order: number;
+    checked?: boolean;
+  }
+
+  interface ItemList {
+    items: RecipeItem[];
+  }
+
   interface ExtractedRecipe {
     title: string;
     description: string;
@@ -10,8 +21,8 @@
     cookTime?: number;
     totalTime?: number;
     servings?: number;
-    ingredients: string[];
-    instructions: string[];
+    ingredients: string[] | ItemList;
+    instructions: string[] | ItemList;
     tags: string[];
     difficulty?: 'easy' | 'medium' | 'hard';
     confidence: number;
@@ -94,6 +105,20 @@
     }
   });
 
+  // Helper to extract texts from ingredients/instructions (handles both old and new formats)
+  function extractItemTexts(data: string[] | ItemList | undefined): string[] {
+    if (!data) return [];
+    // New format: { items: RecipeItem[] }
+    if (typeof data === 'object' && 'items' in data && Array.isArray(data.items)) {
+      return data.items.map((item: RecipeItem) => item.text).filter(Boolean);
+    }
+    // Old format: string[]
+    if (Array.isArray(data)) {
+      return data.filter((item: string) => item.trim());
+    }
+    return [];
+  }
+
   function convertToFormData(recipe: ExtractedRecipe) {
     return {
       title: recipe.title,
@@ -102,13 +127,13 @@
       cookTime: recipe.cookTime,
       totalTime: recipe.totalTime,
       servings: recipe.servings,
-      ingredients: recipe.ingredients,
-      instructions: recipe.instructions,
+      ingredients: extractItemTexts(recipe.ingredients),
+      instructions: extractItemTexts(recipe.instructions),
       tags: recipe.tags.map((t) => ({ name: t })),
       difficulty: recipe.difficulty,
       confidence: recipe.confidence,
       extractionNotes: recipe.extractionNotes,
-      failed: recipe.confidence === 0 && recipe.ingredients.length === 0,
+      failed: recipe.confidence === 0 && extractItemTexts(recipe.ingredients).length === 0,
     };
   }
 
@@ -189,6 +214,27 @@
     return lines.join('\n');
   }
 
+  // Helper to convert ingredients/instructions to structured format
+  function toStructuredItems(data: string[] | ItemList | undefined): ItemList {
+    if (!data) return { items: [] };
+    // Already in new format
+    if (typeof data === 'object' && 'items' in data && Array.isArray(data.items)) {
+      return data as ItemList;
+    }
+    // Old format: string[] - convert to structured
+    if (Array.isArray(data)) {
+      return {
+        items: data
+          .map((text: string, i: number) => ({
+            id: crypto.randomUUID(),
+            text,
+            order: i
+          }))
+      };
+    }
+    return { items: [] };
+  }
+
   async function handleSaveSelected() {
     const toSave = Array.from(selectedIndices)
       .filter((i) => !editedRecipes[i].failed)
@@ -206,8 +252,8 @@
           cookTime: recipe.cookTime,
           totalTime: recipe.totalTime,
           servings: recipe.servings,
-          ingredients: recipe.ingredients,
-          instructions: recipe.instructions,
+          ingredients: toStructuredItems(recipe.ingredients),
+          instructions: toStructuredItems(recipe.instructions),
           tags: recipe.tags.map((t: any) => (typeof t === 'string' ? t : t.name)),
           notes: extractionNote,
         };
@@ -274,7 +320,7 @@
                 {#if recipe.totalTime}
                   <span>{recipe.totalTime} min</span>
                 {/if}
-                <span>{recipe.ingredients.length} ingredients</span>
+                <span>{extractItemTexts(recipe.ingredients).length} ingredients</span>
               </div>
             {:else}
               <div class="recipe-meta failed-meta">

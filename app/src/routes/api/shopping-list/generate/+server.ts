@@ -35,13 +35,15 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
         eq(recipes.userId, user.id)
       ));
 
-    // Collect all ingredients
+    // Collect all ingredients from the items array
     const allIngredients: { ingredient: string; recipeId: string }[] = [];
 
     for (const recipe of selectedRecipes) {
-      for (const ingredient of recipe.ingredients) {
+      // Handle new RecipeItemList format
+      const ingredientItems = recipe.ingredients?.items || [];
+      for (const item of ingredientItems) {
         allIngredients.push({
-          ingredient,
+          ingredient: item.text,
           recipeId: recipe.id,
         });
       }
