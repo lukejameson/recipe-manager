@@ -12,6 +12,7 @@
     Download,
     Sparkles,
     FolderOpen,
+    Sliders,
   } from 'lucide-svelte';
 
   let {} = $props();
@@ -114,6 +115,10 @@
               <a href="/tags" class:active={$page.url.pathname === '/tags'} onclick={closeUserMenu}>
                 <Tag size={18} />
                 Tags
+              </a>
+              <a href="/preferences" class:active={$page.url.pathname === '/preferences'} onclick={closeUserMenu}>
+                <Sliders size={18} />
+                Preferences
               </a>
               <a href="/profile" class:active={$page.url.pathname === '/profile'} onclick={closeUserMenu}>
                 <User size={18} />

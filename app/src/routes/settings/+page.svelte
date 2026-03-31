@@ -77,14 +77,6 @@
   let pexelsApiKey = $state('');
   let savingPexels = $state(false);
   let pexelsSuccess = $state('');
-
-  // AI Memories
-  type Memory = { id: string; content: string; enabled: boolean; createdAt: Date };
-  let memories = $state<Memory[]>([]);
-  let newMemory = $state('');
-  let savingMemory = $state(false);
-  let memoriesSuccess = $state('');
-
   const providerDisplayNames: Record<string, string> = {
     'anthropic': 'Anthropic (Claude)',
     'openai': 'OpenAI (GPT)',
@@ -95,19 +87,13 @@
 
   onMount(async () => {
     try {
-      const [settings, userMemories] = await Promise.all([
-        apiClient.getSettings(),
-        apiClient.getMemories(),
-      ]);
+      const settings = await apiClient.getSettings();
       isAdmin = settings.isAdmin;
       hasApiKey = settings.hasApiKey;
       hasPexelsApiKey = settings.hasPexelsApiKey;
       selectedModel = settings.model;
       selectedSecondaryModel = settings.secondaryModel;
       availableModels = [...settings.availableModels];
-      memories = userMemories;
-
-      // Load multi-provider data if admin
       if (isAdmin) {
         await loadProviderData();
       }
@@ -358,52 +344,6 @@
       savingPexels = false;
     }
   }
-
-  async function handleAddMemory() {
-    if (!newMemory.trim()) return;
-
-    savingMemory = true;
-    error = '';
-
-    try {
-      const memory = await apiClient.createMemory(newMemory.trim());
-      memories = [memory, ...memories];
-      newMemory = '';
-      memoriesSuccess = 'Memory added!';
-      setTimeout(() => {
-        memoriesSuccess = '';
-      }, 3000);
-    } catch (err: any) {
-      error = err.message || 'Failed to add memory';
-    } finally {
-      savingMemory = false;
-    }
-  }
-
-  async function handleToggleMemory(id: string, enabled: boolean) {
-    try {
-      await apiClient.updateMemory(id, { enabled });
-      memories = memories.map((m) => (m.id === id ? { ...m, enabled } : m));
-    } catch (err: any) {
-      error = err.message || 'Failed to update memory';
-    }
-  }
-
-  async function handleDeleteMemory(id: string) {
-    if (!confirm('Are you sure you want to delete this memory?')) return;
-
-    try {
-      await apiClient.deleteMemory(id);
-      memories = memories.filter((m) => m.id !== id);
-      memoriesSuccess = 'Memory deleted';
-      setTimeout(() => {
-        memoriesSuccess = '';
-      }, 3000);
-    } catch (err: any) {
-      error = err.message || 'Failed to delete memory';
-    }
-  }
-
   function groupFeaturesByCategory(features: Feature[]): Map<string, Feature[]> {
     const grouped = new Map<string, Feature[]>();
     for (const feature of features) {
@@ -742,61 +682,6 @@
           {/if}
         </section>
       {/if}
-
-      <!-- My Preferences Section (for all users) -->
-      <section class="settings-section">
-        <h2>My Preferences</h2>
-        <p class="section-description">
-          Tell us about your dietary needs, allergies, and cooking preferences. This helps personalize recipe suggestions and generated recipes just for you.
-        </p>
-
-        {#if memoriesSuccess}
-          <div class="success-message">{memoriesSuccess}</div>
-        {/if}
-
-        {#if memories.length > 0}
-          <div class="memories-list">
-            {#each memories as memory (memory.id)}
-              <div class="memory-item" class:disabled={!memory.enabled}>
-                <label class="memory-toggle">
-                  <input
-                    type="checkbox"
-                    checked={memory.enabled}
-                    onchange={() => handleToggleMemory(memory.id, !memory.enabled)}
-                  />
-                  <span class="memory-content">{memory.content}</span>
-                </label>
-                <button
-                  class="btn-icon-danger"
-                  onclick={() => handleDeleteMemory(memory.id)}
-                  title="Delete"
-                >
-                  &times;
-                </button>
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <p class="empty-state">No preferences added yet. Add some to get personalized recipe suggestions.</p>
-        {/if}
-
-        <div class="add-memory-form">
-          <input
-            type="text"
-            bind:value={newMemory}
-            placeholder="Add a preference..."
-            maxlength="500"
-            onkeydown={(e) => e.key === 'Enter' && handleAddMemory()}
-          />
-          <button class="btn-primary" onclick={handleAddMemory} disabled={savingMemory || !newMemory.trim()}>
-            {savingMemory ? 'Adding...' : 'Add'}
-          </button>
-        </div>
-
-        <p class="hint">
-          Examples: "I'm vegetarian", "Allergic to nuts", "Low sodium diet", "Cooking for a family of 4", "I don't like cilantro"
-        </p>
-      </section>
     {/if}
   </div>
 </main>
@@ -1399,90 +1284,6 @@
     width: 1.25rem;
     height: 1.25rem;
   }
-
-  /* Memories */
-  .memories-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .memory-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
-    background: var(--color-bg-subtle);
-    border-radius: var(--radius-md);
-    transition: opacity 0.2s;
-  }
-
-  .memory-item.disabled {
-    opacity: 0.5;
-  }
-
-  .memory-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    cursor: pointer;
-    flex: 1;
-  }
-
-  .memory-toggle input[type='checkbox'] {
-    width: 1.25rem;
-    height: 1.25rem;
-    cursor: pointer;
-    accent-color: var(--color-primary);
-  }
-
-  .memory-content {
-    font-size: 0.95rem;
-    color: var(--color-text);
-  }
-
-  .btn-icon-danger {
-    background: none;
-    border: none;
-    color: #dc2626;
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
-    padding: 0.25rem 0.5rem;
-    border-radius: var(--radius-sm);
-    transition: background 0.2s;
-  }
-
-  .btn-icon-danger:hover {
-    background: rgba(220, 38, 38, 0.1);
-  }
-
-  .add-memory-form {
-    display: flex;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .add-memory-form input {
-    flex: 1;
-    padding: 0.75rem;
-    border: 2px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: 1rem;
-    font-family: inherit;
-  }
-
-  .add-memory-form input:focus {
-    outline: none;
-    border-color: var(--color-primary);
-  }
-
-  .add-memory-form .btn-primary {
-    padding: 0.75rem 1.25rem;
-  }
-
-  @media (max-width: 640px) {
     .section-header {
       flex-direction: column;
       gap: 1rem;
@@ -1497,13 +1298,4 @@
     .form-row {
       grid-template-columns: 1fr;
     }
-
-    .add-memory-form {
-      flex-direction: column;
-    }
-
-    .add-memory-form .btn-primary {
-      width: 100%;
-    }
-  }
 </style>

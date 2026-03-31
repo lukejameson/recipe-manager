@@ -189,7 +189,7 @@
         <li>Use keyboard shortcut <kbd>/</kbd> to quickly focus the search bar</li>
         <li>Double-click an ingredient while cooking to mark it as used</li>
         <li>Add recipes to collections for easy meal planning</li>
-        <li>Add your dietary preferences in Settings for personalized suggestions</li>
+        <li>Add your dietary preferences in <a href="/preferences">Preferences</a> for personalized suggestions</li>
       </ul>
     </section>
   </div>

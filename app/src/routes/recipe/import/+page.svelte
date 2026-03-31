@@ -13,8 +13,8 @@
   type PhotoStep = 'upload' | 'group' | 'extract' | 'review';
 
   // Feature flags
-  let hasJsonldImport = $derived(authStore.hasFeature('jsonldImport'));
-  let hasPhotoExtraction = $derived(authStore.hasFeature('photoExtraction'));
+  let hasJsonldImport = $derived(authStore.user?.featureFlags?.jsonldImport ?? false);
+  let hasPhotoExtraction = $derived(authStore.user?.featureFlags?.photoExtraction ?? false);
 
   const DRAFT_STORAGE_KEY = 'recipe-photo-import-draft';
 
@@ -628,11 +628,11 @@
 
 <!-- Duplicate Recipe Modal -->
 {#if showDuplicateModal}
-  <div class="modal-overlay" onclick={() => handleDuplicateChoice('cancel')}>
-    <div class="modal" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-overlay" onclick={() => handleDuplicateChoice('cancel')} aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="duplicate-modal-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
-        <h3>Recipe Already Exists</h3>
-        <button class="modal-close" onclick={() => handleDuplicateChoice('cancel')}>×</button>
+        <h3 id="duplicate-modal-title">Recipe Already Exists</h3>
+        <button class="modal-close" onclick={() => handleDuplicateChoice('cancel')} aria-label="Close modal">×</button>
       </div>
       <div class="modal-content">
         <p>

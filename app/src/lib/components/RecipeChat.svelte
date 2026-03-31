@@ -43,7 +43,7 @@
     onClose: () => void;
   } = $props();
 
-  let hasImageSearch = $derived(authStore.hasFeature('imageSearch'));
+  let hasImageSearch = $derived(authStore.user?.featureFlags?.imageSearch ?? false);
   let messages = $state<Message[]>([]);
   let inputValue = $state('');
   let sending = $state(false);

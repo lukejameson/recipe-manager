@@ -1,27 +1,24 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
+  import { onMount } from 'svelte';
   import { apiClient } from '$lib/api/client';
+  import { authStore } from '$lib/stores/auth.svelte';
   import Header from '$lib/components/Header.svelte';
   import RecipeCard from '$lib/components/RecipeCard.svelte';
-  import { authStore } from '$lib/stores/auth.svelte';
   import {
     Camera,
-    Flame,
     LayoutGrid,
     List,
     PanelTop,
     Plus,
     Search,
     SlidersHorizontal,
-    Tag,
-    Wine,
     ArrowDownUp,
+    Star,
     X,
   } from 'lucide-svelte';
-  import { onMount } from 'svelte';
   import LoadingSkeleton from '$lib/components/LoadingSkeleton.svelte';
-
   let recipes = $state<any[]>([]);
   let allTags = $state<any[]>([]);
   let loading = $state(true);
@@ -30,22 +27,15 @@
   let selectedTags = $state<string[]>([]);
   let sortBy = $state<string>('date-newest');
   let viewMode = $state<'grid' | 'list' | 'compact'>('grid');
-  let category = $state<'all' | 'food' | 'cocktails'>('all');
-
-  // Mobile filter/sort sheets
+  let category = $state<'all' | string>('all');
   let showMobileSort = $state(false);
   let showMobileFilter = $state(false);
-
-  // Desktop dropdowns
   let showViewDropdown = $state(false);
   let showSortDropdown = $state(false);
   let showFilterDropdown = $state(false);
-
-  // Feature flags
-  let hasPhotoExtraction = $derived(authStore.hasFeature('photoExtraction'));
-
-  // Photo upload
+  let hasPhotoExtraction = $derived(authStore.user?.featureFlags?.photoExtraction ?? false);
   let photoInputRef = $state<HTMLInputElement | null>(null);
+  let categories = $state<Array<{ id: string; name: string; iconName: string | null; sortOrder: number; isDefault?: boolean; tags: Array<{ id: string; name: string }> }>>([]);
 
   // Tags that indicate a recipe is a drink/cocktail
   const drinkTags = [
@@ -66,31 +56,35 @@
     { value: 'cooked-most', label: 'Most Cooked' },
   ];
 
-  onMount(() => {
-    // Load saved preferences from localStorage
+  onMount(async () => {
     const savedViewMode = localStorage.getItem('recipeViewMode');
     if (savedViewMode && ['grid', 'list', 'compact'].includes(savedViewMode)) {
       viewMode = savedViewMode as any;
     }
-
     const savedSortBy = localStorage.getItem('recipeSortBy');
     if (savedSortBy) {
       sortBy = savedSortBy;
     }
-
-    const savedCategory = localStorage.getItem('recipeCategory');
-    if (savedCategory && ['all', 'food', 'cocktails'].includes(savedCategory)) {
-      category = savedCategory as any;
+    // Load user's custom categories
+    try {
+      categories = await apiClient.getRecipeCategories();
+      const defaultCategory = categories.find(c => c.isDefault);
+      if (defaultCategory) {
+        category = defaultCategory.id;
+        localStorage.setItem('recipeCategory', defaultCategory.id);
+      } else {
+        category = 'all';
+        localStorage.setItem('recipeCategory', 'all');
+      }
+    } catch (err) {
+      console.error('Failed to load categories:', err);
+      category = 'all';
     }
-
     loadTags();
-
-    // Check for tag in URL params
     const urlTag = $page.url.searchParams.get('tag');
     if (urlTag) {
       selectedTags = [urlTag];
     }
-
     loadRecipes();
   });
 
@@ -106,42 +100,20 @@
     loading = true;
     error = '';
     try {
-      let allRecipes = await apiClient.getRecipes({
+      const params: any = {
         search: searchTerm || undefined,
         sortBy: sortBy as any,
-      });
-
-      // Filter by tags if any selected
-      if (selectedTags.length > 0) {
-        allRecipes = allRecipes.filter((r: any) =>
-          r.tags?.some((t: any) => selectedTags.includes(t.name || t))
-        );
+      };
+      if (category !== 'all') {
+        params.categoryId = category;
       }
-
-      // Filter by category based on drink-related tags
-      if (category === 'cocktails') {
-        recipes = allRecipes.filter((r: any) =>
-          r.tags?.some((t: any) =>
-            drinkTags.includes((t.name || t).toLowerCase())
-          )
-        );
-      } else if (category === 'food') {
-        recipes = allRecipes.filter(
-          (r: any) =>
-            !r.tags?.some((t: any) =>
-              drinkTags.includes((t.name || t).toLowerCase())
-            )
-        );
-      } else {
-        recipes = allRecipes;
-      }
+      recipes = await apiClient.getRecipes(params);
     } catch (err: any) {
       error = err.message || 'Failed to load recipes';
     } finally {
       loading = false;
     }
   }
-
   async function handleDelete(id: string) {
     if (!confirm('Are you sure you want to delete this recipe?')) return;
 
@@ -191,18 +163,15 @@
     loadRecipes();
   }
 
-  function setCategory(newCategory: 'all' | 'food' | 'cocktails') {
+  function setCategory(newCategory: 'all' | string) {
     category = newCategory;
     localStorage.setItem('recipeCategory', newCategory);
     loadRecipes();
   }
-
   function setViewMode(mode: 'grid' | 'list' | 'compact') {
     viewMode = mode;
-    // Save to localStorage
     localStorage.setItem('recipeViewMode', mode);
   }
-
   function triggerPhotoUpload() {
     photoInputRef?.click();
   }
@@ -281,24 +250,28 @@
       >
         All
       </button>
+      {#each categories as cat (cat.id)}
+        <button
+          class="tab"
+          class:active={category === cat.id}
+          onclick={() => setCategory(cat.id)}
+        >
+          {cat.name}
+          {#if cat.isDefault}
+            <Star size={12} class="default-star" />
+          {/if}
+        </button>
+      {/each}
       <button
-        class="tab"
-        class:active={category === 'food'}
-        onclick={() => setCategory('food')}
+        class="tab add-category"
+        onclick={() => {
+          goto('/settings?section=categories');
+        }}
+        title="Add Category"
       >
-        <Flame size={16} />
-        Food
-      </button>
-      <button
-        class="tab"
-        class:active={category === 'cocktails'}
-        onclick={() => setCategory('cocktails')}
-      >
-        <Wine size={16} />
-        Cocktails
+        <Plus size={16} />
       </button>
     </div>
-
     <div class="filters-section">
       <!-- Unified search row -->
       <div class="search-row">
@@ -894,8 +867,11 @@
     color: var(--color-primary);
     border-bottom-color: var(--color-primary);
   }
-
-  /* Unified search row (desktop + mobile) */
+  .default-star {
+    color: #f59e0b;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
   .search-row {
     display: flex;
     gap: var(--spacing-2);

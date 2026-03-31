@@ -63,12 +63,11 @@
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
-
-<div class="modal-backdrop" onclick={onClose}>
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
+<div class="modal-backdrop" onclick={onClose} aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="add-component-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <div class="modal-header">
-      <h3>Add Component Recipe</h3>
-      <button class="btn-close" onclick={onClose}>&times;</button>
+      <h3 id="add-component-title">Add Component Recipe</h3>
+      <button class="btn-close" onclick={onClose} aria-label="Close modal">&times;</button>
     </div>
 
     <div class="modal-body">

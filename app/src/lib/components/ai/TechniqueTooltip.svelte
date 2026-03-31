@@ -23,12 +23,11 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
-
-<div class="tooltip-backdrop" onclick={onClose}>
-  <div class="tooltip-content" onclick={(e) => e.stopPropagation()}>
+<div class="tooltip-backdrop" onclick={onClose} aria-hidden="true">
+  <div class="tooltip-content" role="dialog" aria-modal="true" aria-labelledby="technique-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <div class="tooltip-header">
-      <h4>{explanation.term}</h4>
-      <button class="btn-close" onclick={onClose}>&times;</button>
+      <h4 id="technique-title">{explanation.term}</h4>
+      <button class="btn-close" onclick={onClose} aria-label="Close modal">&times;</button>
     </div>
 
     <p class="definition">{explanation.definition}</p>

@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
 
 const explainTechniqueSchema = z.object({
   term: z.string().min(1),
@@ -70,7 +71,10 @@ Return a JSON object with:
 
     return json(explanation);
   } catch (e) {
-    if (e instanceof Error && 'status' in e) throw e;
+    if ('status' in e) throw e;
+    if (isAIConfigurationError(e)) {
+      throw error(503, e.message);
+    }
     console.error('Explain technique error:', e);
     throw error(500, 'Failed to explain technique');
   }

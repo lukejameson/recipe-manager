@@ -56,7 +56,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     });
 
     if (!response.ok) {
-      throw error(400, `Failed to fetch URL: ${response.statusText}`);
+      throw error(400, 'Failed to fetch URL');
     }
 
     const html = await response.text();

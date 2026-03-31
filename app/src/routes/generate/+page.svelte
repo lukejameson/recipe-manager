@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, onDestroy } from 'svelte';
   import { apiClient } from '$lib/api/client';
   import { authStore } from '$lib/stores/auth.svelte';
   import Header from '$lib/components/Header.svelte';
@@ -12,8 +12,8 @@
   import ImageSearchModal from '$lib/components/ImageSearchModal.svelte';
 
   // Check if user has access to AI chat
-  let hasAiChat = $derived(authStore.hasFeature('aiChat'));
-  let hasImageSearch = $derived(authStore.hasFeature('imageSearch'));
+  let hasAiChat = $derived(authStore.user?.featureFlags?.aiChat ?? false);
+  let hasImageSearch = $derived(authStore.user?.featureFlags?.imageSearch ?? false);
 
   interface ChatMessage {
     id?: string; // Database ID for deletion
@@ -768,13 +768,15 @@
         document.body.style.overflow = '';
       }
     }
-
-    // Cleanup: Always reset overflow when component unmounts
     return () => {
       if (typeof window !== 'undefined') {
         document.body.style.overflow = '';
       }
     };
+  });
+
+  onDestroy(() => {
+    if (debounceTimer) clearTimeout(debounceTimer);
   });
 </script>
 
@@ -816,7 +818,7 @@
     <div class="chat-container">
       {#if messages.length === 0}
         <div class="welcome-state">
-          <div class="welcome-icon">👨‍🍳</div>
+          <div class="welcome-icon"><span aria-hidden="true">👨‍🍳</span></div>
           <h2>What would you like to cook?</h2>
           <p>Describe what you're in the mood for, ingredients you have, or any dietary preferences.</p>
 
@@ -839,7 +841,7 @@
           {#each messages as message, i (message.id || i)}
             <div class="message {message.role}">
               <div class="message-avatar">
-                {message.role === 'user' ? '👤' : '👨‍🍳'}
+                <span aria-hidden="true">{message.role === 'user' ? '👤' : '👨‍🍳'}</span>
               </div>
               <div class="message-content">
                 {#if message.role === 'user'}
@@ -1069,6 +1071,7 @@
             oninput={handleInput}
             onkeydown={handleKeydown}
             placeholder="Describe what you'd like to make... Type @ to reference a recipe"
+            aria-label="Chat message input"
             rows="1"
             disabled={loading}
           ></textarea>
@@ -1135,10 +1138,10 @@
 
 <!-- Recipe Preview/Configure Modal -->
 {#if showRecipePreviewModal && recipeToSave}
-  <div class="modal-overlay" onclick={closeRecipePreviewModal} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && closeRecipePreviewModal()}>
-    <div class="modal-content modal-large" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="0" onkeydown={(e) => e.key === 'Escape' && closeRecipePreviewModal()}>
+  <div class="modal-overlay" onclick={closeRecipePreviewModal} aria-hidden="true">
+    <div class="modal-content modal-large" role="dialog" aria-modal="true" aria-labelledby="recipe-preview-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
-        <h2>Save Recipe</h2>
+        <h2 id="recipe-preview-title">Save Recipe</h2>
         <button class="modal-close" onclick={closeRecipePreviewModal} title="Close">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/>
@@ -1203,10 +1206,10 @@
 
 <!-- Save Success Modal -->
 {#if showSaveSuccessModal}
-  <div class="modal-overlay" onclick={closeSaveSuccessModal} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && closeSaveSuccessModal()}>
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="0" onkeydown={(e) => e.key === 'Escape' && closeSaveSuccessModal()}>
+  <div class="modal-overlay" onclick={closeSaveSuccessModal} aria-hidden="true">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="save-success-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
-        <h2>✅ Recipe Saved!</h2>
+        <h2 id="save-success-title">✅ Recipe Saved!</h2>
         <button class="modal-close" onclick={closeSaveSuccessModal} title="Close">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/>

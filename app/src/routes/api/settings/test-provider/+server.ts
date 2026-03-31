@@ -77,10 +77,11 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 					}
 				}
 			}
-		} catch (err) {
-			isValid = false;
-			errorMessage = err instanceof Error ? err.message : 'Connection failed';
-		}
+	} catch (err) {
+		isValid = false;
+		// Generic error message to avoid leaking sensitive information
+		errorMessage = 'Connection failed. Please check your API key and base URL.';
+	}
 
 		const responseTime = Date.now() - startTime;
 

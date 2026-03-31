@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
 import type { Message } from '$lib/server/ai/providers';
+import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
 
 const recipeChatSchema = z.object({
   messages: z.array(z.object({
@@ -117,7 +118,10 @@ The prepTime and cookTime are in minutes. Only include the JSON block when provi
       recipe: parsedRecipe
     });
   } catch (e) {
-    if (e instanceof Error && 'status' in e) throw e;
+    if ('status' in e) throw e;
+    if (isAIConfigurationError(e)) {
+      throw error(503, e.message);
+    }
     console.error('Recipe chat error:', e);
     throw error(500, 'Failed to process chat message');
   }

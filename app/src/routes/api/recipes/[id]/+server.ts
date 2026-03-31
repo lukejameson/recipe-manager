@@ -100,11 +100,12 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
   try {
     const token = cookies.get('auth_token');
     const user = await getCurrentUser(token);
-
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-
+    if (!params.id) {
+      throw error(400, 'Recipe ID is required');
+    }
     const recipe = await db.query.recipes.findFirst({
       where: and(
         eq(recipes.id, params.id),
@@ -150,12 +151,12 @@ export const PUT: RequestHandler = async ({ params, request, cookies }) => {
   try {
     const token = cookies.get('auth_token');
     const user = await getCurrentUser(token);
-
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-
-    // Check ownership
+    if (!params.id) {
+      throw error(400, 'Recipe ID is required');
+    }
     const [existing] = await db
       .select()
       .from(recipes)
@@ -223,12 +224,12 @@ export const DELETE: RequestHandler = async ({ params, cookies }) => {
   try {
     const token = cookies.get('auth_token');
     const user = await getCurrentUser(token);
-
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-
-    // Check ownership
+    if (!params.id) {
+      throw error(400, 'Recipe ID is required');
+    }
     const [existing] = await db
       .select()
       .from(recipes)

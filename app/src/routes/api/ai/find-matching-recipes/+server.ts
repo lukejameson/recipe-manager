@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
 
 const findMatchingSchema = z.object({
   availableIngredients: z.array(z.string()).min(1),
@@ -67,7 +68,10 @@ ${recipes.map(r => `ID: ${r.id}\nTitle: ${r.title}\nIngredients: ${r.ingredients
 
     return json(matches);
   } catch (e) {
-    if (e instanceof Error && 'status' in e) throw e;
+    if ('status' in e) throw e;
+    if (isAIConfigurationError(e)) {
+      throw error(503, e.message);
+    }
     console.error('Find matching recipes error:', e);
     throw error(500, 'Failed to find matching recipes');
   }

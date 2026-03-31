@@ -31,7 +31,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
       imageSearch: featureFlags.imageSearch,
     });
   } catch (e) {
-    if (e instanceof Error && 'status' in e) throw e;
+    if ('status' in e) throw e;
     console.error('Get AI flags error:', e);
     throw error(500, 'Internal server error');
   }

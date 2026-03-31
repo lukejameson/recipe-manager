@@ -75,11 +75,12 @@ export const apiClient = {
     }),
 
   // Recipes
-  getRecipes: (filters?: { search?: string; tag?: string; favorite?: boolean; sortBy?: string }) => {
+  getRecipes: (filters?: { search?: string; tag?: string; favorite?: boolean; sortBy?: string; categoryId?: string }) => {
     const params = new URLSearchParams();
     if (filters?.search) params.set('search', filters.search);
     if (filters?.tag) params.set('tag', filters.tag);
     if (filters?.sortBy) params.set('sortBy', filters.sortBy);
+    if (filters?.categoryId) params.set('categoryId', filters.categoryId);
     const query = params.toString() ? `?${params.toString()}` : '';
     return api<Array<import('$lib/server/db/schema').Recipe & { tags: string[] }>>(`/api/recipes${query}`);
   },
@@ -173,8 +174,29 @@ export const apiClient = {
     api<{ success: boolean }>(`/api/collections/${collectionId}/recipes/${recipeId}`, {
       method: 'DELETE',
     }),
-
-  // Shopping List
+  getRecipeCategories: () =>
+    api<Array<{ id: string; name: string; iconName: string | null; sortOrder: number; tagPatterns: string[]; isDefault: boolean; tags: Array<{ id: string; name: string }> }>>('/api/recipe-categories'),
+  createRecipeCategory: (data: { name: string; iconName?: string; tagIds?: string[]; tagPatterns?: string[] }) =>
+    api<{ id: string; name: string; iconName: string | null; sortOrder: number; tagPatterns: string[]; isDefault: boolean; tags: Array<{ id: string; name: string }> }>('/api/recipe-categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateRecipeCategory: (id: string, data: { name?: string; iconName?: string; sortOrder?: number; tagIds?: string[]; tagPatterns?: string[]; isDefault?: boolean }) =>
+    api<{ id: string; name: string; iconName: string | null; sortOrder: number; tagPatterns: string[]; isDefault: boolean; tags: Array<{ id: string; name: string }> }>(`/api/recipe-categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteRecipeCategory: (id: string) =>
+    api<{ success: boolean }>(`/api/recipe-categories/${id}`, { method: 'DELETE' }),
+  addTagsToCategory: (categoryId: string, tagIds: string[]) =>
+    api<{ success: boolean }>(`/api/recipe-categories/${categoryId}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ tagIds }),
+    }),
+  removeTagFromCategory: (categoryId: string, tagId: string) =>
+    api<{ success: boolean }>(`/api/recipe-categories/${categoryId}/tags/${tagId}`, {
+      method: 'DELETE',
+    }),
   getShoppingList: () =>
     api<import('$lib/server/db/schema').ShoppingListItem[]>('/api/shopping-list'),
 

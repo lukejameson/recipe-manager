@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
 import { randomUUID } from 'crypto';
+import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
 
 const generateSchema = z.object({
   prompt: z.string().min(1),
@@ -135,7 +136,10 @@ Important:
       },
     });
   } catch (e) {
-    if (e instanceof Error && 'status' in e) throw e;
+    if ('status' in e) throw e;
+    if (isAIConfigurationError(e)) {
+      throw error(503, e.message);
+    }
     console.error('AI generate error:', e);
     throw error(500, 'Failed to generate recipe');
   }

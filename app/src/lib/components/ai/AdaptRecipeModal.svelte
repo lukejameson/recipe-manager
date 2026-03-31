@@ -91,17 +91,15 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
-
-<div class="modal-backdrop" onclick={onClose}>
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
+<div class="modal-backdrop" onclick={onClose} aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="adapt-recipe-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <div class="modal-header">
       <div>
-        <h3>Adapt Recipe</h3>
+        <h3 id="adapt-recipe-title">Adapt Recipe</h3>
         <p class="recipe-name">{recipe.title}</p>
       </div>
-      <button class="btn-close" onclick={onClose}>&times;</button>
+      <button class="btn-close" onclick={onClose} aria-label="Close modal">&times;</button>
     </div>
-
     <div class="modal-body">
       {#if !adaptedRecipe}
         <div class="type-selection">
@@ -114,26 +112,24 @@
                 onclick={() => (selectedType = type.value)}
                 disabled={loading}
               >
-                <span class="emoji">{type.emoji}</span>
+                <span class="emoji" aria-hidden="true">{type.emoji}</span>
                 <span class="label">{type.label}</span>
               </button>
             {/each}
           </div>
-
-          {#if error}
-            <p class="error">{error}</p>
-          {/if}
-
-          <div class="action-row">
-            <AIButton
-              onclick={handleAdapt}
-              {loading}
-              disabled={!selectedType}
-              label="Adapt Recipe"
-              loadingLabel="Adapting..."
-              variant="primary"
-            />
-          </div>
+        </div>
+        {#if error}
+          <p class="error">{error}</p>
+        {/if}
+        <div class="action-row">
+          <AIButton
+            onclick={handleAdapt}
+            {loading}
+            disabled={!selectedType}
+            label="Adapt Recipe"
+            loadingLabel="Adapting..."
+            variant="primary"
+          />
         </div>
       {:else}
         <div class="adapted-preview">

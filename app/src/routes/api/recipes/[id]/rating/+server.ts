@@ -18,30 +18,23 @@ export const POST: RequestHandler = async ({ params, request, cookies }) => {
   try {
     const token = cookies.get('auth_token');
     const user = await getCurrentUser(token);
-
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-
-    // Check recipe exists and belongs to user
+    const body = await request.json();
+    const result = ratingSchema.safeParse(body);
+    if (!result.success) {
+      throw error(400, result.error.message);
+    }
+    const data = result.data;
     const [recipe] = await db
       .select()
       .from(recipes)
       .where(and(eq(recipes.id, params.id), eq(recipes.userId, user.userId)))
       .limit(1);
-
     if (!recipe) {
       throw error(404, 'Recipe not found');
     }
-
-    const body = await request.json();
-    const result = ratingSchema.safeParse(body);
-
-    if (!result.success) {
-      throw error(400, result.error.message);
-    }
-
-    const data = result.data;
 
     // Update rating
     const [updated] = await db

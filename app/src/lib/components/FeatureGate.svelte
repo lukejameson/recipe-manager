@@ -10,7 +10,7 @@
 
   let { feature, children, fallback }: Props = $props();
 
-  let hasFeature = $derived(authStore.hasFeature(feature));
+  let hasFeature = $derived(authStore.user?.featureFlags?.[feature] ?? false);
 </script>
 
 {#if hasFeature}

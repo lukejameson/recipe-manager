@@ -86,12 +86,11 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
-
-<div class="modal-backdrop" onclick={onClose}>
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
+<div class="modal-backdrop" onclick={onClose} aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="image-search-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <div class="modal-header">
-      <h3>Find Recipe Image</h3>
-      <button class="btn-close" onclick={onClose}>&times;</button>
+      <h3 id="image-search-title">Find Recipe Image</h3>
+      <button class="btn-close" onclick={onClose} aria-label="Close modal">&times;</button>
     </div>
 
     <div class="search-bar">

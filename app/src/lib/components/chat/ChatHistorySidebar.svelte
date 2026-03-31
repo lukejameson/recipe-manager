@@ -31,6 +31,8 @@
   let editingSessionId = $state<string | null>(null);
   let editTitle = $state('');
   let openMenuId = $state<string | null>(null);
+  let isRenaming = $state(false);
+  let isDeleting = $state(false);
 
   onMount(async () => {
     await loadSessions();
@@ -124,19 +126,24 @@
 
   async function saveRename(sessionId: string, event?: MouseEvent) {
     event?.stopPropagation();
-    if (!editTitle.trim()) {
+    if (isRenaming) return;
+    const trimmedTitle = editTitle.trim();
+    if (!trimmedTitle) {
       cancelEditing();
       return;
     }
+    isRenaming = true;
     try {
-      await apiClient.updateChatSession(sessionId, { title: editTitle.trim() });
-      sessions = sessions.map(s => 
-        s.id === sessionId ? { ...s, title: editTitle.trim() } : s
+      await apiClient.updateChatSession(sessionId, { title: trimmedTitle });
+      sessions = sessions.map(s =>
+        s.id === sessionId ? { ...s, title: trimmedTitle } : s
       );
       editingSessionId = null;
     } catch (error) {
       console.error('Failed to rename session:', error);
       alert('Failed to rename chat');
+    } finally {
+      isRenaming = false;
     }
   }
 
@@ -151,15 +158,14 @@
   async function deleteSession(sessionId: string, event: MouseEvent) {
     event.stopPropagation();
     openMenuId = null;
-    
+    if (isDeleting) return;
     if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
       return;
     }
-    
+    isDeleting = true;
     try {
       await apiClient.deleteChatSession(sessionId);
       sessions = sessions.filter(s => s.id !== sessionId);
-      
       if (sessionId === currentSessionId) {
         if (onNewChat) {
           onNewChat();
@@ -170,9 +176,10 @@
     } catch (error) {
       console.error('Failed to delete session:', error);
       alert('Failed to delete chat');
+    } finally {
+      isDeleting = false;
     }
   }
-
   function formatTimestamp(date: Date): string {
     const now = new Date();
     const diff = now.getTime() - new Date(date).getTime();

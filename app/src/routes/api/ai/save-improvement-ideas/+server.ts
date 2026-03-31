@@ -53,7 +53,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
     return json({ success: true });
   } catch (e) {
-    if (e instanceof Error && 'status' in e) throw e;
+    if ('status' in e) throw e;
     console.error('Save improvement ideas error:', e);
     throw error(500, 'Internal server error');
   }

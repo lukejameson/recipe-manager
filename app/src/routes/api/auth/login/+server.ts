@@ -10,14 +10,17 @@ const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MINUTES = 15;
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
+  let body: { username?: string; password?: string; rememberMe?: boolean };
   try {
-    const { username, password, rememberMe } = await request.json();
-
-    if (!username || !password) {
-      throw error(400, 'Username and password required');
-    }
-
-    // Find user by username
+    body = await request.json();
+  } catch {
+    throw error(400, 'Invalid JSON body');
+  }
+  const { username, password, rememberMe } = body;
+  if (!username || !password) {
+    throw error(400, 'Username and password required');
+  }
+  try {
     const user = await db.query.users.findFirst({
       where: eq(users.username, username),
     });

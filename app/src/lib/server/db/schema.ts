@@ -172,8 +172,31 @@ export const recipeTags = pgTable('recipe_tags', {
     .notNull()
     .references(() => tags.id, { onDelete: 'cascade' }),
 });
-
-// Collections table
+export const recipeCategories = pgTable('recipe_categories', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  iconName: text('icon_name'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  tagPatterns: text('tag_patterns').array().notNull().default([]),
+  isDefault: boolean('is_default').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}, (table) => ({
+  uniqueNamePerUser: unique().on(table.userId, table.name),
+}));
+export const recipeCategoryTags = pgTable('recipe_category_tags', {
+  categoryId: text('category_id')
+    .notNull()
+    .references(() => recipeCategories.id, { onDelete: 'cascade' }),
+  tagId: text('tag_id')
+    .notNull()
+    .references(() => tags.id, { onDelete: 'cascade' }),
+});
 export const collections = pgTable('collections', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -371,7 +394,10 @@ export type InsertTag = typeof tags.$inferInsert;
 
 export type RecipeTag = typeof recipeTags.$inferSelect;
 export type InsertRecipeTag = typeof recipeTags.$inferInsert;
-
+export type RecipeCategory = typeof recipeCategories.$inferSelect;
+export type InsertRecipeCategory = typeof recipeCategories.$inferInsert;
+export type RecipeCategoryTag = typeof recipeCategoryTags.$inferSelect;
+export type InsertRecipeCategoryTag = typeof recipeCategoryTags.$inferInsert;
 export type Collection = typeof collections.$inferSelect;
 export type InsertCollection = typeof collections.$inferInsert;
 

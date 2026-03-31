@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/db';
-import { recipes, tags, recipeTags, users, DEFAULT_FEATURE_FLAGS } from '$lib/server/db/schema';
+import { recipes, tags, recipeTags, recipeCategories, recipeCategoryTags, users, DEFAULT_FEATURE_FLAGS } from '$lib/server/db/schema';
 import { getCurrentUser } from '$lib/server/auth';
 import { eq, and, like, or, inArray, sql, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
@@ -118,8 +118,27 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
     }
     const search = url.searchParams.get('search');
     const tagFilter = url.searchParams.get('tag');
+    const categoryId = url.searchParams.get('categoryId');
     const favoriteOnly = url.searchParams.get('favorite') === 'true';
     const sortBy = url.searchParams.get('sortBy') || 'date-newest';
+    const limitParam = url.searchParams.get('limit');
+    const offsetParam = url.searchParams.get('offset');
+
+    let limit = 50;
+    let offset = 0;
+    if (limitParam) {
+      const parsedLimit = parseInt(limitParam, 10);
+      if (!isNaN(parsedLimit) && parsedLimit > 0 && parsedLimit <= 200) {
+        limit = parsedLimit;
+      }
+    }
+    if (offsetParam) {
+      const parsedOffset = parseInt(offsetParam, 10);
+      if (!isNaN(parsedOffset) && parsedOffset >= 0) {
+        offset = parsedOffset;
+      }
+    }
+
     let query = db.select().from(recipes).where(eq(recipes.userId, user.userId));
     if (search) {
       query = db.select().from(recipes).where(
@@ -140,49 +159,64 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
         )
       );
     }
-    let allRecipes = query;
-    switch (sortBy) {
-      case 'date-newest':
-        allRecipes = await allRecipes.orderBy(desc(recipes.createdAt));
-        break;
-      case 'date-oldest':
-        allRecipes = await allRecipes.orderBy(asc(recipes.createdAt));
-        break;
-      case 'title-asc':
-        allRecipes = await allRecipes.orderBy(asc(recipes.title));
-        break;
-      case 'title-desc':
-        allRecipes = await allRecipes.orderBy(desc(recipes.title));
-        break;
-      case 'rating-high':
-        allRecipes = await allRecipes.orderBy(desc(recipes.rating)).orderBy(desc(recipes.createdAt));
-        break;
-      case 'cooked-most':
-        allRecipes = await allRecipes.orderBy(desc(recipes.timesCooked)).orderBy(desc(recipes.createdAt));
-        break;
-      default:
-        allRecipes = await allRecipes.orderBy(desc(recipes.createdAt));
-    }
-
-    // Apply tag filter (post-query since we need to check tags)
     if (tagFilter) {
-      const tagRecipes = await db
-        .select({ recipeId: recipeTags.recipeId })
-        .from(recipeTags)
+      query = query.innerJoin(recipeTags, eq(recipes.id, recipeTags.recipeId))
         .innerJoin(tags, eq(recipeTags.tagId, tags.id))
         .where(and(
           eq(tags.name, tagFilter),
           eq(tags.userId, user.userId)
         ));
-
-      const recipeIdsWithTag = new Set(tagRecipes.map(tr => tr.recipeId));
-      allRecipes = allRecipes.filter(r => recipeIdsWithTag.has(r.id));
     }
-
-    // Get tags for all recipes
+    if (categoryId) {
+      const categoryTagRows = await db
+        .select({ tagId: recipeCategoryTags.tagId })
+        .from(recipeCategoryTags)
+        .where(eq(recipeCategoryTags.categoryId, categoryId));
+      const categoryTagIds = categoryTagRows.map(r => r.tagId);
+      if (categoryTagIds.length > 0) {
+        const recipeRows = await db
+          .select({ recipeId: recipeTags.recipeId })
+          .from(recipeTags)
+          .where(inArray(recipeTags.tagId, categoryTagIds));
+        const recipeIds = [...new Set(recipeRows.map(r => r.recipeId))];
+        if (recipeIds.length > 0) {
+          query = db.select().from(recipes).where(
+            and(
+              eq(recipes.userId, user.userId),
+              inArray(recipes.id, recipeIds)
+            )
+          );
+        } else {
+          query = db.select().from(recipes).where(eq(recipes.id, 'never-match'));
+        }
+      } else {
+        query = db.select().from(recipes).where(eq(recipes.id, 'never-match'));
+      }
+    }
+    switch (sortBy) {
+      case 'date-newest':
+        query = query.orderBy(desc(recipes.createdAt));
+        break;
+      case 'date-oldest':
+        query = query.orderBy(asc(recipes.createdAt));
+        break;
+      case 'title-asc':
+        query = query.orderBy(asc(recipes.title));
+        break;
+      case 'title-desc':
+        query = query.orderBy(desc(recipes.title));
+        break;
+      case 'rating-high':
+        query = query.orderBy(desc(recipes.rating)).orderBy(desc(recipes.createdAt));
+        break;
+      case 'cooked-most':
+        query = query.orderBy(desc(recipes.timesCooked)).orderBy(desc(recipes.createdAt));
+        break;
+      default:
+        query = query.orderBy(desc(recipes.createdAt));
+    }
+    const allRecipes = await query.limit(limit).offset(offset);
     const tagsByRecipe = await getRecipesTags(allRecipes.map(r => r.id));
-
-    // Normalize each recipe to ensure proper data structure
     const normalizedRecipes = allRecipes.map(recipe => {
       const normalized = normalizeRecipeData(recipe);
       return {
@@ -190,16 +224,14 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
         tags: tagsByRecipe[recipe.id] || [],
       };
     });
-
     return json(normalizedRecipes);
   } catch (e) {
     if (e instanceof Error && 'status' in e) throw e;
     console.error('List recipes error:', e);
     throw error(500, 'Internal server error');
   }
-};
+  };
 
-// POST /api/recipes - Create a new recipe
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
     const token = cookies.get('auth_token');

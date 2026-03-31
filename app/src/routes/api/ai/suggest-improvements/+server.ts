@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
 
 const suggestImprovementsSchema = z.object({
   recipe: z.object({
@@ -69,7 +70,10 @@ Return a JSON array of suggestions, each with:
 
     return json({ suggestions });
   } catch (e) {
-    if (e instanceof Error && 'status' in e) throw e;
+    if ('status' in e) throw e;
+    if (isAIConfigurationError(e)) {
+      throw error(503, e.message);
+    }
     console.error('Suggest improvements error:', e);
     throw error(500, 'Failed to suggest improvements');
   }

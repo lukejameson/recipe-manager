@@ -189,17 +189,15 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
-
-<div class="modal-backdrop" onclick={onClose}>
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
+<div class="modal-backdrop" onclick={onClose} aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="improvement-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <div class="modal-header">
       <div>
-        <h3>Improvement Ideas</h3>
+        <h3 id="improvement-title">Improvement Ideas</h3>
         <p class="recipe-name">{recipe.title}</p>
       </div>
-      <button class="btn-close" onclick={onClose}>&times;</button>
+      <button class="btn-close" onclick={onClose} aria-label="Close modal">&times;</button>
     </div>
-
     <div class="modal-body">
       {#if loading}
         <div class="loading-state">

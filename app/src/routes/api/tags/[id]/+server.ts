@@ -67,12 +67,12 @@ export const DELETE: RequestHandler = async ({ params, cookies }) => {
   try {
     const token = cookies.get('auth_token');
     const user = await getCurrentUser(token);
-
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-
-    // Check ownership
+    if (!params.id) {
+      throw error(400, 'Tag ID is required');
+    }
     const [tag] = await db
       .select()
       .from(tags)

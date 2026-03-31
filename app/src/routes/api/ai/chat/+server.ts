@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
 import type { Message } from '$lib/server/ai/providers';
+import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
 
 /**
  * POST /api/ai/chat - Chat about a specific recipe
@@ -54,7 +55,10 @@ Cook time: ${recipe.cookTime ? recipe.cookTime + ' min' : 'N/A'}`;
       message: generationResult.content || 'Sorry, I could not generate a response.',
     });
   } catch (e) {
-    if (e instanceof Error && 'status' in e) throw e;
+    if ('status' in e) throw e;
+    if (isAIConfigurationError(e)) {
+      throw error(503, e.message);
+    }
     console.error('Chat about recipe error:', e);
     throw error(500, 'Internal server error');
   }

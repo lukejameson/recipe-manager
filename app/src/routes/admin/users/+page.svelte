@@ -233,11 +233,11 @@
   </main>
 
   {#if selectedUser}
-    <div class="modal-overlay" onclick={closeModal}>
-      <div class="modal" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-overlay" onclick={closeModal} aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="feature-access-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
         <div class="modal-header">
-          <h2>Feature Access: {selectedUser.username}</h2>
-          <button class="btn-close" onclick={closeModal}>&times;</button>
+          <h2 id="feature-access-title">Feature Access: {selectedUser.username}</h2>
+          <button class="btn-close" onclick={closeModal} aria-label="Close modal">&times;</button>
         </div>
 
         <div class="modal-body">

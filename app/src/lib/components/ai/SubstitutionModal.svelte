@@ -51,17 +51,15 @@
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
-
-<div class="modal-backdrop" onclick={onClose}>
-  <div class="modal" onclick={(e) => e.stopPropagation()}>
+<div class="modal-backdrop" onclick={onClose} aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="substitution-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
     <div class="modal-header">
       <div>
-        <h3>Substitutes for</h3>
+        <h3 id="substitution-title">Substitutes for</h3>
         <p class="ingredient-name">{ingredient}</p>
       </div>
-      <button class="btn-close" onclick={onClose}>&times;</button>
+      <button class="btn-close" onclick={onClose} aria-label="Close modal">&times;</button>
     </div>
-
     <div class="modal-body">
       {#if loading}
         <div class="loading-state">

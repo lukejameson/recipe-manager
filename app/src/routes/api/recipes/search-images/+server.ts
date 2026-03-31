@@ -69,7 +69,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       total: data.total_results,
     });
   } catch (e) {
-    if (e instanceof Error && 'status' in e) throw e;
+    if ('status' in e) throw e;
     console.error('Search images error:', e);
     throw error(500, 'Failed to search images');
   }

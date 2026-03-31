@@ -39,7 +39,7 @@
   // View prompt modal
   let viewingPrompt = $state<{ name: string; prompt: string } | null>(null);
 
-  const iconOptions = ['', '', '', '', '', '', '', '', '', '', '', ''];
+  const iconOptions = ['🍳', '🥘', '🍕', '🍔', '🍜', '🥗', '🍰', '🥮', '🍞', '🧁', '🍩', '🍪'];
 
   onMount(loadData);
 
@@ -262,11 +262,11 @@
 
 <!-- Create/Edit Form Modal -->
 {#if showForm}
-  <div class="modal-overlay" onclick={cancelForm}>
-    <div class="modal" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-overlay" onclick={cancelForm} aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="agent-form-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
-        <h2>{editingAgent ? 'Edit Agent' : 'Create Agent'}</h2>
-        <button class="btn-close" onclick={cancelForm}>&times;</button>
+        <h2 id="agent-form-title">{editingAgent ? 'Edit Agent' : 'Create Agent'}</h2>
+        <button class="btn-close" onclick={cancelForm} aria-label="Close modal">&times;</button>
       </div>
 
       <div class="modal-body">
@@ -350,11 +350,11 @@
 
 <!-- View Prompt Modal -->
 {#if viewingPrompt}
-  <div class="modal-overlay" onclick={() => (viewingPrompt = null)}>
-    <div class="modal modal-large" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-overlay" onclick={() => (viewingPrompt = null)} aria-hidden="true">
+    <div class="modal modal-large" role="dialog" aria-modal="true" aria-labelledby="prompt-view-title" tabindex="-1" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
-        <h2>{viewingPrompt.name} - System Prompt</h2>
-        <button class="btn-close" onclick={() => (viewingPrompt = null)}>&times;</button>
+        <h2 id="prompt-view-title">{viewingPrompt.name} - System Prompt</h2>
+        <button class="btn-close" onclick={() => (viewingPrompt = null)} aria-label="Close modal">&times;</button>
       </div>
 
       <div class="modal-body">

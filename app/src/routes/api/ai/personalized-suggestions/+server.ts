@@ -30,7 +30,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
       suggestions: defaultSuggestions,
     });
   } catch (e) {
-    if (e instanceof Error && 'status' in e) throw e;
+    if ('status' in e) throw e;
     console.error('Get personalized suggestions error:', e);
     throw error(500, 'Internal server error');
   }

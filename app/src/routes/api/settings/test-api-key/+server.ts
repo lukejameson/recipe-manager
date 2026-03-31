@@ -38,10 +38,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     if (response.ok) {
       return json({ valid: true });
     } else {
-      const errorData = await response.json().catch(() => ({}));
       return json({
         valid: false,
-        error: errorData.error?.message || 'Invalid API key',
+        error: 'Invalid API key',
       });
     }
   } catch (e) {

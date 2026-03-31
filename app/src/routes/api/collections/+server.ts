@@ -3,48 +3,36 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/db';
 import { collections, collectionRecipes, recipes } from '$lib/server/db/schema';
 import { getCurrentUser } from '$lib/server/auth';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
-
-// GET /api/collections - List all collections
 export const GET: RequestHandler = async ({ cookies }) => {
   try {
     const token = cookies.get('auth_token');
     const user = await getCurrentUser(token);
-
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-
-    const allCollections = await db
-      .select()
-      .from(collections)
-      .where(eq(collections.userId, user.userId));
-
-    // Get recipe counts for each collection
-    const collectionsWithCounts = await Promise.all(
-      allCollections.map(async (collection) => {
-        const recipeCount = await db
-          .select()
-          .from(collectionRecipes)
-          .where(eq(collectionRecipes.collectionId, collection.id));
-
-        return {
-          ...collection,
-          recipeCount: recipeCount.length,
-        };
+    const collectionsWithCounts = await db
+      .select({
+        id: collections.id,
+        userId: collections.userId,
+        name: collections.name,
+        description: collections.description,
+        createdAt: collections.createdAt,
+        recipeCount: sql<number>`COUNT(${collectionRecipes.recipeId})`.as('recipeCount'),
       })
-    );
-
+      .from(collections)
+      .leftJoin(collectionRecipes, eq(collections.id, collectionRecipes.collectionId))
+      .where(eq(collections.userId, user.userId))
+      .groupBy(collections.id)
+      .orderBy(collections.name);
     return json(collectionsWithCounts);
   } catch (e) {
     if (e instanceof Error && 'status' in e) throw e;
     console.error('List collections error:', e);
     throw error(500, 'Internal server error');
   }
-};
-
-// POST /api/collections - Create a new collection
+  };
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
     const token = cookies.get('auth_token');
