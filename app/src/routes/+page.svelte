@@ -265,7 +265,7 @@
       <button
         class="tab add-category"
         onclick={() => {
-          goto('/settings?section=categories');
+          goto('/preferences');
         }}
         title="Add Category"
       >
