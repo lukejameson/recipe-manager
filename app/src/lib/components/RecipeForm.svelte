@@ -7,6 +7,8 @@
   import TagSuggestionsPanel from './ai/TagSuggestionsPanel.svelte';
   import ExpandableSection from './ExpandableSection.svelte';
   import DynamicListInput from './DynamicListInput.svelte';
+  import PhotoGallery from './PhotoGallery.svelte';
+  import PhotoPicker from './PhotoPicker.svelte';
   import type { RecipeItem } from '$lib/server/db/schema';
   import { Sparkles, Search, X, Plus } from 'lucide-svelte';
 
@@ -50,12 +52,19 @@
   // Time unit preferences (minutes or hours)
   let prepTimeUnit = $state<TimeUnit>('minutes');
   let cookTimeUnit = $state<TimeUnit>('minutes');
-  let totalTimeUnit = $state<TimeUnit>('minutes');
-
-  // Track if total time was manually edited
+let totalTimeUnit = $state<TimeUnit>('minutes');
   let totalTimeManuallyEdited = $state(false);
   let imageUrl = $state(recipe?.imageUrl || '');
   let sourceUrl = $state(recipe?.sourceUrl || '');
+  let photos = $state<Array<{
+    id: string;
+    urls: { thumbnail?: string | null; medium?: string | null; original: string };
+    width?: number;
+    height?: number;
+    isMain?: boolean;
+  }>>([]);
+  let photoPickerOpen = $state(false);
+  let loadingPhotos = $state(false);
   let tags = $state(recipe?.tags?.map((t: any) => t.name).join(', ') || '');
 
   // UI state
@@ -84,7 +93,7 @@
   let components = $state<Array<{ childRecipeId: string; servingsNeeded: number; childRecipe: any }>>([]);
 
   // Load existing components when editing
-  onMount(async () => {
+onMount(async () => {
     if (recipe?.id) {
       try {
         const existingComponents = await apiClient.getComponents(recipe.id);
@@ -97,10 +106,49 @@
           showComponents = true;
         }
       } catch (err) {
-        // Ignore errors loading components
+      }
+      try {
+        const recipePhotos = await apiClient.getRecipePhotos(recipe.id);
+        if (recipePhotos.length > 0) {
+          photos = recipePhotos;
+        }
+      } catch (err) {
+        console.error('Failed to load recipe photos:', err);
       }
     }
   });
+
+  async function handleAddPhotos(selectedPhotos: any[]) {
+    if (!recipe?.id) return;
+    for (const photo of selectedPhotos) {
+      try {
+        await apiClient.addPhotoToRecipe(recipe.id, photo.id);
+        photos = [...photos, { ...photo, isMain: photos.length === 0 }];
+      } catch (err) {
+        console.error('Failed to add photo to recipe:', err);
+      }
+    }
+  }
+
+  async function handleSetMainPhoto(photoId: string) {
+    if (!recipe?.id) return;
+    try {
+      await apiClient.setMainPhoto(recipe.id, photoId);
+      photos = photos.map(p => ({ ...p, isMain: p.id === photoId }));
+    } catch (err) {
+      console.error('Failed to set main photo:', err);
+    }
+  }
+
+  async function handleRemovePhoto(photoId: string) {
+    if (!recipe?.id) return;
+    try {
+      await apiClient.removePhotoFromRecipe(recipe.id, photoId);
+      photos = photos.filter(p => p.id !== photoId);
+    } catch (err) {
+      console.error('Failed to remove photo:', err);
+    }
+  }
 
   function handleAddComponent(childRecipe: any, servingsNeeded: number) {
     components = [...components, { childRecipeId: childRecipe.id, servingsNeeded, childRecipe }];
@@ -616,18 +664,13 @@
       </div>
 
       <div class="form-group">
-        <div class="label-with-action">
-          <label for="imageUrl">Image URL</label>
-          <button
-            type="button"
-            class="btn-secondary btn-sm"
-            onclick={() => showImageSearch = true}
-          >
-            <Search size={16} />
-            <span class="btn-label">Search</span>
-          </button>
-        </div>
-        <input id="imageUrl" type="url" bind:value={imageUrl} placeholder="https://example.com/image.jpg" />
+        <label>Photos</label>
+        <PhotoGallery
+          photos={photos}
+          recipeId={recipe?.id || ''}
+          editable={true}
+          onaddphotos={() => photoPickerOpen = true}
+        />
       </div>
 
       <div class="form-group">
@@ -812,7 +855,14 @@
     onClose={() => showImageSearch = false}
   />
 {/if}
-
+{#if photoPickerOpen}
+  <PhotoPicker
+    recipeId={recipe?.id || ''}
+    maxSelectable={5}
+    onclose={() => photoPickerOpen = false}
+    onselect={handleAddPhotos}
+  />
+{/if}
 <style>
   .recipe-form {
     max-width: 800px;

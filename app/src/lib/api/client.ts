@@ -646,10 +646,81 @@ export const apiClient = {
     return api<{ logs: any[]; total: number }>(`/api/admin/audit-logs${query}`);
   },
 
-  getAuditLogActions: () =>
+getAuditLogActions: () =>
     api<string[]>('/api/admin/audit-logs/actions'),
-
-  // Health
+  getStorageConfig: () =>
+    api<{
+      provider: 'local' | 'r2' | 's3' | null;
+      config: Record<string, any>;
+      cdnUrl: string | null;
+      maxUploadSizeMb: number;
+      isLocalEnabled?: boolean;
+    } | null>('/api/admin/storage'),
+  updateStorageConfig: (data: {
+    provider: 'local' | 'r2' | 's3';
+    config: Record<string, string>;
+    cdnUrl?: string;
+    maxUploadSizeMb?: number;
+  }) =>
+    api<{ success: boolean }>('/api/admin/storage', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteStorageConfig: () =>
+    api<{ success: boolean }>('/api/admin/storage', { method: 'DELETE' }),
+  getUploadUrl: (filename: string, contentType: string) =>
+    api<{ uploadUrl: string; publicUrl: string; storageKey: string; maxSizeBytes: number }>(
+      `/api/photos/upload-url?filename=${encodeURIComponent(filename)}&contentType=${encodeURIComponent(contentType)}`
+    ),
+  confirmUpload: (storageKey: string, mimeType: string, size: number, recipeId?: string) =>
+    api<{
+      id: string;
+      originalKey: string;
+      thumbnailKey: string;
+      mediumKey: string;
+      width: number;
+      height: number;
+      mimeType: string;
+    }>('/api/photos/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ storageKey, mimeType, size, recipeId }),
+    }),
+  getMyPhotos: () =>
+    api<Array<{
+      id: string;
+      urls: { thumbnail?: string; medium?: string; original: string };
+      width: number;
+      height: number;
+    }>>('/api/photos/my'),
+  getRecipePhotos: (recipeId: string) =>
+    api<Array<{
+      id: string;
+      isMain: boolean;
+      urls: { thumbnail?: string; medium?: string; original: string };
+      width: number;
+      height: number;
+    }>>(`/api/recipes/${recipeId}/photos`),
+  addPhotoToRecipe: (recipeId: string, photoId: string) =>
+    api<{ success: boolean }>(`/api/recipes/${recipeId}/photos`, {
+      method: 'POST',
+      body: JSON.stringify({ photoId }),
+    }),
+  removePhotoFromRecipe: (recipeId: string, photoId: string) =>
+    api<{ success: boolean }>(`/api/recipes/${recipeId}/photos/${photoId}`, { method: 'DELETE' }),
+  setMainPhoto: (recipeId: string, photoId: string) =>
+    api<{ success: boolean }>(`/api/recipes/${recipeId}/photos/${photoId}`, { method: 'PUT' }),
+  attachInstructionPhoto: (recipeId: string, instructionId: string, photoId: string) =>
+    api<{ success: boolean }>(`/api/recipes/${recipeId}/instructions/${instructionId}/photo`, {
+      method: 'PUT',
+      body: JSON.stringify({ photoId }),
+    }),
+  detachInstructionPhoto: (recipeId: string, instructionId: string) =>
+    api<{ success: boolean }>(`/api/recipes/${recipeId}/instructions/${instructionId}/photo`, { method: 'DELETE' }),
+  migrateImageUrl: (url: string, recipeId?: string) =>
+    api<{ id: string; urls: { thumbnail: string; medium: string; original: string } }>('/api/photos/migrate-from-url', {
+      method: 'POST',
+      body: JSON.stringify({ url, recipeId }),
+    }),
   health: () =>
     api<{ status: string; timestamp: string }>('/api/health'),
 };

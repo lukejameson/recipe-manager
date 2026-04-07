@@ -3,8 +3,7 @@
   import { apiClient } from '$lib/api/client';
   import { authStore } from '$lib/stores/auth.svelte';
   import Header from '$lib/components/Header.svelte';
-
-  // Provider/Feature types
+  import StorageSettings from '$lib/components/StorageSettings.svelte';
   type Provider = {
     id: string;
     name: string;
@@ -77,6 +76,7 @@
   let pexelsApiKey = $state('');
   let savingPexels = $state(false);
   let pexelsSuccess = $state('');
+  let activeTab = $state<'providers' | 'features' | 'storage' | 'imagesearch'>('providers');
   const providerDisplayNames: Record<string, string> = {
     'anthropic': 'Anthropic (Claude)',
     'openai': 'OpenAI (GPT)',
@@ -393,7 +393,13 @@
       {/if}
 
       {#if isAdmin}
-        <!-- AI Providers Section -->
+        <nav class="settings-tabs">
+          <button class="tab-button" class:active={activeTab === 'providers'} onclick={() => activeTab = 'providers'}>AI Providers</button>
+          <button class="tab-button" class:active={activeTab === 'features'} onclick={() => activeTab = 'features'}>Features</button>
+          <button class="tab-button" class:active={activeTab === 'storage'} onclick={() => activeTab = 'storage'}>Storage</button>
+          <button class="tab-button" class:active={activeTab === 'imagesearch'} onclick={() => activeTab = 'imagesearch'}>Image Search</button>
+        </nav>
+        {#if activeTab === 'providers'}
         <section class="settings-section">
           <div class="section-header">
             <div>
@@ -557,8 +563,8 @@
             {/if}
           </div>
         </section>
-
-        <!-- Feature Configuration Section -->
+        {/if}
+        {#if activeTab === 'features'}
         <section class="settings-section">
           <div class="section-header">
             <div>
@@ -636,8 +642,15 @@
             {/each}
           {/if}
         </section>
-
-        <!-- Image Search Section -->
+        {/if}
+        {#if activeTab === 'storage'}
+        <section class="settings-section">
+          <h2>Storage Configuration</h2>
+          <p class="section-description">Configure photo storage for this installation.</p>
+          <StorageSettings />
+        </section>
+        {/if}
+        {#if activeTab === 'imagesearch'}
         <section class="settings-section">
           <h2>Image Search</h2>
           <p class="section-description">
@@ -681,6 +694,7 @@
             </div>
           {/if}
         </section>
+        {/if}
       {/if}
     {/if}
   </div>
@@ -810,7 +824,31 @@
     padding: 3rem;
     color: var(--color-text-light);
   }
-
+  .settings-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--color-border);
+  }
+  .tab-button {
+    padding: 0.75rem 1.25rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .tab-button:hover {
+    color: var(--color-text);
+  }
+  .tab-button.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+  }
   .settings-section {
     background: white;
     padding: 2rem;

@@ -32,12 +32,12 @@ export const users = pgTable('users', {
   isAdmin: boolean('is_admin').notNull().default(false),
   email: text('email'),
   displayName: text('display_name'),
+  adminId: text('admin_id').references(() => users.id, { onDelete: 'set null' }),
   featureFlags: jsonb('feature_flags').$type<UserFeatureFlags>(),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
-  // Account lockout fields
   failedLoginAttempts: integer('failed_login_attempts').notNull().default(0),
   lockedUntil: timestamp('locked_until', { withTimezone: true }),
 });
@@ -92,6 +92,7 @@ export type RecipeItem = {
   text: string;
   order: number;
   checked?: boolean;
+  photoId?: string | null;
 };
 
 // Recipe items container for JSONB storage
@@ -309,6 +310,76 @@ export const memories = pgTable('memories', {
     .defaultNow(),
 });
 
+export type StorageProviderType = 'local' | 'r2' | 's3';
+
+export type R2Config = {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+};
+
+export type S3Config = {
+  region: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+  endpoint?: string;
+};
+
+export type LocalConfig = {
+  path: string;
+};
+
+export type StorageConfigData = R2Config | S3Config | LocalConfig;
+
+export const storageConfigs = pgTable('storage_configs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  adminId: text('admin_id').notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
+  provider: text('provider').notNull() as any as StorageProviderType,
+  config: jsonb('config').$type<StorageConfigData>().notNull(),
+  cdnUrl: text('cdn_url'),
+  maxUploadSizeMb: integer('max_upload_size_mb').notNull().default(10),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const photos = pgTable('photos', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  accountId: text('account_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  adminId: text('admin_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  recipeId: text('recipe_id').references(() => recipes.id, { onDelete: 'set null' }),
+  originalKey: text('original_key').notNull(),
+  thumbnailKey: text('thumbnail_key'),
+  mediumKey: text('medium_key'),
+  originalSize: integer('original_size'),
+  originalUrl: text('original_url'),
+  mimeType: text('mime_type'),
+  width: integer('width'),
+  height: integer('height'),
+  accessedAt: timestamp('accessed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const recipePhotos = pgTable('recipe_photos', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  recipeId: text('recipe_id').notNull().references(() => recipes.id, { onDelete: 'cascade' }),
+  photoId: text('photo_id').notNull().references(() => photos.id, { onDelete: 'cascade' }),
+  isMain: boolean('is_main').notNull().default(false),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}, (table) => ({
+  recipePhotoPk: { columns: [table.recipeId, table.photoId] },
+}));
+
 // AI Agents for specialized chat personas (Chef, Mixologist, custom)
 export const agents = pgTable('agents', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -433,6 +504,11 @@ export type InsertChatMessage = typeof chatMessages.$inferInsert;
 
 export type ProviderConfig = typeof providerConfigs.$inferSelect;
 export type InsertProviderConfig = typeof providerConfigs.$inferInsert;
-
 export type FeatureModelConfig = typeof featureModelConfigs.$inferSelect;
 export type InsertFeatureModelConfig = typeof featureModelConfigs.$inferInsert;
+export type StorageConfig = typeof storageConfigs.$inferSelect;
+export type InsertStorageConfig = typeof storageConfigs.$inferInsert;
+export type Photo = typeof photos.$inferSelect;
+export type InsertPhoto = typeof photos.$inferInsert;
+export type RecipePhoto = typeof recipePhotos.$inferSelect;
+export type InsertRecipePhoto = typeof recipePhotos.$inferInsert;
