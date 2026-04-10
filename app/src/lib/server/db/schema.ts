@@ -11,6 +11,7 @@ export type UserFeatureFlags = {
   imageSearch: boolean;
   jsonldImport: boolean;
   instagramImport: boolean;
+  textImport: boolean;
 };
 export const DEFAULT_FEATURE_FLAGS: UserFeatureFlags = {
   aiChat: true,
@@ -22,6 +23,7 @@ export const DEFAULT_FEATURE_FLAGS: UserFeatureFlags = {
   imageSearch: true,
   jsonldImport: false,
   instagramImport: false,
+  textImport: true,
 };
 
 

@@ -9,13 +9,14 @@
   import PhotoGrouper from '$lib/components/PhotoGrouper.svelte';
   import BulkRecipeReview from '$lib/components/BulkRecipeReview.svelte';
 
-  type ImportMode = 'url' | 'jsonld' | 'photos' | 'instagram' | 'preview';
+  type ImportMode = 'url' | 'jsonld' | 'photos' | 'instagram' | 'text' | 'preview';
   type PhotoStep = 'upload' | 'group' | 'extract' | 'review';
 
   // Feature flags
   let hasJsonldImport = $derived(authStore.user?.featureFlags?.jsonldImport ?? false);
   let hasPhotoExtraction = $derived(authStore.user?.featureFlags?.photoExtraction ?? false);
   let hasInstagramImport = $derived(authStore.user?.featureFlags?.instagramImport ?? false);
+  let hasTextImport = $derived(authStore.user?.featureFlags?.textImport ?? false);
 
   const DRAFT_STORAGE_KEY = 'recipe-photo-import-draft';
 
@@ -32,6 +33,8 @@
   let instagramUrl = $state('');
   let instagramCaption = $state('');
   let instagramInputMode = $state<'url' | 'caption'>('url');
+  let textInputMode = $state<'paste' | 'full'>('full');
+  let textContent = $state('');
   let fetchedRecipe = $state<any>(null);
   let loading = $state(false);
   let error = $state('');
@@ -271,6 +274,22 @@
       loading = false;
     }
   }
+  async function handleExtractFromText() {
+    error = '';
+    if (!textContent.trim()) {
+      error = 'Please paste some text to extract a recipe from';
+      return;
+    }
+    loading = true;
+    try {
+      fetchedRecipe = await apiClient.extractFromText(textContent.trim());
+      await checkForDuplicate(fetchedRecipe.title);
+    } catch (err: any) {
+      error = err.message || 'Failed to extract recipe from text';
+    } finally {
+      loading = false;
+    }
+  }
   async function handleSaveRecipe(data: any) {
     if (data.id) {
       // Updating existing recipe
@@ -390,6 +409,7 @@
     instagramUrl = '';
     instagramCaption = '';
     instagramInputMode = 'url';
+    textContent = '';
     if (newMode === 'photos') {
       resetPhotoImport();
     }
@@ -450,6 +470,14 @@
             onclick={() => handleModeChange('instagram')}
           >
             From Instagram
+          </button>
+        {/if}
+        {#if hasTextImport}
+          <button
+            class:active={mode === 'text'}
+            onclick={() => handleModeChange('text')}
+          >
+            From Text
           </button>
         {/if}
         {#if hasPhotoExtraction}
@@ -674,6 +702,67 @@
                 bind:value={instagramCaption}
                 rows="12"
                 placeholder="Paste the full Instagram caption here..."
+              ></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary" disabled={loading}>
+                {loading ? 'Extracting Recipe...' : 'Extract Recipe'}
+              </button>
+              <button type="button" class="btn-secondary" onclick={() => goto('/')}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        {/if}
+      {:else if mode === 'text'}
+        <div class="info">
+          <p>
+            Paste any text containing a recipe — an Instagram caption, a blog post, a copied recipe, or even handwritten notes. AI will extract and format it for you.
+          </p>
+        </div>
+        <div class="instagram-mode-toggle">
+          <button
+            class:active={textInputMode === 'full'}
+            onclick={() => { textInputMode = 'full'; error = ''; }}
+          >
+            Full Recipe
+          </button>
+          <button
+            class:active={textInputMode === 'paste'}
+            onclick={() => { textInputMode = 'paste'; error = ''; }}
+          >
+            Ingredients + Instructions
+          </button>
+        </div>
+        {#if textInputMode === 'full'}
+          <form onsubmit={(e) => { e.preventDefault(); handleExtractFromText(); }}>
+            <div class="form-group">
+              <label for="text-content">Recipe Text</label>
+              <textarea
+                id="text-content"
+                bind:value={textContent}
+                rows="16"
+                placeholder="Paste your recipe text here — ingredients, instructions, notes, anything..."
+              ></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary" disabled={loading}>
+                {loading ? 'Extracting Recipe...' : 'Extract Recipe'}
+              </button>
+              <button type="button" class="btn-secondary" onclick={() => goto('/')}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        {:else}
+          <form onsubmit={(e) => { e.preventDefault(); handleExtractFromText(); }}>
+            <div class="form-group">
+              <label for="text-ingredients">Ingredients</label>
+              <textarea
+                id="text-ingredients"
+                bind:value={textContent}
+                rows="12"
+                placeholder="Paste your ingredient list here — each ingredient on its own line..."
               ></textarea>
             </div>
             <div class="form-actions">

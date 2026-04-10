@@ -29,6 +29,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
       photoExtraction: featureFlags.photoExtraction,
       urlImport: featureFlags.urlImport,
       imageSearch: featureFlags.imageSearch,
+      textImport: featureFlags.textImport,
     });
   } catch (e) {
     if ('status' in e) throw e;
