@@ -593,8 +593,20 @@
       const recipeData: any = {
         title: recipeToSave.title,
         description: recipeToSave.description,
-        ingredients: recipeToSave.ingredients,
-        instructions: recipeToSave.instructions,
+        ingredients: {
+          items: recipeToSave.ingredients.map((text, i) => ({
+            id: crypto.randomUUID(),
+            text,
+            order: i,
+          })),
+        },
+        instructions: {
+          items: recipeToSave.instructions.map((text, i) => ({
+            id: crypto.randomUUID(),
+            text,
+            order: i,
+          })),
+        },
         prepTime: recipeToSave.prepTime,
         cookTime: recipeToSave.cookTime,
         servings: recipeToSave.servings,
