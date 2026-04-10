@@ -38,7 +38,7 @@ run_migrations() {
     # DRIZZLE_STUDIO=false disables studio to avoid permission issues
     echo "Running drizzle-kit push..."
     # Pipe "n" to avoid truncating tables, add constraint without truncating
-    if DRIZZLE_STUDIO=false npx drizzle-kit push --force --strict=false; then
+    if printf "\n" | DRIZZLE_STUDIO=false npx drizzle-kit push --force --strict=false; then
         echo "✅ Database migrations completed successfully"
     else
         echo "⚠️  Database migration had issues, but continuing..."
