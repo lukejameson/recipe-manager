@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/db';
-import { collectionRecipes } from '$lib/server/db/schema';
+import { collectionRecipes, collections } from '$lib/server/db/schema';
 import { getCurrentUser } from '$lib/server/auth';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
@@ -25,8 +25,14 @@ export const POST: RequestHandler = async ({ params, request, cookies }) => {
     }
 
     const { recipeId } = result.data;
-
-    // Check if already exists
+    const [collection] = await db
+      .select()
+      .from(collections)
+      .where(and(eq(collections.id, params.id), eq(collections.userId, user.userId)))
+      .limit(1);
+    if (!collection) {
+      throw error(404, 'Collection not found');
+    }
     const [existing] = await db
       .select()
       .from(collectionRecipes)

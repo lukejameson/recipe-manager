@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getCurrentUser } from '$lib/server/auth';
-import { getStorageProviderForUser, getAdminIdForUser, getStorageConfigForUser } from '$lib/server/storage/service';
+import { getStorageProviderForAdmin, getAdminIdForUser, getStorageConfigForUser } from '$lib/server/storage/service';
 import { imageProcessor } from '$lib/server/storage/image-processor';
 import { db } from '$lib/server/db/db';
 import { photos } from '$lib/server/db/schema';
@@ -38,7 +38,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     }
 
     const adminId = await getAdminIdForUser(user.userId);
-    const provider = await getStorageProviderForUser(adminId);
+    const provider = await getStorageProviderForAdmin(adminId);
     if (!provider) {
       throw error(500, 'Storage provider not available');
     }
@@ -111,7 +111,11 @@ if (recipeId) {
         }
       });
     } catch (processError) {
-      await provider.deleteKey(storageKey);
+      await Promise.allSettled([
+        provider.deleteKey(storageKey),
+        provider.deleteKey(thumbnailKey),
+        provider.deleteKey(mediumKey),
+      ]);
       throw processError;
     }
   } catch (e) {

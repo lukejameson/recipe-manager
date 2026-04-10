@@ -18,6 +18,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
     const userSessions = await db
       .select({
         id: sessions.id,
+        tokenHash: sessions.tokenHash,
         userAgent: sessions.userAgent,
         ipAddress: sessions.ipAddress,
         createdAt: sessions.createdAt,
@@ -33,10 +34,9 @@ export const GET: RequestHandler = async ({ cookies }) => {
       );
 
     const currentTokenHash = token ? hashToken(token) : null;
-
-    return json(userSessions.map(session => ({
+    return json(userSessions.map(({ tokenHash, ...session }) => ({
       ...session,
-      isCurrent: currentTokenHash === session.id,
+      isCurrent: currentTokenHash === tokenHash,
     })));
   } catch (e) {
     if (e instanceof Error && 'status' in e) throw e;

@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getCurrentUser } from '$lib/server/auth';
-import { getAdminIdForUser, getStorageProviderForUser } from '$lib/server/storage/service';
+import { getAdminIdForUser, getStorageProviderForAdmin } from '$lib/server/storage/service';
 export const PUT: RequestHandler = async ({ url, request, cookies }) => {
   try {
     const token = cookies.get('auth_token');
@@ -38,7 +38,7 @@ export const PUT: RequestHandler = async ({ url, request, cookies }) => {
     }
     const buffer = Buffer.concat(chunks);
     const adminId = await getAdminIdForUser(user.userId);
-    const provider = await getStorageProviderForUser(adminId);
+    const provider = await getStorageProviderForAdmin(adminId);
     if (!provider) {
       throw error(500, 'Storage provider not available');
     }

@@ -714,6 +714,7 @@ onMount(async () => {
           editable={true}
           onaddphotos={() => photoPickerOpen = true}
           onremovephoto={handleRemovePhoto}
+          onselectmain={handleSetMainPhoto}
         />
       </div>
       {/if}
@@ -904,7 +905,8 @@ onMount(async () => {
   <PhotoPicker
     recipeId={recipe?.id || ''}
     maxSelectable={5}
-    onclose={() => photoPickerOpen = false}
+    initialTab={changingCoverPhoto ? 'existing' : 'upload'}
+    onclose={() => { photoPickerOpen = false; changingCoverPhoto = false; }}
     onselect={handleAddPhotos}
   />
 {/if}

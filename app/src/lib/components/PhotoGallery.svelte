@@ -21,7 +21,8 @@
     maxPhotos = 5,
     onaddphotos,
     onviewphotos,
-    onremovephoto
+    onremovephoto,
+    onselectmain
   }: {
     photos: PhotoGalleryPhoto[];
     recipeId?: string;
@@ -30,6 +31,7 @@
     onaddphotos?: () => void;
     onviewphotos?: () => void;
     onremovephoto?: (photoId: string) => void;
+    onselectmain?: (photoId: string) => void;
   } = $props();
 
   let fullscreenOpen = $state(false);
@@ -46,10 +48,8 @@
   }
 
   function handleSetMain(photoId: string) {
-    photos = photos.map(p => ({
-      ...p,
-      isMain: p.id === photoId
-    }));
+    photos = photos.map(p => ({ ...p, isMain: p.id === photoId }));
+    onselectmain?.(photoId);
   }
 
   function handleDelete(photoId: string) {

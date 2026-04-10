@@ -1,9 +1,9 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/db';
-import { users, sessions, recipes, tags, recipeTags, collections, collectionRecipes, shoppingListItems, memories, chatSessions, chatMessages, agents } from '$lib/server/db/schema';
+import { users, sessions, recipes, tags, recipeTags, recipePhotos, photos, collections, collectionRecipes, shoppingListItems, memories, chatSessions, chatMessages, agents } from '$lib/server/db/schema';
 import { getCurrentUser, verifyPassword, clearAuthCookie } from '$lib/server/auth';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 const deleteAccountSchema = z.object({
@@ -69,16 +69,11 @@ export const DELETE: RequestHandler = async ({ request, cookies }) => {
       .where(eq(recipes.userId, user.userId));
 
     const recipeIds = userRecipes.map(r => r.id);
-
-    // Delete recipe tags
     if (recipeIds.length > 0) {
-      await db.delete(recipeTags).where(eq(recipeTags.recipeId, recipeIds[0]));
-      for (let i = 1; i < recipeIds.length; i++) {
-        await db.delete(recipeTags).where(eq(recipeTags.recipeId, recipeIds[i]));
-      }
+      await db.delete(recipeTags).where(inArray(recipeTags.recipeId, recipeIds));
+      await db.delete(recipePhotos).where(inArray(recipePhotos.recipeId, recipeIds));
     }
-
-    // Delete recipes
+    await db.delete(photos).where(eq(photos.accountId, user.userId));
     await db.delete(recipes).where(eq(recipes.userId, user.userId));
 
     // Delete collections

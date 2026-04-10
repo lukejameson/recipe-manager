@@ -41,6 +41,7 @@ export const POST: RequestHandler = async ({ params, request, cookies }) => {
       .update(recipes)
       .set({
         rating: data.rating !== undefined ? data.rating : recipe.rating,
+        notes: data.notes !== undefined ? data.notes : recipe.notes,
         updatedAt: new Date(),
       })
       .where(eq(recipes.id, params.id))

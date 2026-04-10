@@ -4,7 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { getStorageProviderForUser, getAdminIdForUser } from '$lib/server/storage/service';
 import { db } from '$lib/server/db/db';
 import { photos, recipePhotos, recipes } from '$lib/server/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 const addPhotoSchema = z.object({
@@ -47,7 +47,7 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
     }
 
     const photoRecords = await db.query.photos.findMany({
-      where: eq(photos.id, photos.id)
+      where: inArray(photos.id, photoIds)
     });
 
     const photoMap = new Map(photoRecords.map(p => [p.id, p]));
@@ -128,9 +128,12 @@ export const POST: RequestHandler = async ({ params, request, cookies }) => {
       throw error(403, 'Not authorized to use this photo');
     }
 
+    const alreadyLinked = existingPhotos.some(p => p.photoId === photoId);
+    if (alreadyLinked) {
+      return json({ success: true });
+    }
     const isMain = existingPhotos.length === 0;
     const maxSortOrder = existingPhotos.reduce((max, p) => Math.max(max, p.sortOrder), -1);
-
     await db.insert(recipePhotos).values({
       recipeId: params.id,
       photoId,

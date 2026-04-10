@@ -42,7 +42,7 @@ const recipeInputSchema = z.object({
   servings: z.number().min(0).optional(),
   ingredients: recipeItemListSchema,
   instructions: recipeItemListSchema,
-  imageUrl: z.string().url().optional().or(z.literal('')),
+  imageUrl: z.string().optional().or(z.literal('')),
   sourceUrl: z.string().url().optional().or(z.literal('')),
   tags: z.array(z.string()).optional(),
   isFavorite: z.boolean().optional(),

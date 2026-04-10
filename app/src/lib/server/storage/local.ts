@@ -1,13 +1,12 @@
 import {
-  createWriteStream,
   statSync,
   unlinkSync,
   existsSync,
   mkdirSync,
   readdirSync,
-  readFileSync
+  readFileSync,
+  writeFileSync
 } from 'fs';
-import { pipeline } from 'stream/promises';
 import { join } from 'path';
 import type { StorageProvider, UploadUrlResult } from './base.js';
 import type { Photo } from '$lib/server/db/schema.js';
@@ -124,10 +123,7 @@ export class LocalStorageProvider implements StorageProvider {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
-    await pipeline(
-      buffer as any,
-      createWriteStream(localPath)
-    );
+    writeFileSync(localPath, buffer);
   }
 
   async getFile(storageKey: string): Promise<Buffer | null> {

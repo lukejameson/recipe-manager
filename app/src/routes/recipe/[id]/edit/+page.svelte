@@ -58,20 +58,6 @@
 
     parsing = true;
     try {
-      // Use the backend to parse the JSON-LD (reuse the import logic)
-      const parsed = await apiClient.fetchFromUrl(
-        'data:application/json,' + encodeURIComponent(jsonldInput.trim()),
-        false
-      );
-
-      // This won't work with data: URLs, so we need a different approach
-      // Let's create a dedicated endpoint or parse client-side
-    } catch (err) {
-      // Expected - let's try a different approach
-    }
-
-    // Parse client-side instead
-    try {
       const data = JSON.parse(jsonldInput.trim());
 
       // Find the recipe object

@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getCurrentUser } from '$lib/server/auth';
-import { getAdminIdForUser, getStorageProviderForUser } from '$lib/server/storage/service';
+import { getAdminIdForUser, getStorageProviderForAdmin } from '$lib/server/storage/service';
 export const GET: RequestHandler = async ({ params, cookies }) => {
   try {
     const token = cookies.get('auth_token');
@@ -21,7 +21,8 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
         throw error(403, 'Access denied');
       }
     }
-    const provider = await getStorageProviderForUser(accountId);
+    const adminId = await getAdminIdForUser(user.userId);
+    const provider = await getStorageProviderForAdmin(adminId);
     if (!provider) {
       throw error(404, 'Storage not configured');
     }

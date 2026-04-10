@@ -18,17 +18,18 @@
   let {
     recipeId = '',
     maxSelectable = 5,
+    initialTab = 'upload',
     onclose,
     onselect
   }: {
     recipeId?: string;
     maxSelectable?: number;
+    initialTab?: 'upload' | 'pexels' | 'existing';
     onclose: () => void;
     onselect: (photos: SelectedPhoto[]) => void;
   } = $props();
-
   type Tab = 'upload' | 'pexels' | 'existing';
-  let activeTab = $state<Tab>('upload');
+  let activeTab = $state<Tab>(initialTab);
   let selectedPhotos = $state<SelectedPhoto[]>([]);
   let uploading = $state(false);
   let uploadProgress = $state(0);

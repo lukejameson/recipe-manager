@@ -65,6 +65,19 @@ export const PUT: RequestHandler = async ({ params, request, cookies }) => {
     if (result.data.tagPatterns !== undefined) updates.tagPatterns = result.data.tagPatterns;
     if (result.data.isDefault !== undefined) updates.isDefault = result.data.isDefault;
     updates.updatedAt = new Date();
+    const existing = await db
+      .select()
+      .from(recipeCategories)
+      .where(
+        and(
+          eq(recipeCategories.id, id),
+          eq(recipeCategories.userId, user.userId)
+        )
+      )
+      .limit(1);
+    if (existing.length === 0) {
+      throw error(404, 'Category not found');
+    }
     if (result.data.isDefault === true) {
       await db
         .update(recipeCategories)
