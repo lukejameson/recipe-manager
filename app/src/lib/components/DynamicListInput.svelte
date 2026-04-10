@@ -94,11 +94,15 @@
   let draggedItem: RecipeItem | null = null;
   let dragOverIndex: number | null = null;
 
-  function handleDragStart(event: DragEvent, item: RecipeItem) {
-    if (!(event.target as HTMLElement).closest('.drag-handle')) {
-      event.preventDefault();
-      return;
+  function handleHandlePointerDown(event: PointerEvent) {
+    const row = (event.currentTarget as HTMLElement).closest('.item-row') as HTMLElement;
+    if (row) {
+      row.setAttribute('draggable', 'true');
+      row.addEventListener('dragend', () => row.removeAttribute('draggable'), { once: true });
     }
+  }
+
+  function handleDragStart(event: DragEvent, item: RecipeItem) {
     draggedItem = item;
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
@@ -194,6 +198,13 @@
     textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
   }
 
+  function initTextarea(node: HTMLTextAreaElement) {
+    autoResize(node);
+    return {
+      update() { autoResize(node); }
+    };
+  }
+
   function handleTextareaInput(event: Event, id: string) {
     const target = event.target as HTMLTextAreaElement;
     updateItem(id, target.value);
@@ -244,7 +255,6 @@
           class="item-row"
           class:dragging={draggedItem?.id === item.id}
           class:drag-over={dragOverIndex === item.order}
-          draggable="true"
           ondragstart={(e) => handleDragStart(e, item)}
           ondragover={(e) => handleDragOver(e, item.order)}
           ondragleave={handleDragLeave}
@@ -255,15 +265,15 @@
           ontouchend={handleTouchEnd}
           data-index={item.order}
           role="listitem"
-          aria-grabbed={draggedItem?.id === item.id}
         >
-          <span class="drag-handle" aria-hidden="true">
+          <span class="drag-handle" aria-hidden="true" onpointerdown={handleHandlePointerDown}>
             <GripVertical size={18} />
           </span>
           <textarea
             class="item-input"
             value={item.text}
             {placeholder}
+            use:initTextarea
             oninput={(e) => handleTextareaInput(e, item.id)}
             onkeydown={(e) => handleTextareaKeydown(e, item.id)}
             aria-label="{label} item {item.order + 1}"
@@ -366,7 +376,6 @@
     border-radius: var(--radius-lg);
     padding: var(--spacing-1) var(--spacing-2);
     transition: var(--transition-normal);
-    touch-action: none;
   }
   .item-row:hover {
     border-color: var(--color-border-light);
@@ -394,6 +403,7 @@
     border-radius: var(--radius-md);
     transition: var(--transition-fast);
     flex-shrink: 0;
+    touch-action: none;
   }
   .drag-handle:hover {
     color: var(--color-text);
@@ -447,10 +457,8 @@
     outline: none;
     min-height: 44px;
     resize: none;
-    overflow: hidden;
+    overflow-y: hidden;
     line-height: 1.5;
-    max-height: 200px;
-    field-sizing: content;
     user-select: text;
     -webkit-user-select: text;
   }
