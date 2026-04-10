@@ -931,6 +931,20 @@
     color: var(--color-text-light);
     margin: 0.5rem 0 0;
   }
+  .hint-box {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: var(--radius-md);
+    padding: 0.875rem 1rem;
+    font-size: 0.875rem;
+    color: #0369a1;
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+  }
+  .hint-box a {
+    color: #0284c7;
+    font-weight: 500;
+  }
 
   .hint a {
     color: var(--color-primary);

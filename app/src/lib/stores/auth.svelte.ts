@@ -12,6 +12,7 @@ export type UserFeatureFlags = {
   urlImport: boolean;
   imageSearch: boolean;
   jsonldImport: boolean;
+  instagramImport: boolean;
 };
 
 /**

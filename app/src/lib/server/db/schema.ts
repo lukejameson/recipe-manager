@@ -10,9 +10,8 @@ export type UserFeatureFlags = {
   urlImport: boolean;
   imageSearch: boolean;
   jsonldImport: boolean;
+  instagramImport: boolean;
 };
-
-// Default feature flags (jsonldImport disabled by default as it's a power user feature)
 export const DEFAULT_FEATURE_FLAGS: UserFeatureFlags = {
   aiChat: true,
   recipeGeneration: true,
@@ -22,7 +21,9 @@ export const DEFAULT_FEATURE_FLAGS: UserFeatureFlags = {
   urlImport: true,
   imageSearch: true,
   jsonldImport: false,
+  instagramImport: false,
 };
+
 
 // Users table for authentication
 export const users = pgTable('users', {
@@ -255,11 +256,12 @@ export const shoppingListItems = pgTable('shopping_list_items', {
 // App settings (single-row table for configuration)
 export const settings = pgTable('settings', {
   id: text('id').primaryKey().default('app-settings'),
-  // DEPRECATED: Will be removed after migration to provider_configs
-  anthropicApiKey: text('anthropic_api_key'), // Encrypted
+  anthropicApiKey: text('anthropic_api_key'),
   anthropicModel: text('anthropic_model').default('claude-3-5-sonnet-20241022'),
   anthropicSecondaryModel: text('anthropic_secondary_model').default('claude-3-haiku-20240307'),
-  pexelsApiKey: text('pexels_api_key'), // Encrypted - for image search
+  pexelsApiKey: text('pexels_api_key'),
+  instagramAppId: text('instagram_app_id'),
+  instagramAppSecret: text('instagram_app_secret'),
   defaultFeatureFlags: jsonb('default_feature_flags').$type<UserFeatureFlags>(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()

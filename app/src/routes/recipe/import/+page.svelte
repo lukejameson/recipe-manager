@@ -9,12 +9,13 @@
   import PhotoGrouper from '$lib/components/PhotoGrouper.svelte';
   import BulkRecipeReview from '$lib/components/BulkRecipeReview.svelte';
 
-  type ImportMode = 'url' | 'jsonld' | 'photos' | 'preview';
+  type ImportMode = 'url' | 'jsonld' | 'photos' | 'instagram' | 'preview';
   type PhotoStep = 'upload' | 'group' | 'extract' | 'review';
 
   // Feature flags
   let hasJsonldImport = $derived(authStore.user?.featureFlags?.jsonldImport ?? false);
   let hasPhotoExtraction = $derived(authStore.user?.featureFlags?.photoExtraction ?? false);
+  let hasInstagramImport = $derived(authStore.user?.featureFlags?.instagramImport ?? false);
 
   const DRAFT_STORAGE_KEY = 'recipe-photo-import-draft';
 
@@ -28,6 +29,9 @@
   let mode = $state<ImportMode>('url');
   let url = $state('');
   let jsonld = $state('');
+  let instagramUrl = $state('');
+  let instagramCaption = $state('');
+  let instagramInputMode = $state<'url' | 'caption'>('url');
   let fetchedRecipe = $state<any>(null);
   let loading = $state(false);
   let error = $state('');
@@ -222,12 +226,10 @@
 
   async function handleImportJsonLd() {
     error = '';
-
     if (!jsonld.trim()) {
       error = 'Please paste JSONLD code';
       return;
     }
-
     loading = true;
     try {
       await apiClient.importJsonLd(jsonld.trim());
@@ -237,7 +239,38 @@
       loading = false;
     }
   }
-
+  async function handleImportFromInstagram() {
+    error = '';
+    if (!instagramUrl.trim()) {
+      error = 'Please enter an Instagram URL';
+      return;
+    }
+    loading = true;
+    try {
+      fetchedRecipe = await apiClient.importFromInstagram(instagramUrl.trim());
+      await checkForDuplicate(fetchedRecipe.title, fetchedRecipe.sourceUrl);
+    } catch (err: any) {
+      error = err.message || 'Failed to import recipe from Instagram';
+    } finally {
+      loading = false;
+    }
+  }
+  async function handleImportFromCaption() {
+    error = '';
+    if (!instagramCaption.trim()) {
+      error = 'Please paste the caption text';
+      return;
+    }
+    loading = true;
+    try {
+      fetchedRecipe = await apiClient.extractFromText(instagramCaption.trim());
+      await checkForDuplicate(fetchedRecipe.title);
+    } catch (err: any) {
+      error = err.message || 'Failed to extract recipe from caption';
+    } finally {
+      loading = false;
+    }
+  }
   async function handleSaveRecipe(data: any) {
     if (data.id) {
       // Updating existing recipe
@@ -354,6 +387,9 @@
   function handleModeChange(newMode: ImportMode) {
     mode = newMode;
     error = '';
+    instagramUrl = '';
+    instagramCaption = '';
+    instagramInputMode = 'url';
     if (newMode === 'photos') {
       resetPhotoImport();
     }
@@ -408,6 +444,14 @@
         >
           From Website
         </button>
+        {#if hasInstagramImport}
+          <button
+            class:active={mode === 'instagram'}
+            onclick={() => handleModeChange('instagram')}
+          >
+            From Instagram
+          </button>
+        {/if}
         {#if hasPhotoExtraction}
           <button
             class:active={mode === 'photos'}
@@ -569,6 +613,79 @@
             {saving}
           />
         {/if}
+      {:else if mode === 'instagram'}
+        <div class="instagram-mode-toggle">
+          <button
+            class:active={instagramInputMode === 'url'}
+            onclick={() => { instagramInputMode = 'url'; error = ''; }}
+          >
+            Post URL
+          </button>
+          <button
+            class:active={instagramInputMode === 'caption'}
+            onclick={() => { instagramInputMode = 'caption'; error = ''; }}
+          >
+            Paste Caption
+          </button>
+        </div>
+        {#if instagramInputMode === 'url'}
+          <div class="info">
+            <p>
+              Paste a link to any public Instagram post or reel. The app fetches the post image and caption via the Instagram API, then extracts the recipe with AI.
+            </p>
+            <p>
+              <strong>On iOS:</strong> Tap the three-dot menu on the post → Share → Copy Link, then paste below.
+            </p>
+          </div>
+          <form onsubmit={(e) => { e.preventDefault(); handleImportFromInstagram(); }}>
+            <div class="form-group">
+              <label for="instagram-url">Instagram Post or Reel URL</label>
+              <input
+                id="instagram-url"
+                type="url"
+                bind:value={instagramUrl}
+                placeholder="https://www.instagram.com/reel/..."
+                autocomplete="off"
+              />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary" disabled={loading}>
+                {loading ? 'Fetching Recipe...' : 'Import from Instagram'}
+              </button>
+              <button type="button" class="btn-secondary" onclick={() => goto('/')}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        {:else}
+          <div class="info">
+            <p>
+              Copy the caption from the Instagram post and paste it here. AI will extract the recipe title, ingredients, and instructions.
+            </p>
+            <p>
+              <strong>On iOS:</strong> Tap the post caption to expand it, then long-press to copy the text.
+            </p>
+          </div>
+          <form onsubmit={(e) => { e.preventDefault(); handleImportFromCaption(); }}>
+            <div class="form-group">
+              <label for="instagram-caption">Instagram Caption</label>
+              <textarea
+                id="instagram-caption"
+                bind:value={instagramCaption}
+                rows="12"
+                placeholder="Paste the full Instagram caption here..."
+              ></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary" disabled={loading}>
+                {loading ? 'Extracting Recipe...' : 'Extract Recipe'}
+              </button>
+              <button type="button" class="btn-secondary" onclick={() => goto('/')}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        {/if}
       {:else}
         <div class="info">
           <p>
@@ -699,6 +816,34 @@
     overflow: hidden;
     border: 1px solid #ddd;
     width: fit-content;
+  }
+  .instagram-mode-toggle {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+    width: fit-content;
+  }
+  .instagram-mode-toggle button {
+    padding: 0.5rem 1.25rem;
+    border: none;
+    background: white;
+    color: #666;
+    cursor: pointer;
+    font-size: 0.9375rem;
+    transition: all 0.2s;
+  }
+  .instagram-mode-toggle button:not(:last-child) {
+    border-right: 1px solid #ddd;
+  }
+  .instagram-mode-toggle button.active {
+    background: var(--color-primary);
+    color: white;
+  }
+  .instagram-mode-toggle button:hover:not(.active) {
+    background: #f5f5f5;
   }
 
   .mode-toggle button {

@@ -64,6 +64,20 @@
       "when": 1772600800000,
       "tag": "0008_add_recipe_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1772700800000,
+      "tag": "0009_add_provider_configs",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1775200000000,
+      "tag": "0010_add_instagram_settings",
+      "breakpoints": true
     }
   ]
 }

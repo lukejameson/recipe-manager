@@ -232,17 +232,20 @@ export const apiClient = {
     api<{
       hasApiKey: boolean;
       hasPexelsApiKey: boolean;
+      hasInstagramAppId: boolean;
+      hasInstagramAppSecret: boolean;
       model: string;
       secondaryModel: string;
       availableModels: Array<{ id: string; name: string }>;
       isAdmin: boolean;
     }>('/api/settings'),
-
   updateSettings: (data: {
     anthropicApiKey?: string;
     anthropicModel?: string;
     anthropicSecondaryModel?: string;
     pexelsApiKey?: string;
+    instagramAppId?: string;
+    instagramAppSecret?: string;
   }) =>
     api<{ success: boolean }>('/api/settings', {
       method: 'PUT',
@@ -491,6 +494,16 @@ export const apiClient = {
     api<any>('/api/recipes/import-jsonld', {
       method: 'POST',
       body: JSON.stringify({ jsonld }),
+    }),
+  importFromInstagram: (url: string) =>
+    api<any>('/api/recipes/import-instagram', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    }),
+  extractFromText: (text: string, sourceUrl?: string) =>
+    api<any>('/api/recipes/extract-from-text', {
+      method: 'POST',
+      body: JSON.stringify({ text, sourceUrl }),
     }),
 
   bulkExtractFromPhotos: (imageGroups: string[][]) =>

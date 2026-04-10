@@ -5,23 +5,17 @@
 
 /** AI Feature identifiers - matches the 16 AI features in the app */
 export enum AIFeature {
-	// Chat features
 	RECIPE_CHAT = 'recipe_chat',
 	RECIPE_CHAT_CONTEXTUAL = 'recipe_chat_contextual',
-
-	// Generation features
 	RECIPE_GENERATION = 'recipe_generation',
 	RECIPE_FROM_PHOTOS = 'recipe_from_photos',
+	RECIPE_FROM_INSTAGRAM = 'recipe_from_instagram',
 	PHOTO_GROUPING = 'photo_grouping',
-
-	// Enhancement features
 	TAG_SUGGESTIONS = 'tag_suggestions',
 	IMPROVEMENT_SUGGESTIONS = 'improvement_suggestions',
 	APPLY_IMPROVEMENTS = 'apply_improvements',
 	INGREDIENT_SUBSTITUTIONS = 'ingredient_substitutions',
 	RECIPE_ADAPTATION = 'recipe_adaptation',
-
-	// Analysis features
 	NUTRITION_CALCULATION = 'nutrition_calculation',
 	TECHNIQUE_EXPLANATION = 'technique_explanation',
 	PANTRY_MATCHING = 'pantry_matching',
@@ -56,6 +50,11 @@ export const DEFAULT_FEATURE_CONFIGS: Record<AIFeature, { temperature: number; m
 		requiresVision: false
 	},
 	[AIFeature.RECIPE_FROM_PHOTOS]: {
+		temperature: 0.3,
+		maxTokens: 4096,
+		requiresVision: true
+	},
+	[AIFeature.RECIPE_FROM_INSTAGRAM]: {
 		temperature: 0.3,
 		maxTokens: 4096,
 		requiresVision: true
@@ -118,6 +117,7 @@ export const FEATURE_NAMES: Record<AIFeature, string> = {
 	[AIFeature.RECIPE_CHAT_CONTEXTUAL]: 'Recipe Chat (Contextual)',
 	[AIFeature.RECIPE_GENERATION]: 'Recipe Generation',
 	[AIFeature.RECIPE_FROM_PHOTOS]: 'Recipe from Photos',
+	[AIFeature.RECIPE_FROM_INSTAGRAM]: 'Recipe from Instagram',
 	[AIFeature.PHOTO_GROUPING]: 'Photo Grouping',
 	[AIFeature.TAG_SUGGESTIONS]: 'Tag Suggestions',
 	[AIFeature.IMPROVEMENT_SUGGESTIONS]: 'Improvement Suggestions',
@@ -136,6 +136,7 @@ export const FEATURE_DESCRIPTIONS: Record<AIFeature, string> = {
 	[AIFeature.RECIPE_CHAT_CONTEXTUAL]: 'Chat about a specific recipe with full context',
 	[AIFeature.RECIPE_GENERATION]: 'Generate new recipes from text descriptions',
 	[AIFeature.RECIPE_FROM_PHOTOS]: 'Extract recipes from uploaded photos (requires vision)',
+	[AIFeature.RECIPE_FROM_INSTAGRAM]: 'Extract recipes from Instagram posts via oEmbed (requires vision)',
 	[AIFeature.PHOTO_GROUPING]: 'Group photos by recipe (requires vision)',
 	[AIFeature.TAG_SUGGESTIONS]: 'Suggest tags for recipes',
 	[AIFeature.IMPROVEMENT_SUGGESTIONS]: 'Suggest improvements to recipes',
@@ -162,6 +163,7 @@ export const FEATURE_CATEGORIES: Record<AIFeature, FeatureCategory> = {
 	[AIFeature.RECIPE_CHAT_CONTEXTUAL]: FeatureCategory.CHAT,
 	[AIFeature.RECIPE_GENERATION]: FeatureCategory.GENERATION,
 	[AIFeature.RECIPE_FROM_PHOTOS]: FeatureCategory.GENERATION,
+	[AIFeature.RECIPE_FROM_INSTAGRAM]: FeatureCategory.GENERATION,
 	[AIFeature.PHOTO_GROUPING]: FeatureCategory.GENERATION,
 	[AIFeature.TAG_SUGGESTIONS]: FeatureCategory.ENHANCEMENT,
 	[AIFeature.IMPROVEMENT_SUGGESTIONS]: FeatureCategory.ENHANCEMENT,

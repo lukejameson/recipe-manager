@@ -78,33 +78,6 @@ export const PUT: RequestHandler = async ({ params, request, cookies }) => {
     if (existing.length === 0) {
       throw error(404, 'Category not found');
     }
-    if (result.data.isDefault === true) {
-      await db
-        .update(recipeCategories)
-        .set({ isDefault: false })
-        .where(
-          and(
-            eq(recipeCategories.userId, user.userId),
-            ne(recipeCategories.id, id)
-          )
-        );
-    }
-
-    const existing = await db
-      .select()
-      .from(recipeCategories)
-      .where(
-        and(
-          eq(recipeCategories.id, id),
-          eq(recipeCategories.userId, user.userId)
-        )
-      )
-      .limit(1);
-
-    if (existing.length === 0) {
-      throw error(404, 'Category not found');
-    }
-
     if (result.data.name && result.data.name !== existing[0].name) {
       const duplicate = await db
         .select()

@@ -5,7 +5,7 @@ import { settings, memories, users } from '$lib/server/db/schema';
 import { getCurrentUser } from '$lib/server/auth';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
-import { decrypt } from '$lib/server/utils/encryption';
+import { decrypt, encrypt } from '$lib/server/utils/encryption';
 
 // GET /api/settings - Get current settings
 export const GET: RequestHandler = async ({ cookies }) => {
@@ -70,6 +70,8 @@ export const GET: RequestHandler = async ({ cookies }) => {
     return json({
       hasApiKey: !!appSettings?.anthropicApiKey,
       hasPexelsApiKey: !!appSettings?.pexelsApiKey,
+      hasInstagramAppId: !!appSettings?.instagramAppId,
+      hasInstagramAppSecret: !!appSettings?.instagramAppSecret,
       model: appSettings?.anthropicModel || 'claude-sonnet-4-20250514',
       secondaryModel: appSettings?.anthropicSecondaryModel || 'claude-3-haiku-20240307',
       availableModels,
@@ -107,6 +109,8 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
       anthropicModel: z.string().optional(),
       anthropicSecondaryModel: z.string().optional(),
       pexelsApiKey: z.string().optional(),
+      instagramAppId: z.string().optional(),
+      instagramAppSecret: z.string().optional(),
     });
     const result = schema.safeParse(body);
 
@@ -131,6 +135,16 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
 
     if (result.data.pexelsApiKey !== undefined) {
       updateData.pexelsApiKey = result.data.pexelsApiKey || null;
+    }
+    if (result.data.instagramAppId !== undefined) {
+      updateData.instagramAppId = result.data.instagramAppId
+        ? encrypt(result.data.instagramAppId)
+        : null;
+    }
+    if (result.data.instagramAppSecret !== undefined) {
+      updateData.instagramAppSecret = result.data.instagramAppSecret
+        ? encrypt(result.data.instagramAppSecret)
+        : null;
     }
 
     if (result.data.anthropicModel) {
