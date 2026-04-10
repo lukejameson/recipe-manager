@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/lukejameson/recipe-manager:latest
+    image: ghcr.io/lukejameson/marrow:latest
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
