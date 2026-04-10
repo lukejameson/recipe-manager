@@ -22,9 +22,9 @@ run_migrations() {
     echo "Running Drizzle database migrations..."
 
     # First, run any SQL migration files in drizzle/migrations
-    if [ -d "./drizzle/migrations" ]; then
+    if [ -d "./drizzle" ]; then
         echo "Running SQL migration files..."
-        for sql_file in ./drizzle/migrations/*.sql; do
+        for sql_file in ./drizzle/*.sql; do
             if [ -f "$sql_file" ]; then
                 echo "Executing: $sql_file"
                 psql "$DATABASE_URL" -f "$sql_file" || echo "⚠️  Failed to execute $sql_file (may already exist)"
@@ -38,7 +38,7 @@ run_migrations() {
     # DRIZZLE_STUDIO=false disables studio to avoid permission issues
     echo "Running drizzle-kit push..."
     # Pipe "n" to avoid truncating tables, add constraint without truncating
-    if printf "n\n" | DRIZZLE_STUDIO=false npx drizzle-kit push --force --strict=false; then
+    if DRIZZLE_STUDIO=false npx drizzle-kit push --force --strict=false; then
         echo "✅ Database migrations completed successfully"
     else
         echo "⚠️  Database migration had issues, but continuing..."

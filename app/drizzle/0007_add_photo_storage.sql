@@ -2,7 +2,7 @@
 -- Description: Add storage configs and photos tables for multi-provider photo storage
 
 -- Add admin_id column to users table
-ALTER TABLE users ADD COLUMN admin_id TEXT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_id TEXT REFERENCES users(id) ON DELETE SET NULL;
 
 -- Create storage_configs table
 CREATE TABLE IF NOT EXISTS storage_configs (
