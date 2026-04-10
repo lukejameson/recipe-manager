@@ -36,7 +36,7 @@ export class R2StorageProvider implements StorageProvider {
     if (this.cdnUrl) {
       return `${this.cdnUrl.replace(/\/$/, '')}/${key}`;
     }
-    return `/api/photos/serve/${encodeURIComponent(key)}`;
+    return `/api/photos/serve/${key}`;
   }
   async createUploadUrl(filename: string, contentType: string, accountId: string): Promise<UploadUrlResult> {
     const timestamp = Date.now();

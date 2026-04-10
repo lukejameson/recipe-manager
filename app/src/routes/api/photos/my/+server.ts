@@ -22,9 +22,9 @@ export const GET: RequestHandler = async ({ cookies }) => {
     const photosWithUrls = userPhotos.map(photo => ({
       id: photo.id,
       urls: {
-        thumbnail: photo.thumbnailKey ? `/api/photos/serve/${encodeURIComponent(photo.thumbnailKey)}` : null,
-        medium: photo.mediumKey ? `/api/photos/serve/${encodeURIComponent(photo.mediumKey)}` : null,
-        original: `/api/photos/serve/${encodeURIComponent(photo.originalKey)}`
+        thumbnail: photo.thumbnailKey ? `/api/photos/serve/${photo.thumbnailKey}` : null,
+        medium: photo.mediumKey ? `/api/photos/serve/${photo.mediumKey}` : null,
+        original: `/api/photos/serve/${photo.originalKey}`
       },
       width: photo.width,
       height: photo.height,

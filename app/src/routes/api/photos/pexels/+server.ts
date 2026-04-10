@@ -160,9 +160,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       width: newPhoto.width,
       height: newPhoto.height,
       urls: {
-        thumbnail: `/api/photos/serve/${encodeURIComponent(newPhoto.thumbnailKey!)}`,
-        medium: `/api/photos/serve/${encodeURIComponent(newPhoto.mediumKey!)}`,
-        original: `/api/photos/serve/${encodeURIComponent(newPhoto.originalKey)}`
+        thumbnail: `/api/photos/serve/${newPhoto.thumbnailKey!}`,
+        medium: `/api/photos/serve/${newPhoto.mediumKey!}`,
+        original: `/api/photos/serve/${newPhoto.originalKey}`
       }
     });
   } catch (e) {

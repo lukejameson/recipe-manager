@@ -45,7 +45,7 @@ export class LocalStorageProvider implements StorageProvider {
 
     return {
       uploadUrl: `/api/photos/upload-local?key=${encodeURIComponent(storageKey)}`,
-      publicUrl: `/api/photos/serve/${encodeURIComponent(storageKey)}`,
+      publicUrl: `/api/photos/serve/${storageKey}`,
       storageKey
     };
   }
@@ -64,7 +64,7 @@ export class LocalStorageProvider implements StorageProvider {
     } else if (variant === 'medium' && photo.mediumKey) {
       key = photo.mediumKey;
     }
-    return `/api/photos/serve/${encodeURIComponent(key)}`;
+    return `/api/photos/serve/${key}`;
   }
 
   async getMetadata(storageKey: string): Promise<{ width: number; height: number; mimeType: string } | null> {

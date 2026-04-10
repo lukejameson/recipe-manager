@@ -64,9 +64,9 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
           width: photo.width,
           height: photo.height,
           urls: {
-            thumbnail: photo.thumbnailKey ? `/api/photos/serve/${encodeURIComponent(photo.thumbnailKey)}` : null,
-            medium: photo.mediumKey ? `/api/photos/serve/${encodeURIComponent(photo.mediumKey)}` : null,
-            original: `/api/photos/serve/${encodeURIComponent(photo.originalKey)}`
+            thumbnail: photo.thumbnailKey ? `/api/photos/serve/${photo.thumbnailKey}` : null,
+            medium: photo.mediumKey ? `/api/photos/serve/${photo.mediumKey}` : null,
+            original: `/api/photos/serve/${photo.originalKey}`
           },
           createdAt: photo.createdAt
         };

@@ -9,7 +9,7 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-    const key = decodeURIComponent(params.key);
+    const key = params.key;
     const pathParts = key.split('/');
     if (pathParts.length < 2) {
       throw error(400, 'Invalid storage key');
