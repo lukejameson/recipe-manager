@@ -16,12 +16,14 @@
     initialIndex = 0,
     onclose,
     onselectmain,
+    ondelete,
     showSetMain = false
   }: {
     photos: GalleryPhoto[];
     initialIndex?: number;
     onclose: () => void;
     onselectmain?: (photoId: string) => void;
+    ondelete?: (photoId: string) => void;
     showSetMain?: boolean;
   } = $props();
 
@@ -112,6 +114,16 @@
       onselectmain(currentPhoto.id);
     }
   }
+  function handleDelete() {
+    if (ondelete && currentPhoto) {
+      ondelete(currentPhoto.id);
+      if (photos.length <= 1) {
+        onclose();
+      } else {
+        currentIndex = Math.min(currentIndex, photos.length - 2);
+      }
+    }
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -140,6 +152,13 @@
         disabled={currentPhoto?.isMain}
       >
         {currentPhoto?.isMain ? '★ Main' : 'Set as Main'}
+      </button>
+    {/if}
+    {#if ondelete}
+      <button class="btn-delete" onclick={handleDelete} aria-label="Delete photo">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+        </svg>
       </button>
     {/if}
   </div>
@@ -270,6 +289,22 @@
   .btn-set-main:disabled {
     color: #fbbf24;
     cursor: default;
+  }
+  .btn-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(220, 38, 38, 0.7);
+    border: none;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-delete:hover {
+    background: rgba(220, 38, 38, 1);
   }
 
   .gallery-content {

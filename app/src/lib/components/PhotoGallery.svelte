@@ -20,7 +20,8 @@
     editable = false,
     maxPhotos = 5,
     onaddphotos,
-    onviewphotos
+    onviewphotos,
+    onremovephoto
   }: {
     photos: PhotoGalleryPhoto[];
     recipeId?: string;
@@ -28,6 +29,7 @@
     maxPhotos?: number;
     onaddphotos?: () => void;
     onviewphotos?: () => void;
+    onremovephoto?: (photoId: string) => void;
   } = $props();
 
   let fullscreenOpen = $state(false);
@@ -52,6 +54,7 @@
 
   function handleDelete(photoId: string) {
     photos = photos.filter(p => p.id !== photoId);
+    onremovephoto?.(photoId);
   }
 </script>
 
@@ -73,24 +76,34 @@
   {:else}
     <div class="gallery-grid">
       {#if mainPhoto}
-        <button class="photo-main" onclick={() => openFullscreen(photos.indexOf(mainPhoto))}>
-          <img src={mainPhoto.urls.medium || mainPhoto.urls.original} alt="Main photo" />
-          {#if mainPhoto.isMain}
-            <span class="main-badge">★ Main</span>
+        <div class="photo-main-wrap">
+          <button class="photo-main" onclick={() => openFullscreen(photos.indexOf(mainPhoto))}>
+            <img src={mainPhoto.urls.medium || mainPhoto.urls.original} alt="Main photo" />
+            {#if mainPhoto.isMain}
+              <span class="main-badge">★ Main</span>
+            {/if}
+          </button>
+          {#if editable}
+            <button class="btn-delete-photo" type="button" onclick={() => handleDelete(mainPhoto.id)} aria-label="Remove photo">✕</button>
           {/if}
-        </button>
+        </div>
       {/if}
       {#if photos.length > 1}
         <div class="photo-thumbnails">
           {#each photos.slice(0, 4) as photo, index}
             {#if index !== 0 || !photo.isMain}
-              <button
-                class="photo-thumb"
-                class:small={photos.length > 2}
-                onclick={() => openFullscreen(photos.indexOf(photo))}
-              >
-                <img src={photo.urls.thumbnail || photo.urls.medium} alt={`Photo ${index + 1}`} />
-              </button>
+              <div class="photo-thumb-wrap">
+                <button
+                  class="photo-thumb"
+                  class:small={photos.length > 2}
+                  onclick={() => openFullscreen(photos.indexOf(photo))}
+                >
+                  <img src={photo.urls.thumbnail || photo.urls.medium} alt={`Photo ${index + 1}`} />
+                </button>
+                {#if editable}
+                  <button class="btn-delete-photo" type="button" onclick={() => handleDelete(photo.id)} aria-label="Remove photo">✕</button>
+                {/if}
+              </div>
             {/if}
           {/each}
           {#if photos.length > 4}
@@ -127,6 +140,7 @@
     initialIndex={fullscreenIndex}
     onclose={closeFullscreen}
     onselectmain={editable ? handleSetMain : undefined}
+    ondelete={editable ? handleDelete : undefined}
     showSetMain={editable}
   />
 {/if}
@@ -174,6 +188,35 @@
     gap: 0.5rem;
   }
 
+  .photo-main-wrap,
+  .photo-thumb-wrap {
+    position: relative;
+  }
+  .btn-delete-photo {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    z-index: 2;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .photo-main-wrap:hover .btn-delete-photo,
+  .photo-thumb-wrap:hover .btn-delete-photo {
+    opacity: 1;
+  }
   .photo-main {
     position: relative;
     width: 100%;

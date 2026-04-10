@@ -64,6 +64,7 @@ let totalTimeUnit = $state<TimeUnit>('minutes');
     isMain?: boolean;
   }>>([]);
   let photoPickerOpen = $state(false);
+  let changingCoverPhoto = $state(false);
   let loadingPhotos = $state(false);
   let tags = $state(recipe?.tags?.map((t: any) => t.name).join(', ') || '');
 
@@ -119,15 +120,32 @@ onMount(async () => {
   });
 
   async function handleAddPhotos(selectedPhotos: any[]) {
+    if (changingCoverPhoto) {
+      changingCoverPhoto = false;
+      if (selectedPhotos.length > 0) {
+        const first = selectedPhotos[0];
+        imageUrl = first.urls?.medium || first.urls?.original || first.pexelsUrl || '';
+      }
+      if (!recipe?.id) return;
+    }
     if (!recipe?.id) return;
     for (const photo of selectedPhotos) {
       try {
         await apiClient.addPhotoToRecipe(recipe.id, photo.id);
-        photos = [...photos, { ...photo, isMain: photos.length === 0 }];
+        const isFirst = photos.length === 0;
+        photos = [...photos, { ...photo, isMain: isFirst }];
+        if (!imageUrl && (photo.urls?.medium || photo.urls?.original)) {
+          imageUrl = photo.urls.medium || photo.urls.original;
+        }
       } catch (err) {
         console.error('Failed to add photo to recipe:', err);
       }
     }
+  }
+
+  function handleChangeCoverPhoto() {
+    changingCoverPhoto = true;
+    photoPickerOpen = true;
   }
 
   async function handleSetMainPhoto(photoId: string) {
@@ -668,14 +686,37 @@ onMount(async () => {
       </div>
 
       <div class="form-group">
-        <label>Photos</label>
+        <label>Cover Photo</label>
+        {#if imageUrl}
+          <div class="cover-photo-preview">
+            <img src={imageUrl} alt="Cover photo" class="cover-photo-img" />
+            <div class="cover-photo-actions">
+              <button type="button" class="btn-cover-change" onclick={handleChangeCoverPhoto}>Change</button>
+              <button type="button" class="btn-cover-remove" onclick={() => imageUrl = ''}>Remove</button>
+            </div>
+          </div>
+        {:else}
+          <button type="button" class="btn-add-cover" onclick={handleChangeCoverPhoto}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            Add Cover Photo
+          </button>
+        {/if}
+      </div>
+      {#if recipe?.id}
+      <div class="form-group">
+        <label>Gallery Photos</label>
         <PhotoGallery
           photos={photos}
           recipeId={recipe?.id || ''}
           editable={true}
           onaddphotos={() => photoPickerOpen = true}
+          onremovephoto={handleRemovePhoto}
         />
       </div>
+      {/if}
 
       <div class="form-group">
         <label for="sourceUrl">Source URL</label>
@@ -891,6 +932,73 @@ onMount(async () => {
 
   .form-group {
     margin-bottom: var(--spacing-5);
+  }
+  .form-group:last-child {
+    margin-bottom: 0;
+  }
+  .cover-photo-preview {
+    position: relative;
+    width: 100%;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--color-bg-subtle);
+  }
+  .cover-photo-img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    display: block;
+  }
+  .cover-photo-actions {
+    position: absolute;
+    bottom: var(--spacing-3);
+    right: var(--spacing-3);
+    display: flex;
+    gap: var(--spacing-2);
+  }
+  .btn-cover-change,
+  .btn-cover-remove {
+    padding: var(--spacing-1) var(--spacing-3);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    border: none;
+  }
+  .btn-cover-change {
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+  }
+  .btn-cover-change:hover {
+    background: rgba(0, 0, 0, 0.8);
+  }
+  .btn-cover-remove {
+    background: rgba(220, 38, 38, 0.8);
+    color: white;
+  }
+  .btn-cover-remove:hover {
+    background: rgba(220, 38, 38, 1);
+  }
+  .btn-add-cover {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    width: 100%;
+    padding: var(--spacing-5);
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg-subtle);
+    color: var(--color-text-light);
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    justify-content: center;
+    transition: var(--transition-normal);
+  }
+  .btn-add-cover:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: rgba(224, 122, 82, 0.05);
   }
 
   .form-group:last-child {
