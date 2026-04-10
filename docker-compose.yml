@@ -6,6 +6,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - PORT=3000
       - NODE_ENV=production
+      - BODY_SIZE_LIMIT=10M
       # Optional: Set to "true" to run recipe structure migration on startup
       # - RECIPE_MIGRATION=${RECIPE_MIGRATION:-false}
     restart: unless-stopped
