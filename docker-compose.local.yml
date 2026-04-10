@@ -3,6 +3,10 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://recipe_user:recipe_pass@localhost:5432/recipe_manager}
       - JWT_SECRET=${JWT_SECRET:-local-dev-secret-change-in-production}
