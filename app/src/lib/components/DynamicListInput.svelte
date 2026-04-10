@@ -18,33 +18,47 @@
   }
 
   let { items, placeholder, label, required, onChange }: Props = $props();
+  let containerEl: HTMLDivElement;
 
-  // Generate a unique ID for new items
-  function generateId(): string {
-    return `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  // Add a new empty item at the end
   function addItem() {
     const newItem: RecipeItem = {
-      id: generateId(),
+      id: crypto.randomUUID(),
       text: '',
       order: items.length,
     };
     const newItems = [...items, newItem];
     onChange(newItems);
-    // Auto-focus the new item's input after render
     tick().then(() => {
-      const inputs = document.querySelectorAll('.dynamic-list-input .item-input');
-      const lastTextarea = textareas[textareas.length - 1] as HTMLTextAreaElement;
-      if (lastTextarea) {
-        lastTextarea.focus();
-        autoResize(lastTextarea);
+      const inputs = containerEl.querySelectorAll('.item-input');
+      const lastInput = inputs[inputs.length - 1] as HTMLTextAreaElement;
+      if (lastInput) {
+        lastInput.focus();
+        autoResize(lastInput);
       }
     });
   }
 
-  // Remove an item by ID
+  function addItemAfter(afterId: string) {
+    const sorted = [...items].sort((a, b) => a.order - b.order);
+    const afterIndex = sorted.findIndex((i) => i.id === afterId);
+    const newItem: RecipeItem = {
+      id: crypto.randomUUID(),
+      text: '',
+      order: afterIndex + 1,
+    };
+    sorted.splice(afterIndex + 1, 0, newItem);
+    const reordered = sorted.map((item, idx) => ({ ...item, order: idx }));
+    onChange(reordered);
+    tick().then(() => {
+      const inputs = containerEl.querySelectorAll('.item-input');
+      const newInput = inputs[afterIndex + 1] as HTMLTextAreaElement;
+      if (newInput) {
+        newInput.focus();
+        autoResize(newInput);
+      }
+    });
+  }
+
   function removeItem(id: string) {
     const newItems = items
       .filter((item) => item.id !== id)
@@ -52,7 +66,6 @@
     onChange(newItems);
   }
 
-  // Update item text
   function updateItem(id: string, text: string) {
     const newItems = items.map((item) =>
       item.id === id ? { ...item, text } : item
@@ -60,15 +73,11 @@
     onChange(newItems);
   }
 
-  // Reorder functions
   function moveItemUp(id: string) {
     const index = items.findIndex((i) => i.id === id);
     if (index <= 0) return;
-
     const newItems = [...items];
     [newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]];
-
-    // Update order properties
     const reordered = newItems.map((item, idx) => ({ ...item, order: idx }));
     onChange(reordered);
   }
@@ -76,20 +85,20 @@
   function moveItemDown(id: string) {
     const index = items.findIndex((i) => i.id === id);
     if (index === -1 || index >= items.length - 1) return;
-
     const newItems = [...items];
     [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
-
-    // Update order properties
     const reordered = newItems.map((item, idx) => ({ ...item, order: idx }));
     onChange(reordered);
   }
 
-  // Drag and drop state
   let draggedItem: RecipeItem | null = null;
   let dragOverIndex: number | null = null;
 
   function handleDragStart(event: DragEvent, item: RecipeItem) {
+    if (!(event.target as HTMLElement).closest('.drag-handle')) {
+      event.preventDefault();
+      return;
+    }
     draggedItem = item;
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
@@ -112,23 +121,15 @@
   function handleDrop(event: DragEvent, dropIndex: number) {
     event.preventDefault();
     dragOverIndex = null;
-
     if (!draggedItem) return;
-
-    const dragIndex = items.findIndex((i) => i.id === draggedItem.id);
+    const dragIndex = items.findIndex((i) => i.id === draggedItem!.id);
     if (dragIndex === dropIndex) return;
-
     const newItems = [...items];
     newItems.splice(dragIndex, 1);
-
-    // Insert at drop position (adjust if dropping after the removed item)
     const insertIndex = dragIndex < dropIndex ? dropIndex - 1 : dropIndex;
-    newItems.splice(insertIndex, 0, draggedItem);
-
-    // Update order properties
+    newItems.splice(insertIndex, 0, draggedItem!);
     const reordered = newItems.map((item, idx) => ({ ...item, order: idx }));
     onChange(reordered);
-
     draggedItem = null;
   }
 
@@ -137,16 +138,15 @@
     dragOverIndex = null;
   }
 
-  // Touch-based reordering (since HTML5 drag doesn't work on mobile)
   let touchStartY = 0;
   let touchDraggedItem: RecipeItem | null = null;
   let touchStartTime = 0;
-  const TOUCH_DRAG_THRESHOLD = 10; // pixels
-  const TOUCH_TIME_THRESHOLD = 500; // ms
+  const TOUCH_DRAG_THRESHOLD = 10;
+  const TOUCH_TIME_THRESHOLD = 500;
 
   function handleTouchStart(event: TouchEvent, item: RecipeItem) {
     if (event.touches.length !== 1) return;
-
+    if (!(event.target as HTMLElement).closest('.drag-handle')) return;
     touchStartY = event.touches[0].clientY;
     touchDraggedItem = item;
     touchStartTime = Date.now();
@@ -154,142 +154,83 @@
 
   function handleTouchMove(event: TouchEvent) {
     if (!touchDraggedItem || event.touches.length !== 1) return;
-
     const currentY = event.touches[0].clientY;
     const deltaY = Math.abs(currentY - touchStartY);
-
-    // Only activate drag after threshold
     if (deltaY > TOUCH_DRAG_THRESHOLD && Date.now() - touchStartTime < TOUCH_TIME_THRESHOLD) {
       event.preventDefault();
-      // Visual feedback could be added here
     }
   }
 
   function handleTouchEnd(event: TouchEvent) {
     if (!touchDraggedItem) return;
-
-    // Determine if this was a tap or a drag
     const deltaY = Math.abs((event.changedTouches[0]?.clientY || 0) - touchStartY);
     const deltaTime = Date.now() - touchStartTime;
-
     if (deltaY < TOUCH_DRAG_THRESHOLD || deltaTime > TOUCH_TIME_THRESHOLD) {
-      // It's a tap, ignore
       touchDraggedItem = null;
       return;
     }
-
-    // Calculate which item we dropped on based on touch end position
     const elements = document.elementsFromPoint(
       event.changedTouches[0]?.clientX || 0,
       event.changedTouches[0]?.clientY || 0
     );
-
     const itemRow = elements.find(el => el.classList.contains('item-row'));
     if (itemRow) {
       const dropIndex = parseInt(itemRow.getAttribute('data-index') || '-1');
-      if (dropIndex !== -1 && dropIndex !== items.findIndex(i => i.id === touchDraggedItem.id)) {
-        const dragIndex = items.findIndex(i => i.id === touchDraggedItem.id);
+      const currentIndex = items.findIndex(i => i.id === touchDraggedItem!.id);
+      if (dropIndex !== -1 && dropIndex !== currentIndex) {
         const newItems = [...items];
-        newItems.splice(dragIndex, 1);
-        const insertIndex = dragIndex < dropIndex ? dropIndex - 1 : dropIndex;
-        newItems.splice(insertIndex, 0, touchDraggedItem);
-
+        newItems.splice(currentIndex, 1);
+        const insertIndex = currentIndex < dropIndex ? dropIndex - 1 : dropIndex;
+        newItems.splice(insertIndex, 0, touchDraggedItem!);
         const reordered = newItems.map((item, idx) => ({ ...item, order: idx }));
         onChange(reordered);
       }
     }
-
     touchDraggedItem = null;
   }
 
-  // Handle keyboard events
-  function handleKeydown(event: KeyboardEvent, id: string) {
-    const item = items.find((i) => i.id === id);
-    if (!item) return;
-
-    // Enter key: Add new item
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      addItem();
-    }
-
-    // Backspace on empty item: Remove it and focus previous
-    if (event.key === 'Backspace' && item.text === '') {
-      event.preventDefault();
-      const itemIndex = items.findIndex((i) => i.id === id);
-      if (items.length > 1) {
-        removeItem(id);
-        // Focus the previous item's input after render
-        tick().then(() => {
-          const inputs = document.querySelectorAll('.dynamic-list-input .item-input');
-          const targetIndex = Math.max(0, itemIndex - 1);
-          const targetInput = inputs[targetIndex] as HTMLInputElement;
-          if (targetInput) {
-            targetInput.focus();
-          }
-        });
-      }
-    }
+  function autoResize(textarea: HTMLTextAreaElement) {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
   }
 
-  // Handle textarea input with auto-resize
   function handleTextareaInput(event: Event, id: string) {
     const target = event.target as HTMLTextAreaElement;
     updateItem(id, target.value);
     autoResize(target);
   }
 
-  // Auto-resize textarea to fit content
-  function autoResize(textarea: HTMLTextAreaElement) {
-    textarea.style.height = 'auto';
-    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
-  }
-
-  // Handle textarea keydown - prevent enter from creating newlines, use it to add item
   function handleTextareaKeydown(event: KeyboardEvent, id: string) {
     const item = items.find((i) => i.id === id);
     if (!item) return;
-
-    // Enter key: Add new item (but Shift+Enter allows newline in textarea)
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      addItem();
+      addItemAfter(id);
     }
-
-    // Backspace on empty item: Remove it and focus previous
     if (event.key === 'Backspace' && item.text === '') {
       event.preventDefault();
       const itemIndex = items.findIndex((i) => i.id === id);
       if (items.length > 1) {
         removeItem(id);
-        // Focus the previous item's textarea after render
         tick().then(() => {
-          const textareas = document.querySelectorAll('.dynamic-list-input .item-input');
+          const inputs = containerEl.querySelectorAll('.item-input');
           const targetIndex = Math.max(0, itemIndex - 1);
-          const targetTextarea = textareas[targetIndex] as HTMLTextAreaElement;
+          const targetTextarea = inputs[targetIndex] as HTMLTextAreaElement;
           if (targetTextarea) {
             targetTextarea.focus();
-            // Move cursor to end
             targetTextarea.setSelectionRange(targetTextarea.value.length, targetTextarea.value.length);
           }
         });
       }
     }
   }
-
-  // Handle legacy input event
-  function handleInput(event: Event, id: string) {
-    const target = event.target as HTMLInputElement;
-    updateItem(id, target.value);
-  }
 </script>
 
-<div class="dynamic-list-input">
+<div class="dynamic-list-input" bind:this={containerEl}>
   <label class="list-label">
     {label}
     {#if required}<span class="required">*</span>{/if}
   </label>
-
   <div class="items-container">
     {#if items.length === 0}
       <div class="empty-state">
@@ -319,7 +260,6 @@
           <span class="drag-handle" aria-hidden="true">
             <GripVertical size={18} />
           </span>
-
           <textarea
             class="item-input"
             value={item.text}
@@ -329,7 +269,6 @@
             aria-label="{label} item {item.order + 1}"
             rows="1"
           ></textarea>
-
           <div class="reorder-buttons">
             <button
               type="button"
@@ -352,7 +291,6 @@
               <ChevronDown size={18} />
             </button>
           </div>
-
           {#if items.length > 1}
             <button
               type="button"
@@ -364,7 +302,6 @@
               <X size={18} />
             </button>
           {/if}
-
           {#if isLast}
             <button
               type="button"
@@ -380,7 +317,6 @@
       {/each}
     {/if}
   </div>
-
   {#if items.length === 0}
     <button type="button" class="add-btn" onclick={addItem}>
       <Plus size={18} />
@@ -393,7 +329,6 @@
   .dynamic-list-input {
     width: 100%;
   }
-
   .list-label {
     display: block;
     font-weight: var(--font-semibold);
@@ -401,19 +336,16 @@
     color: var(--color-text);
     font-size: var(--text-sm);
   }
-
   .required {
     color: var(--color-error);
     margin-left: var(--spacing-1);
   }
-
   .items-container {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-2);
     margin-bottom: var(--spacing-3);
   }
-
   .empty-state {
     padding: var(--spacing-4);
     background: var(--color-bg-subtle);
@@ -421,12 +353,10 @@
     border-radius: var(--radius-lg);
     text-align: center;
   }
-
   .empty-text {
     color: var(--color-text-light);
     font-size: var(--text-sm);
   }
-
   .item-row {
     display: flex;
     align-items: center;
@@ -436,29 +366,24 @@
     border-radius: var(--radius-lg);
     padding: var(--spacing-1) var(--spacing-2);
     transition: var(--transition-normal);
-    touch-action: none; /* Prevent scroll during touch drag */
+    touch-action: none;
   }
-
   .item-row:hover {
     border-color: var(--color-border-light);
     box-shadow: var(--shadow-sm);
   }
-
   .item-row:focus-within {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 3px rgba(224, 122, 82, 0.1);
   }
-
   .item-row.dragging {
     opacity: 0.5;
     transform: scale(0.98);
   }
-
   .item-row.drag-over {
     border-color: var(--color-primary);
     border-style: dashed;
   }
-
   .drag-handle {
     display: flex;
     align-items: center;
@@ -470,16 +395,13 @@
     transition: var(--transition-fast);
     flex-shrink: 0;
   }
-
   .drag-handle:hover {
     color: var(--color-text);
     background: var(--color-bg-subtle);
   }
-
   .drag-handle:active {
     cursor: grabbing;
   }
-
   .move-up-btn,
   .move-down-btn {
     display: flex;
@@ -498,25 +420,21 @@
     transition: var(--transition-fast);
     flex-shrink: 0;
   }
-
   .move-up-btn:hover:not(:disabled),
   .move-down-btn:hover:not(:disabled) {
     background: var(--color-border);
     color: var(--color-text);
   }
-
   .move-up-btn:disabled,
   .move-down-btn:disabled {
     opacity: 0.3;
     cursor: not-allowed;
   }
-
   .move-up-btn:focus-visible,
   .move-down-btn:focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
-
   .item-input {
     flex: 1;
     min-width: 0;
@@ -533,13 +451,13 @@
     line-height: 1.5;
     max-height: 200px;
     field-sizing: content;
+    user-select: text;
+    -webkit-user-select: text;
   }
-
   .item-input::placeholder {
     color: var(--color-text-light);
     opacity: 0.6;
   }
-
   .remove-btn {
     display: flex;
     align-items: center;
@@ -557,17 +475,14 @@
     transition: var(--transition-fast);
     flex-shrink: 0;
   }
-
   .remove-btn:hover {
     background: #fef2f2;
     color: var(--color-error);
   }
-
   .remove-btn:focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
-
   .add-inline-btn {
     display: flex;
     align-items: center;
@@ -585,24 +500,20 @@
     transition: var(--transition-fast);
     flex-shrink: 0;
   }
-
   .add-inline-btn:hover {
     background: rgba(34, 197, 94, 0.1);
     color: var(--color-success, #22c55e);
   }
-
   .add-inline-btn:focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
-
   .reorder-buttons {
     display: flex;
     flex-direction: row;
     gap: 2px;
     flex-shrink: 0;
   }
-
   .add-btn {
     display: inline-flex;
     align-items: center;
@@ -619,75 +530,60 @@
     transition: var(--transition-normal);
     min-height: 32px;
   }
-
   .add-btn:hover {
     border-color: var(--color-primary);
     color: var(--color-primary);
     background: rgba(224, 122, 82, 0.05);
   }
-
   .add-btn:focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
-
   .add-btn:active {
     transform: translateY(1px);
   }
-
-  /* Mobile optimizations */
   @media (max-width: 768px) {
     .item-row {
       padding: var(--spacing-1) var(--spacing-2);
     }
-
     .item-input {
-      font-size: 16px; /* Prevent iOS zoom on focus */
+      font-size: 16px;
       min-height: 48px;
     }
-
     .drag-handle {
-      display: none; /* Hide drag handle on mobile for cleaner UI */
+      display: none;
     }
-
     .move-up-btn,
     .move-down-btn {
       width: 32px;
       height: 32px;
     }
-
     .remove-btn {
       width: 48px;
       height: 48px;
     }
-
     .add-inline-btn {
       width: 48px;
       height: 48px;
       min-width: 48px;
       min-height: 48px;
     }
-
     .add-btn {
       width: auto;
       min-height: 36px;
       padding: var(--spacing-2) var(--spacing-4);
     }
   }
-
   @media (max-width: 480px) {
     .items-container {
       gap: var(--spacing-3);
     }
-
     .item-row {
       padding: var(--spacing-2);
     }
-
     .empty-state {
       padding: var(--spacing-3);
     }
-
     .move-up-btn,
     .move-down-btn {
       width: 32px;

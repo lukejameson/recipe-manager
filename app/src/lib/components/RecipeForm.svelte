@@ -268,7 +268,11 @@ onMount(async () => {
         existingTags: existingTagNames,
       });
 
-      tagSuggestions = result;
+      tagSuggestions = (result.suggestedTags || []).map((tag: string) => ({
+        tag,
+        confidence: 0.8,
+        reason: 'Suggested based on recipe content',
+      }));
     } catch (err: any) {
       tagSuggestionsError = err.message || 'Failed to suggest tags';
     } finally {
