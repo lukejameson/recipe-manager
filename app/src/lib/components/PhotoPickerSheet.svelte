@@ -155,6 +155,7 @@
     animation: slideUp 0.3s ease;
     position: relative;
     padding-bottom: env(safe-area-inset-bottom);
+    padding-top: env(safe-area-inset-top);
   }
 
   @keyframes slideUp {

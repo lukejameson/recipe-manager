@@ -112,7 +112,6 @@
         <input
           type="file"
           accept="image/*"
-          capture="environment"
           class="file-input"
           onchange={async (e) => {
             const input = e.target as HTMLInputElement;

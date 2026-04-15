@@ -462,6 +462,7 @@ onMount(async () => {
         required
         maxlength="200"
         placeholder="Recipe name (e.g., Grandma's Apple Pie)"
+        autofocus
       />
     </div>
 
@@ -1398,11 +1399,12 @@ onMount(async () => {
   }
 
   .servings-input {
-    width: 70px;
+    width: 100px;
+    min-height: 44px;
     padding: var(--spacing-2);
     border: 2px solid var(--color-border);
     border-radius: var(--radius-md);
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     text-align: center;
   }
 
@@ -1510,7 +1512,7 @@ onMount(async () => {
     }
 
     .servings-input {
-      width: 80px;
+      width: 100px;
       min-height: 44px;
       padding: var(--spacing-3);
       font-size: var(--text-base);

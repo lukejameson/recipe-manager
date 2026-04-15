@@ -438,7 +438,6 @@
     <input
       type="file"
       accept="image/*"
-      capture="environment"
       multiple
       bind:this={fileInput}
       onchange={handleFileSelect}
@@ -911,7 +910,9 @@
       background: var(--color-surface);
       z-index: 301;
     }
-
+    .chat-input textarea {
+      font-size: 16px;
+    }
     .recipe-title {
       display: none;
     }

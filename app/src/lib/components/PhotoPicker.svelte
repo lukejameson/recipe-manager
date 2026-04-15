@@ -281,7 +281,6 @@
             bind:this={fileInput}
             type="file"
             accept="image/*"
-            capture="environment"
             multiple
             onchange={handleFileSelect}
             class="file-input"

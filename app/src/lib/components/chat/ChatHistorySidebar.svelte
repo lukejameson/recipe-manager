@@ -904,7 +904,9 @@
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
     }
-
+    .search-input {
+      font-size: 16px;
+    }
     .session-item {
       min-height: 56px;
       user-select: none;

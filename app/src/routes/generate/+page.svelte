@@ -1086,6 +1086,7 @@
             aria-label="Chat message input"
             rows="1"
             disabled={loading}
+            autofocus
           ></textarea>
           {#if showMentionDropdown}
             <div class="mention-dropdown">

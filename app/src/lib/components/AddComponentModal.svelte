@@ -161,10 +161,12 @@
     bottom: 0;
     background: rgba(0, 0, 0, 0.5);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     z-index: 1000;
     padding: var(--spacing-4);
+    padding-top: calc(var(--spacing-4) + env(safe-area-inset-top));
+    overflow-y: auto;
   }
 
   .modal {

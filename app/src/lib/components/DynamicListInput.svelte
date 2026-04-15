@@ -417,10 +417,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 0;
     border: none;
     background: var(--color-bg-subtle);
@@ -495,10 +495,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    min-height: 36px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 0;
     border: none;
     background: transparent;
@@ -536,7 +536,7 @@
     font-weight: var(--font-medium);
     cursor: pointer;
     transition: var(--transition-normal);
-    min-height: 32px;
+    min-height: 44px;
   }
   .add-btn:hover {
     border-color: var(--color-primary);
