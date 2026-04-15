@@ -114,6 +114,8 @@
     display: flex;
     flex-direction: column;
     border: 1px solid var(--color-border-light);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* List View */
@@ -487,9 +489,23 @@
   }
 
   /* Mobile optimizations */
+  @media (hover: hover) and (pointer: fine) {
+    .recipe-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--color-border);
+    }
+  }
   @media (max-width: 640px) {
     .recipe-card {
       border-radius: var(--radius-lg);
+    }
+    .recipe-card:hover {
+      transform: none;
+      box-shadow: var(--shadow-sm);
+    }
+    .image {
+      height: 180px;
     }
 
     .recipe-card:hover {

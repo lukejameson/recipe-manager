@@ -1268,6 +1268,9 @@
     main {
       padding: var(--spacing-4) 0;
     }
+    .header {
+      display: none;
+    }
 
     .header {
       margin-bottom: var(--spacing-4);
