@@ -325,12 +325,6 @@
     flex: 1;
   }
 
-  .recipe-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
-    border-color: var(--color-border);
-  }
-
   .image {
     width: 100%;
     height: 220px;
@@ -387,8 +381,10 @@
     flex: 1;
   }
 
-  .card-link:hover h3 {
-    color: var(--color-primary);
+  @media (hover: hover) and (pointer: fine) {
+    .card-link:hover h3 {
+      color: var(--color-primary);
+    }
   }
 
   .rating {
