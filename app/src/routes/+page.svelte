@@ -751,8 +751,13 @@
     border: none;
     cursor: pointer;
     color: #5a7a66;
-    padding: 0;
+    padding: 4px 6px;
     line-height: 1;
+    min-width: 28px;
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .clear-btn {
@@ -1155,8 +1160,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 36px;
-    min-height: 36px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .sheet-close:hover {
@@ -1298,14 +1303,22 @@
     }
 
     .category-tabs {
-      justify-content: stretch;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
       margin-bottom: var(--spacing-3);
     }
 
+    .category-tabs::-webkit-scrollbar {
+      display: none;
+    }
+
     .tab {
-      flex: 1;
+      flex: none;
+      white-space: nowrap;
       justify-content: center;
-      padding: var(--spacing-2) var(--spacing-2);
+      padding: var(--spacing-2) var(--spacing-3);
       font-size: var(--text-xs);
     }
 

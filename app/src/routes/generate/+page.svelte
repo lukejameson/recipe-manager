@@ -1512,6 +1512,12 @@
     opacity: 1;
   }
 
+  @media (hover: none) {
+    .message-actions {
+      opacity: 1;
+    }
+  }
+
   .action-btn {
     display: inline-flex;
     align-items: center;
@@ -2487,8 +2493,8 @@
       /* Use relative positioning with flex for better keyboard handling */
       position: relative;
       top: 0;
-      height: calc(100vh - 60px); /* Account for header */
-      min-height: calc(100vh - 60px);
+      height: calc(100dvh - 64px - env(safe-area-inset-bottom)); /* Account for bottom nav */
+      min-height: calc(100dvh - 64px - env(safe-area-inset-bottom));
       overflow: hidden;
     }
 

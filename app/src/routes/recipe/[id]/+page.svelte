@@ -75,6 +75,13 @@
     showMoreMenu = false;
   }
 
+  function handleWindowClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.more-menu-container')) {
+      showMoreMenu = false;
+    }
+  }
+
   function handlePrint() {
     closeMoreMenu();
     window.print();
@@ -589,6 +596,8 @@
     }
   }
 </script>
+
+<svelte:window onclick={handleWindowClick} />
 
 <Header />
 
@@ -1200,6 +1209,21 @@
   .actions {
     display: flex;
     gap: var(--spacing-3);
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 480px) {
+    .actions {
+      gap: var(--spacing-2);
+    }
+
+    .btn-cooking,
+    .btn-edit,
+    .btn-chat,
+    .btn-more {
+      padding: var(--spacing-2) var(--spacing-3);
+      font-size: var(--text-xs);
+    }
   }
 
   .btn-edit,
@@ -1503,6 +1527,12 @@
     background: var(--color-bg-subtle);
     border-color: var(--color-primary);
     color: var(--color-primary);
+  }
+
+  @media (hover: none) {
+    .btn-substitute {
+      opacity: 1;
+    }
   }
 
   .sub-icon {

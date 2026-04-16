@@ -473,8 +473,8 @@
     cursor: pointer;
     color: var(--color-text-light);
     padding: 0;
-    width: 2rem;
-    height: 2rem;
+    min-width: 44px;
+    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;

@@ -485,6 +485,12 @@
     overflow: hidden;
   }
 
+  @media (max-width: 640px) {
+    .recipe-chat {
+      max-height: 70vh;
+    }
+  }
+
   .chat-header {
     display: flex;
     justify-content: space-between;
@@ -536,6 +542,11 @@
     cursor: pointer;
     border-radius: var(--radius-md);
     transition: var(--transition-fast);
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .btn-clear:hover,

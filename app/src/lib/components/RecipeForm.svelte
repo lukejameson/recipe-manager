@@ -1208,7 +1208,7 @@ onMount(async () => {
   .btn-sm {
     padding: var(--spacing-2) var(--spacing-3);
     font-size: var(--text-sm);
-    min-height: 36px;
+    min-height: 44px;
   }
 
   /* Nutrition section styles */
@@ -1418,8 +1418,8 @@ onMount(async () => {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border-radius: var(--radius-md);
     background: var(--color-surface);
@@ -1436,8 +1436,8 @@ onMount(async () => {
   }
 
   .btn-icon.btn-sm {
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
   }
 
   /* Mobile optimizations */
