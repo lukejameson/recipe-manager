@@ -377,6 +377,7 @@
 
   @media (max-width: 768px) {
     header {
+      display: none;
       padding: var(--spacing-3) 0;
       padding-top: calc(var(--spacing-3) + env(safe-area-inset-top));
     }

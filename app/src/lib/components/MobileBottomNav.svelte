@@ -90,8 +90,7 @@
     z-index: 100;
     display: flex;
     justify-content: space-around;
-    align-items: flex-end;
-    padding-top: env(safe-area-inset-top);
+    align-items: center;
   }
 
   .nav-item {
