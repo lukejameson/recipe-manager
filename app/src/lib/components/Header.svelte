@@ -13,6 +13,8 @@
     Sparkles,
     FolderOpen,
     Sliders,
+    ShoppingCart,
+    Package,
   } from 'lucide-svelte';
 
   let {} = $props();
@@ -91,8 +93,18 @@
         >
           Collections
         </a>
-
-        <!-- User menu dropdown -->
+        <a
+          href="/shopping-list"
+          class:active={$page.url.pathname.startsWith('/shopping-list')}
+        >
+          Shopping List
+        </a>
+        <a
+          href="/pantry"
+          class:active={$page.url.pathname.startsWith('/pantry')}
+        >
+          Pantry
+        </a>
         <div class="user-menu-container">
           <button
             class="user-menu-btn"

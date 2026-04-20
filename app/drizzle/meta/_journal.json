@@ -78,6 +78,13 @@
       "when": 1775200000000,
       "tag": "0010_add_instagram_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1776349488798,
+      "tag": "0011_large_dazzler",
+      "breakpoints": true
     }
   ]
 }

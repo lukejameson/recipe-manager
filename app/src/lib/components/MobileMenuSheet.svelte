@@ -10,6 +10,8 @@
     Shield,
     LogOut,
     X,
+    ShoppingCart,
+    Package,
   } from 'lucide-svelte';
 
   interface Props {
@@ -92,7 +94,6 @@
 
       <!-- Menu sections -->
       <div class="sheet-content">
-        <!-- Main section -->
         <div class="menu-section">
           <h3>Main</h3>
           <button
@@ -101,6 +102,20 @@
           >
             <FolderOpen size={22} />
             <span>Collections</span>
+          </button>
+          <button
+            class="menu-item"
+            onclick={() => navigateTo('/shopping-list')}
+          >
+            <ShoppingCart size={22} />
+            <span>Shopping List</span>
+          </button>
+          <button
+            class="menu-item"
+            onclick={() => navigateTo('/pantry')}
+          >
+            <Package size={22} />
+            <span>Pantry</span>
           </button>
         </div>
 

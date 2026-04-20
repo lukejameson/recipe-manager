@@ -1,10 +1,13 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getCurrentUser } from '$lib/server/auth';
+import { db } from '$lib/server/db/db';
+import { recipes } from '$lib/server/db/schema';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
 import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
+import { eq, like, and, or } from 'drizzle-orm';
 
 const searchRecipesSchema = z.object({
   query: z.string().min(1),
@@ -58,15 +61,30 @@ Return ONLY a JSON array of recipe names. If no recipes are mentioned, return an
 
     // Return mock recipe matches (in a real implementation, this would search the database)
     // For now, return the extracted names as potential matches
-    const matches = recipeNames.map((name, index) => ({
-      id: `search-result-${index}`,
-      title: name,
-      description: `Potential match for "${name}"`,
-      ingredients: [],
-      instructions: [],
-    }));
+    if (recipeNames.length === 0) {
+      return json([]);
+    }
 
-    return json(matches.slice(0, limit));
+    const searchConditions = recipeNames.map(name =>
+      like(recipes.title, `%${name}%`)
+    );
+
+    const dbResults = await db
+      .select({
+        id: recipes.id,
+        title: recipes.title,
+        description: recipes.description,
+        ingredients: recipes.ingredients,
+        instructions: recipes.instructions,
+      })
+      .from(recipes)
+      .where(and(
+        eq(recipes.userId, user.userId),
+        or(...searchConditions)
+      ))
+      .limit(limit);
+
+    return json(dbResults.slice(0, limit));
   } catch (e) {
     if ('status' in e) throw e;
     if (isAIConfigurationError(e)) {

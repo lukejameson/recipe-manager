@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, boolean, jsonb, unique } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, timestamp, boolean, jsonb, unique, real } from 'drizzle-orm/pg-core';
 
 // Feature flags type for per-user feature toggles
 export type UserFeatureFlags = {
@@ -247,10 +247,38 @@ export const shoppingListItems = pgTable('shopping_list_items', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   ingredient: text('ingredient').notNull(),
   quantity: text('quantity'),
-  category: text('category'), // produce, dairy, meat, pantry, etc.
+  category: text('category'),
   isChecked: boolean('is_checked').notNull().default(false),
   recipeId: text('recipe_id').references(() => recipes.id, { onDelete: 'set null' }),
+  pantryItemId: text('pantry_item_id').references(() => pantryItems.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const pantryItems = pgTable('pantry_items', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  ingredient: text('ingredient').notNull(),
+  displayName: text('display_name').notNull(),
+  quantity: real('quantity'),
+  unit: text('unit'),
+  category: text('category'),
+  expirationDate: timestamp('expiration_date', { withTimezone: true }),
+  threshold: real('threshold').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const pantryItemRecipes = pgTable('pantry_item_recipes', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  pantryItemId: text('pantry_item_id').notNull().references(() => pantryItems.id, { onDelete: 'cascade' }),
+  recipeId: text('recipe_id').notNull().references(() => recipes.id, { onDelete: 'cascade' }),
+  addedAt: timestamp('added_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
@@ -516,3 +544,7 @@ export type Photo = typeof photos.$inferSelect;
 export type InsertPhoto = typeof photos.$inferInsert;
 export type RecipePhoto = typeof recipePhotos.$inferSelect;
 export type InsertRecipePhoto = typeof recipePhotos.$inferInsert;
+export type PantryItem = typeof pantryItems.$inferSelect;
+export type InsertPantryItem = typeof pantryItems.$inferInsert;
+export type PantryItemRecipe = typeof pantryItemRecipes.$inferSelect;
+export type InsertPantryItemRecipe = typeof pantryItemRecipes.$inferInsert;

@@ -206,7 +206,7 @@ export const apiClient = {
       body: JSON.stringify(data),
     }),
 
-  updateShoppingListItem: (id: string, data: { isChecked?: boolean; ingredient?: string; quantity?: string; category?: string }) =>
+  updateShoppingListItem: (id: string, data: { isChecked?: boolean; ingredient?: string; quantity?: string; category?: string; pantryItemId?: string | null }) =>
     api<import('$lib/server/db/schema').ShoppingListItem>(`/api/shopping-list/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -226,8 +226,62 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-
-  // Settings
+  getPantryItems: () =>
+    api<import('$lib/server/db/schema').PantryItem[]>('/api/pantry'),
+  addPantryItem: (data: {
+    ingredient: string;
+    displayName?: string;
+    quantity?: number;
+    unit?: string;
+    category?: string;
+    expirationDate?: string;
+    threshold?: number;
+  }) =>
+    api<import('$lib/server/db/schema').PantryItem>('/api/pantry', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updatePantryItem: (id: string, data: {
+    ingredient?: string;
+    displayName?: string;
+    quantity?: number | null;
+    unit?: string | null;
+    category?: string | null;
+    expirationDate?: string | null;
+    threshold?: number | null;
+  }) =>
+    api<import('$lib/server/db/schema').PantryItem>(`/api/pantry/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deletePantryItem: (id: string) =>
+    api<{ success: boolean }>(`/api/pantry/${id}`, { method: 'DELETE' }),
+  clearPantry: () =>
+    api<{ success: boolean }>('/api/pantry', { method: 'DELETE' }),
+  checkPantryAgainstIngredients: (ingredients: string[]) =>
+    api<Array<{
+      ingredient: string;
+      found: boolean;
+      pantryItem?: import('$lib/server/db/schema').PantryItem;
+      matchScore?: number;
+    }>>('/api/pantry/check', {
+      method: 'POST',
+      body: JSON.stringify({ ingredients }),
+    }),
+  quickAddPantryItems: (text: string) =>
+    api<import('$lib/server/db/schema').PantryItem[]>('/api/pantry/quick-add', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  getLowStockItems: () =>
+    api<import('$lib/server/db/schema').PantryItem[]>('/api/pantry/low-stock'),
+  getPantryItemRecipes: (pantryItemId: string) =>
+    api<Array<{ id: string; title: string; description?: string; imageUrl?: string }>>(`/api/pantry/${pantryItemId}/recipes`),
+  linkRecipeToPantryItem: (pantryItemId: string, recipeId: string) =>
+    api<{ success: boolean }>(`/api/pantry/${pantryItemId}/recipes`, {
+      method: 'POST',
+      body: JSON.stringify({ recipeId }),
+    }),
   getSettings: () =>
     api<{
       hasApiKey: boolean;

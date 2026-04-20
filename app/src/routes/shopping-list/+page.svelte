@@ -39,10 +39,40 @@
     error = '';
     try {
       items = await apiClient.getShoppingList();
+      await matchItemsWithPantry();
     } catch (err: any) {
       error = err.message || 'Failed to load shopping list';
     } finally {
       loading = false;
+    }
+  }
+
+  async function matchItemsWithPantry() {
+    const uncheckedItems = items.filter((item) => !item.isChecked && !item.pantryItemId);
+    if (uncheckedItems.length === 0) return;
+
+    try {
+      const ingredients = uncheckedItems.map((item) => item.ingredient);
+      const matches = await apiClient.checkPantryAgainstIngredients(ingredients);
+
+      for (const match of matches) {
+        if (match.found && match.pantryItem) {
+          const item = items.find((i) => i.ingredient === match.ingredient && !i.pantryItemId);
+          if (item) {
+            try {
+              await apiClient.updateShoppingListItem(item.id, {
+                isChecked: true,
+                pantryItemId: match.pantryItem.id,
+              });
+            } catch (e) {
+              console.error('Failed to update item with pantry match:', e);
+            }
+          }
+        }
+      }
+      items = await apiClient.getShoppingList();
+    } catch (err: any) {
+      console.error('Failed to match items with pantry:', err);
     }
   }
 
@@ -151,6 +181,7 @@
   );
 
   const checkedCount = $derived(items.filter((item) => item.isChecked).length);
+  const inPantryCount = $derived(items.filter((item) => item.pantryItemId).length);
 </script>
 
 <Header />
@@ -308,6 +339,9 @@
         <div class="list-actions">
           <div class="stats">
             {items.length} item{items.length !== 1 ? 's' : ''} total
+            {#if inPantryCount > 0}
+              • {inPantryCount} in pantry
+            {/if}
             {#if checkedCount > 0}
               • {checkedCount} checked
             {/if}
@@ -344,6 +378,9 @@
                         {/if}
                       </div>
                     </label>
+                    {#if item.pantryItemId}
+                      <span class="pantry-badge" title="Found in pantry">In Pantry</span>
+                    {/if}
                     <button
                       onclick={() => handleDeleteItem(item.id)}
                       class="btn-delete-item"
@@ -773,6 +810,18 @@
     font-size: 1.25rem;
     padding: 0.5rem;
     opacity: 0.6;
+  }
+  .btn-delete-item:hover {
+    opacity: 1;
+  }
+  .pantry-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-sm);
+    background: #dcfce7;
+    color: #166534;
+    white-space: nowrap;
   }
 
   .btn-delete-item:hover {
