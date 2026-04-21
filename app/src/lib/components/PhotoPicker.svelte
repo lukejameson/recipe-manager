@@ -153,20 +153,16 @@
 
   async function downloadSelectedPexels() {
     if (pexelsSelected.size === 0) return;
-
     uploading = true;
     uploadProgress = 0;
     error = null;
-
     const selected = pexelsResults.filter(p => pexelsSelected.has(p.id));
     const newPhotos: SelectedPhoto[] = [];
-    let hasFailure = false;
-
+    let failedCount = 0;
     for (let i = 0; i < selected.length; i++) {
       const photo = selected[i];
       try {
         uploadProgress = Math.round(((i + 0.5) / selected.length) * 100);
-
         const result = await fetch('/api/photos/pexels', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -177,16 +173,12 @@
             alt: photo.alt
           })
         });
-
         if (!result.ok) {
           const errorData = await result.json().catch(() => ({}));
           throw new Error(errorData.message || `Failed to download ${photo.alt || 'photo'}`);
         }
-
         const data = await result.json();
-
         uploadProgress = Math.round(((i + 1) / selected.length) * 100);
-
         newPhotos.push({
           id: data.id,
           urls: data.urls,
@@ -196,14 +188,15 @@
         });
       } catch (err) {
         error = err instanceof Error ? err.message : 'Download failed';
-        hasFailure = true;
+        failedCount++;
       }
     }
-
+    pexelsSelected = new Set();
     selectedPhotos = [...selectedPhotos, ...newPhotos];
-    if (hasFailure && newPhotos.length === 0) {
-    } else {
-      pexelsSelected = new Set();
+    if (failedCount > 0 && newPhotos.length === 0) {
+      error = `Failed to download ${failedCount} photo${failedCount > 1 ? 's' : ''}. Check storage configuration.`;
+    } else if (failedCount > 0) {
+      error = `${failedCount} photo${failedCount > 1 ? 's' : ''} failed to download. ${newPhotos.length} added.`;
     }
     uploading = false;
     uploadProgress = 0;
