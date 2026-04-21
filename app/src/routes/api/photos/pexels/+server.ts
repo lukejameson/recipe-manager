@@ -115,8 +115,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     const buffer = Buffer.from(await response.arrayBuffer());
     const processed = await imageProcessor.processImage(buffer);
 
-    const timestamp = Date.now();
-    const storageKey = `${user.userId}/${timestamp}_pexels_${pexelsId}.webp`;
+    const storageKey = `${user.userId}/${crypto.randomUUID()}.webp`;
 
     if (provider.provider === 'local') {
       const localProvider = provider as any;

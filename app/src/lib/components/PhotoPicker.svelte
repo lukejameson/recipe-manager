@@ -54,6 +54,7 @@
   let loadingExisting = $state(false);
 
   let fileInput: HTMLInputElement;
+  let pendingBlobUrls = new Map<string, string>();
 
   async function handleFileSelect(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -67,6 +68,16 @@
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      const pendingId = `pending-${Date.now()}-${i}`;
+      const blobUrl = URL.createObjectURL(file);
+      pendingBlobUrls.set(pendingId, blobUrl);
+
+      selectedPhotos = [...selectedPhotos, {
+        id: pendingId,
+        urls: { original: blobUrl, thumbnail: blobUrl, medium: blobUrl },
+        isNew: true
+      }];
+
       try {
         uploadProgress = Math.round(((i + 0.5) / files.length) * 100);
 
@@ -88,15 +99,19 @@
 
         uploadProgress = Math.round(((i + 1) / files.length) * 100);
         const photo = await apiClient.confirmUpload(storageKey, file.type, file.size);
-        selectedPhotos = [...selectedPhotos, {
-          id: photo.id,
-          urls: photo.urls,
-          width: photo.width,
-          height: photo.height,
-          isNew: true
-        }];
+
+        URL.revokeObjectURL(blobUrl);
+        pendingBlobUrls.delete(pendingId);
+        selectedPhotos = selectedPhotos.map(p =>
+          p.id === pendingId
+            ? { id: photo.id, urls: photo.urls, width: photo.width, height: photo.height, isNew: true }
+            : p
+        );
       } catch (err) {
         error = err instanceof Error ? err.message : 'Upload failed';
+        URL.revokeObjectURL(blobUrl);
+        pendingBlobUrls.delete(pendingId);
+        selectedPhotos = selectedPhotos.filter(p => p.id !== pendingId);
       }
     }
 
@@ -230,6 +245,11 @@
   }
 
   function removeSelected(photoId: string) {
+    const blobUrl = pendingBlobUrls.get(photoId);
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+      pendingBlobUrls.delete(photoId);
+    }
     selectedPhotos = selectedPhotos.filter(p => p.id !== photoId);
     pexelsSelected.delete(photoId);
     pexelsSelected = new Set(pexelsSelected);

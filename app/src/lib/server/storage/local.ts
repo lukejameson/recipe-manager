@@ -32,9 +32,8 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   async createUploadUrl(filename: string, _contentType: string, accountId: string): Promise<UploadUrlResult> {
-    const timestamp = Date.now();
-    const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const storageKey = `${accountId}/${timestamp}_${safeFilename}`;
+    const ext = (filename.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const storageKey = `${accountId}/${crypto.randomUUID()}.${ext}`;
     const localPath = join(this.getBasePath(), storageKey);
 
     const dir = join(this.getBasePath(), accountId);

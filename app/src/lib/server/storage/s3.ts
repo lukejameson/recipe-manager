@@ -38,9 +38,8 @@ export class S3StorageProvider implements StorageProvider {
     return `/api/photos/serve/${key}`;
   }
   async createUploadUrl(filename: string, contentType: string, accountId: string): Promise<UploadUrlResult> {
-    const timestamp = Date.now();
-    const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const storageKey = `${accountId}/${timestamp}_${safeFilename}`;
+    const ext = (filename.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const storageKey = `${accountId}/${crypto.randomUUID()}.${ext}`;
     return {
       uploadUrl: `/api/photos/upload-local?key=${encodeURIComponent(storageKey)}`,
       publicUrl: this.getPublicUrl(storageKey),
