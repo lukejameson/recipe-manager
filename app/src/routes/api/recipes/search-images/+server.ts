@@ -1,6 +1,9 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getCurrentUser } from '$lib/server/auth';
+import { db } from '$lib/server/db/db';
+import { settings } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 const searchImagesSchema = z.object({
@@ -28,8 +31,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
     const { query, tags, page = 1 } = result.data;
 
-    // Get Pexels API key from environment
-    const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
+    const [appSettings] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.id, 'app-settings'))
+      .limit(1);
+
+    const PEXELS_API_KEY = appSettings?.pexelsApiKey || process.env.PEXELS_API_KEY;
+    console.log('[search-images] pexelsApiKey from DB:', !!appSettings?.pexelsApiKey, '| from env:', !!process.env.PEXELS_API_KEY);
 
     if (!PEXELS_API_KEY) {
       throw error(503, 'Image search is not configured');

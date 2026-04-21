@@ -907,6 +907,7 @@ onMount(async () => {
     recipeId={recipe?.id || ''}
     maxSelectable={5}
     initialTab={changingCoverPhoto ? 'existing' : 'upload'}
+    initialQuery={title}
     onclose={() => { photoPickerOpen = false; changingCoverPhoto = false; }}
     onselect={handleAddPhotos}
   />

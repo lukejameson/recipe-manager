@@ -94,13 +94,17 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
     const storageConfig = await getStorageConfigForUser(user.userId);
     if (!storageConfig) {
-      throw error(400, 'Storage not configured');
+      const errorMsg = 'Storage not configured. Please go to Settings > Storage to configure photo storage.';
+      console.error('Pexels download error:', errorMsg);
+      throw error(400, errorMsg);
     }
 
     const adminId = await getAdminIdForUser(user.userId);
     const provider = await getStorageProviderForUser(adminId);
     if (!provider) {
-      throw error(500, 'Storage provider not available');
+      const errorMsg = 'Storage provider not available. Please check Settings > Storage configuration.';
+      console.error('Pexels download error:', errorMsg);
+      throw error(500, errorMsg);
     }
 
     const response = await fetch(url);

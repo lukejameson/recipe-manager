@@ -19,12 +19,14 @@
     recipeId = '',
     maxSelectable = 5,
     initialTab = 'upload',
+    initialQuery = '',
     onclose,
     onselect
   }: {
     recipeId?: string;
     maxSelectable?: number;
     initialTab?: 'upload' | 'pexels' | 'existing';
+    initialQuery?: string;
     onclose: () => void;
     onselect: (photos: SelectedPhoto[]) => void;
   } = $props();
@@ -143,6 +145,7 @@
 
     const selected = pexelsResults.filter(p => pexelsSelected.has(p.id));
     const newPhotos: SelectedPhoto[] = [];
+    let hasFailure = false;
 
     for (let i = 0; i < selected.length; i++) {
       const photo = selected[i];
@@ -161,7 +164,8 @@
         });
 
         if (!result.ok) {
-          throw new Error(`Failed to download ${photo.alt || 'photo'}`);
+          const errorData = await result.json().catch(() => ({}));
+          throw new Error(errorData.message || `Failed to download ${photo.alt || 'photo'}`);
         }
 
         const data = await result.json();
@@ -177,11 +181,15 @@
         });
       } catch (err) {
         error = err instanceof Error ? err.message : 'Download failed';
+        hasFailure = true;
       }
     }
 
     selectedPhotos = [...selectedPhotos, ...newPhotos];
-    pexelsSelected = new Set();
+    if (hasFailure && newPhotos.length === 0) {
+    } else {
+      pexelsSelected = new Set();
+    }
     uploading = false;
     uploadProgress = 0;
   }
@@ -231,12 +239,19 @@
     onselect(selectedPhotos);
     onclose();
   }
-
   $effect(() => {
     if (activeTab === 'existing' && existingPhotos.length === 0) {
       loadExistingPhotos();
     }
   });
+
+  $effect(() => {
+    if (initialTab === 'pexels' && initialQuery) {
+      pexelsQuery = initialQuery;
+      searchPexels();
+    }
+  });
+
 </script>
 
 <div class="modal-overlay" onclick={onclose} role="dialog" aria-modal="true">
@@ -257,7 +272,13 @@
       <button
         class="tab"
         class:active={activeTab === 'pexels'}
-        onclick={() => activeTab = 'pexels'}
+        onclick={() => {
+          activeTab = 'pexels';
+          if (!pexelsQuery && initialQuery) {
+            pexelsQuery = initialQuery;
+            searchPexels();
+          }
+        }}
       >
         Pexels
       </button>
