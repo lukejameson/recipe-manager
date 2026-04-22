@@ -54,6 +54,19 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
 
+      - name: Notify Telegram (Build Failure)
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            ❌ *Build Failed* — Marrow
+            Message: `${{ github.event.commits[0].message }}`
+            Commit: `${{ github.sha }}`
+            By: ${{ github.actor }}
+
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -81,3 +94,29 @@ jobs:
 
             echo "Cleanup complete"
             docker system df
+
+      - name: Notify Telegram (Success)
+        if: success()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            ✅ *Production* — Marrow
+            Message: `${{ github.event.commits[0].message }}`
+            Commit: `${{ github.sha }}`
+            By: ${{ github.actor }}
+
+      - name: Notify Telegram (Failure)
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          format: markdown
+          message: |
+            🔥 *Production Deploy Failed* — Marrow
+            Message: `${{ github.event.commits[0].message }}`
+            Commit: `${{ github.sha }}`
+            By: ${{ github.actor }}
