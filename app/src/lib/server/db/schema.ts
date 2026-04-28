@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, boolean, jsonb, unique, real } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, timestamp, boolean, jsonb, unique, real, index } from 'drizzle-orm/pg-core';
 
 // Feature flags type for per-user feature toggles
 export type UserFeatureFlags = {
@@ -49,7 +49,7 @@ export const users = pgTable('users', {
 export const sessions = pgTable('sessions', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the token for security
+  tokenHash: text('token_hash').notNull().unique(),
   userAgent: text('user_agent'),
   ipAddress: text('ip_address'),
   rememberMe: boolean('remember_me').notNull().default(false),
@@ -60,7 +60,9 @@ export const sessions = pgTable('sessions', {
     .notNull()
     .defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+  userIdExpiresIdx: index('sessions_user_id_expires_idx').on(table.userId, table.expiresAt),
+}));
 
 // Audit logs for admin actions
 export const auditLogs = pgTable('audit_logs', {
@@ -163,7 +165,6 @@ export const tags = pgTable('tags', {
     .notNull()
     .defaultNow(),
 }, (table) => ({
-  // Unique tag name per user
   uniqueNamePerUser: unique().on(table.userId, table.name),
 }));
 

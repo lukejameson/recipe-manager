@@ -10,6 +10,14 @@ import { eq, and } from 'drizzle-orm';
 
 let localProvider: LocalStorageProvider | null = null;
 
+interface CachedProvider {
+  provider: StorageProvider;
+  expiresAt: number;
+}
+
+const providerCache = new Map<string, CachedProvider>();
+const PROVIDER_CACHE_TTL = 30 * 60 * 1000;
+
 export function getLocalStorageProvider(): LocalStorageProvider {
   if (!localProvider) {
     localProvider = new LocalStorageProvider();
@@ -18,17 +26,29 @@ export function getLocalStorageProvider(): LocalStorageProvider {
 }
 
 export async function getStorageProviderForAdmin(adminId: string): Promise<StorageProvider | null> {
+  const cached = providerCache.get(adminId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.provider;
+  }
+
   const isLocalEnabled = env?.LOCAL_PHOTO_STORAGE === 'true' || process.env.LOCAL_PHOTO_STORAGE === 'true';
   if (isLocalEnabled) {
     return getLocalStorageProvider();
   }
+
   const config = await db.query.storageConfigs.findFirst({
     where: eq(storageConfigs.adminId, adminId)
   });
   if (!config) {
     return null;
   }
-  return createStorageProvider(config);
+
+  const provider = createStorageProvider(config);
+  providerCache.set(adminId, {
+    provider,
+    expiresAt: Date.now() + PROVIDER_CACHE_TTL,
+  });
+  return provider;
 }
 
 export async function getStorageProviderForUser(userId: string): Promise<StorageProvider | null> {
@@ -62,7 +82,6 @@ export function isStorageConfigured(config: StorageConfig | null | undefined): b
 
 export async function getStorageConfigForAdmin(adminId: string): Promise<StorageConfig | null> {
   const isLocalEnabled = env?.LOCAL_PHOTO_STORAGE === 'true' || process.env.LOCAL_PHOTO_STORAGE === 'true';
-
   if (isLocalEnabled) {
     return {
       id: 'local',
@@ -75,7 +94,6 @@ export async function getStorageConfigForAdmin(adminId: string): Promise<Storage
       updatedAt: new Date()
     };
   }
-
   return db.query.storageConfigs.findFirst({
     where: eq(storageConfigs.adminId, adminId)
   });
@@ -85,17 +103,13 @@ export async function getStorageConfigForUser(userId: string): Promise<StorageCo
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId)
   });
-
   if (!user) return null;
-
   if (user.isAdmin) {
     return getStorageConfigForAdmin(user.id);
   }
-
   if (user.adminId) {
     return getStorageConfigForAdmin(user.adminId);
   }
-
   return getStorageConfigForAdmin(user.id);
 }
 
@@ -103,17 +117,13 @@ export async function getAdminIdForUser(userId: string): Promise<string> {
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId)
   });
-
   if (!user) throw new Error('User not found');
-
   if (user.isAdmin) {
     return user.id;
   }
-
   if (user.adminId) {
     return user.adminId;
   }
-
   return user.id;
 }
 
@@ -124,7 +134,6 @@ export async function upsertStorageConfig(
   const existing = await db.query.storageConfigs.findFirst({
     where: eq(storageConfigs.adminId, adminId)
   });
-
   if (existing) {
     await db.update(storageConfigs)
       .set({
@@ -144,11 +153,12 @@ export async function upsertStorageConfig(
       maxUploadSizeMb: input.maxUploadSizeMb || 10
     });
   }
-
+  providerCache.delete(adminId);
   return (await getStorageConfigForAdmin(adminId))!;
 }
 
 export async function deleteStorageConfig(adminId: string): Promise<void> {
+  providerCache.delete(adminId);
   await db.delete(storageConfigs)
     .where(eq(storageConfigs.adminId, adminId));
 }

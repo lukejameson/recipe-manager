@@ -101,6 +101,7 @@ interface CachedSession {
   userId: string;
   sessionId: string;
   expiresAt: number;
+  lastDbUpdate: number;
 }
 
 interface CachedUser {
@@ -132,6 +133,15 @@ export async function verifySession(token: string): Promise<{ userId: string; se
 
     const cached = sessionCache.get(tokenHash);
     if (cached && cached.expiresAt > Date.now()) {
+      const now = Date.now();
+      const fiveMinutes = 5 * 60 * 1000;
+      if ((now - cached.lastDbUpdate) > fiveMinutes) {
+        cached.lastDbUpdate = now;
+        db.update(sessions)
+          .set({ lastActiveAt: new Date() })
+          .where(eq(sessions.id, cached.sessionId))
+          .catch(() => {});
+      }
       return { userId: cached.userId, sessionId: cached.sessionId };
     }
 
@@ -147,15 +157,22 @@ export async function verifySession(token: string): Promise<{ userId: string; se
     }
 
     const ttl = getCacheTTL(session.expiresAt);
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+    const shouldUpdateLastActive = !cached || (now - cached.lastDbUpdate) > fiveMinutes;
+
     sessionCache.set(tokenHash, {
       userId,
       sessionId: session.id,
-      expiresAt: Date.now() + ttl,
+      expiresAt: now + ttl,
+      lastDbUpdate: shouldUpdateLastActive ? now : (cached?.lastDbUpdate ?? now),
     });
 
-    await db.update(sessions)
-      .set({ lastActiveAt: new Date() })
-      .where(eq(sessions.id, session.id));
+    if (shouldUpdateLastActive) {
+      await db.update(sessions)
+        .set({ lastActiveAt: new Date() })
+        .where(eq(sessions.id, session.id));
+    }
     return { userId, sessionId: session.id };
   } catch {
     return null;
