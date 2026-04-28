@@ -106,7 +106,22 @@ export const apiClient = {
   deleteRecipe: (id: string) =>
     api<{ success: boolean }>(`/api/recipes/${id}`, { method: 'DELETE' }),
 
-  // Tags
+  shareRecipe: (id: string) =>
+    api<{ shareToken: string; isShared: boolean; shareUrl: string }>(`/api/recipes/${id}/share`, {
+      method: 'POST',
+    }),
+
+  revokeShare: (id: string) =>
+    api<{ success: boolean; isShared: boolean }>(`/api/recipes/${id}/share`, {
+      method: 'DELETE',
+    }),
+
+  getShareStatus: (id: string) =>
+    api<{ shareToken: string | null; isShared: boolean; shareUrl: string | null }>(`/api/recipes/${id}/share`),
+
+  getSharedRecipe: (token: string) =>
+    api<import('$lib/server/db/schema').Recipe & { tags: string[] }>(`/api/shared/${token}`),
+
   getTags: () =>
     api<Array<import('$lib/server/db/schema').Tag & { recipeCount: number }>>('/api/tags'),
 

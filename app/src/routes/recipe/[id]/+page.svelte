@@ -58,6 +58,11 @@
   let showChat = $state(false);
   let showMoreMenu = $state(false);
   let generatingPdf = $state(false);
+  let isShared = $state(false);
+  let shareToken = $state<string | null>(null);
+  let shareUrl = $state<string | null>(null);
+  let sharingInProgress = $state(false);
+  let linkCopied = $state(false);
 
   // Derived: sorted text arrays from structured recipe items
   const ingredientTexts = $derived(
@@ -365,17 +370,14 @@
       scaledServings = recipe.servings;
       rating = recipe.rating || 0;
       notes = recipe.notes || '';
-
-      // Load components for compound recipes
       const hierarchy = await apiClient.getHierarchy($page.params.id);
       components = hierarchy;
-
-      // Load aggregated nutrition if has components
       if (components.length > 0) {
         aggregatedNutrition = await apiClient.getAggregatedNutrition($page.params.id);
       } else {
         aggregatedNutrition = null;
       }
+      await loadShareStatus();
     } catch (err: any) {
       error = err.message || 'Failed to load recipe';
     } finally {
@@ -456,6 +458,73 @@
 
   function handleEdit() {
     goto(`/recipe/${$page.params.id}/edit`);
+  }
+
+  async function handleShare() {
+    closeMoreMenu();
+    if (isShared && shareToken) {
+      try {
+        await navigator.clipboard.writeText(window.location.origin + `/share/${shareToken}`);
+        linkCopied = true;
+        setTimeout(() => { linkCopied = false; }, 2000);
+      } catch {
+        alert('Failed to copy link');
+      }
+      return;
+    }
+    sharingInProgress = true;
+    try {
+      const response = await fetch(`/api/recipes/${$page.params.id}/share`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to generate share link');
+      }
+      const data = await response.json();
+      shareToken = data.shareToken;
+      shareUrl = data.shareUrl;
+      isShared = true;
+      await navigator.clipboard.writeText(window.location.origin + shareUrl);
+      linkCopied = true;
+      setTimeout(() => { linkCopied = false; }, 2000);
+    } catch (err: any) {
+      alert('Failed to share recipe: ' + err.message);
+    } finally {
+      sharingInProgress = false;
+    }
+  }
+
+  async function handleRevokeShare() {
+    closeMoreMenu();
+    if (!confirm('Are you sure you want to revoke this share link? Anyone with the link will lose access.')) return;
+    try {
+      await fetch(`/api/recipes/${$page.params.id}/share`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      isShared = false;
+      shareToken = null;
+      shareUrl = null;
+    } catch (err: any) {
+      alert('Failed to revoke share: ' + err.message);
+    }
+  }
+
+  async function loadShareStatus() {
+    try {
+      const response = await fetch(`/api/recipes/${$page.params.id}/share`, {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        isShared = data.isShared;
+        shareToken = data.shareToken;
+        shareUrl = data.shareUrl;
+      }
+    } catch {
+    }
   }
 
   function recipeToJsonLd(recipe: any): string {
@@ -655,6 +724,21 @@
                   <span class="menu-icon">{copied ? '✓' : '📋'}</span>
                   <span>{copied ? 'Copied!' : 'Export as JSON-LD'}</span>
                 </button>
+                {#if isShared}
+                  <button onclick={handleShare} class="menu-item" role="menuitem">
+                    <span class="menu-icon">{linkCopied ? '✓' : '🔗'}</span>
+                    <span>{linkCopied ? 'Link Copied!' : 'Copy Share Link'}</span>
+                  </button>
+                  <button onclick={handleRevokeShare} class="menu-item" role="menuitem">
+                    <span class="menu-icon">✕</span>
+                    <span>Revoke Share Link</span>
+                  </button>
+                {:else}
+                  <button onclick={handleShare} class="menu-item" role="menuitem" disabled={sharingInProgress}>
+                    <span class="menu-icon">{sharingInProgress ? '⏳' : '🔗'}</span>
+                    <span>{sharingInProgress ? 'Generating...' : 'Share Recipe'}</span>
+                  </button>
+                {/if}
                 <div class="menu-divider"></div>
                 <button onclick={handlePrint} class="menu-item" role="menuitem">
                   <span class="menu-icon">🖨️</span>

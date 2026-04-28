@@ -128,24 +128,24 @@ export const recipes = pgTable('recipes', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   description: text('description'),
-  prepTime: integer('prep_time'), // in minutes
-  cookTime: integer('cook_time'), // in minutes
-  totalTime: integer('total_time'), // in minutes
+  prepTime: integer('prep_time'),
+  cookTime: integer('cook_time'),
+  totalTime: integer('total_time'),
   servings: integer('servings'),
   ingredients: jsonb('ingredients').notNull().$type<RecipeItemList>(),
   instructions: jsonb('instructions').notNull().$type<RecipeItemList>(),
   imageUrl: text('image_url'),
   sourceUrl: text('source_url'),
   isFavorite: boolean('is_favorite').notNull().default(false),
-  rating: integer('rating'), // 1-5 stars
-  notes: text('notes'), // Personal cooking notes
-  difficulty: text('difficulty'), // easy, medium, hard
+  rating: integer('rating'),
+  notes: text('notes'),
+  difficulty: text('difficulty'),
   timesCooked: integer('times_cooked').notNull().default(0),
   lastCookedAt: timestamp('last_cooked_at', { withTimezone: true }),
-  // Nutrition information (per serving)
   nutrition: jsonb('nutrition').$type<NutritionInfo>(),
-  // AI-generated improvement ideas
   improvementIdeas: jsonb('improvement_ideas').$type<ImprovementSuggestion[]>(),
+  shareToken: text('share_token').unique(),
+  isShared: boolean('is_shared').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

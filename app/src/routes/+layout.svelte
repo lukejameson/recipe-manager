@@ -6,11 +6,11 @@
   import MobileBottomNav from '$lib/components/MobileBottomNav.svelte';
 
   let { children } = $props();
-
   onMount(() => {
-    // Redirect to login if not authenticated and not on login page
-    const isLoginPage = $page.url.pathname === '/login';
-    if (!authStore.isAuthenticated && !isLoginPage) {
+    const pathname = $page.url.pathname;
+    const isLoginPage = pathname === '/login';
+    const isSharePage = pathname.startsWith('/share/');
+    if (!authStore.isAuthenticated && !isLoginPage && !isSharePage) {
       goto('/login');
     }
   });
