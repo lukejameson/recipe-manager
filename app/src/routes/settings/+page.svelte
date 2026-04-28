@@ -7,6 +7,7 @@
   import Header from '$lib/components/Header.svelte';
   import StorageSettings from '$lib/components/StorageSettings.svelte';
   import AgentSettings from '$lib/components/AgentSettings.svelte';
+  import PromptSettings from '$lib/components/PromptSettings.svelte';
   type Provider = {
     id: string;
     name: string;
@@ -79,9 +80,20 @@
   let pexelsApiKey = $state('');
   let savingPexels = $state(false);
   let pexelsSuccess = $state('');
-  let activeTab = $state<'providers' | 'features' | 'storage' | 'imagesearch' | 'agents'>(
-    ['providers', 'features', 'storage', 'imagesearch', 'agents'].includes(page.url.searchParams.get('tab') || '') 
-      ? page.url.searchParams.get('tab') as 'providers' | 'features' | 'storage' | 'imagesearch' | 'agents'
+  let prompts: Array<{
+    featureId: string;
+    content: string;
+    version: number;
+    updatedAt: Date | null;
+    updatedBy: string | null;
+    updatedByUsername: string | null;
+    variables: Array<{ name: string; description: string; sampleValue: string }>;
+    isDefault: boolean;
+  }> = $state([]);
+  let selectedPrompt: typeof prompts[0] | null = $state(null);
+  let activeTab = $state<'providers' | 'features' | 'storage' | 'imagesearch' | 'agents' | 'prompts'>(
+    ['providers', 'features', 'storage', 'imagesearch', 'agents', 'prompts'].includes(page.url.searchParams.get('tab') || '')
+      ? page.url.searchParams.get('tab') as 'providers' | 'features' | 'storage' | 'imagesearch' | 'agents' | 'prompts'
       : 'providers'
   );
   const providerDisplayNames: Record<string, string> = {
@@ -404,6 +416,7 @@
           <button class="tab-button" class:active={activeTab === 'storage'} onclick={() => { activeTab = 'storage'; goto('/settings?tab=storage', { replaceState: true }); }}>Storage</button>
           <button class="tab-button" class:active={activeTab === 'imagesearch'} onclick={() => { activeTab = 'imagesearch'; goto('/settings?tab=imagesearch', { replaceState: true }); }}>Image Search</button>
           <button class="tab-button" class:active={activeTab === 'agents'} onclick={() => { activeTab = 'agents'; goto('/settings?tab=agents', { replaceState: true }); }}>Agents</button>
+          <button class="tab-button" class:active={activeTab === 'prompts'} onclick={() => { activeTab = 'prompts'; goto('/settings?tab=prompts', { replaceState: true }); }}>Prompts</button>
         </nav>
         {#if activeTab === 'providers'}
         <section class="settings-section">
@@ -704,6 +717,11 @@
         {#if activeTab === 'agents'}
         <section class="settings-section">
           <AgentSettings isAdmin={isAdmin} />
+        </section>
+        {/if}
+        {#if activeTab === 'prompts'}
+        <section class="settings-section">
+          <PromptSettings isAdmin={isAdmin} />
         </section>
         {/if}
       {/if}
