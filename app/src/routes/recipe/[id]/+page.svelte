@@ -63,8 +63,8 @@
   let shareUrl = $state<string | null>(null);
   let sharingInProgress = $state(false);
   let linkCopied = $state(false);
-
-  // Derived: sorted text arrays from structured recipe items
+  let addingToShoppingList = $state(false);
+  let shoppingListMessage = $state<string | null>(null);
   const ingredientTexts = $derived(
     recipe?.ingredients?.items
       ?.toSorted((a: RecipeItem, b: RecipeItem) => (a.order ?? 0) - (b.order ?? 0))
@@ -511,7 +511,30 @@
       alert('Failed to revoke share: ' + err.message);
     }
   }
-
+  async function handleAddToShoppingList() {
+    if (!recipe) return;
+    addingToShoppingList = true;
+    shoppingListMessage = null;
+    try {
+      const response = await fetch('/api/shopping-list/generate', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeIds: [recipe.id] })
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || 'Failed to add to shopping list');
+      }
+      const items = await response.json();
+      shoppingListMessage = `Added ${items.length} ingredient${items.length !== 1 ? 's' : ''} to shopping list`;
+      setTimeout(() => { shoppingListMessage = null; }, 3000);
+    } catch (err: any) {
+      alert('Failed to add to shopping list: ' + err.message);
+    } finally {
+      addingToShoppingList = false;
+    }
+  }
   async function loadShareStatus() {
     try {
       const response = await fetch(`/api/recipes/${$page.params.id}/share`, {
@@ -694,8 +717,15 @@
             <span class="icon">💬</span>
             <span>Ask AI</span>
           </button>
-
-          <!-- More menu for secondary actions -->
+          <button onclick={handleAddToShoppingList} class="btn-shopping" disabled={addingToShoppingList}>
+            {#if addingToShoppingList}
+              <span class="icon">⏳</span>
+              <span>Adding...</span>
+            {:else}
+              <span class="icon">🛒</span>
+              <span>Add to List</span>
+            {/if}
+          </button>
           <div class="more-menu-container">
             <button
               onclick={() => showMoreMenu = !showMoreMenu}
@@ -758,8 +788,12 @@
           </div>
         </div>
       </div>
-
-      <!-- Recipe Chat Panel -->
+      {#if shoppingListMessage}
+        <div class="shopping-list-message">
+          <span class="message-icon">✓</span>
+          <span>{shoppingListMessage}</span>
+        </div>
+      {/if}
       {#if showChat && !cookingMode}
         <div class="chat-panel">
           <RecipeChat {recipe} onClose={() => showChat = false} />
@@ -1373,8 +1407,53 @@
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     box-shadow: var(--shadow-md);
   }
-
-  /* More menu dropdown */
+  .btn-shopping {
+    padding: var(--spacing-2-5) var(--spacing-4);
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: 2px solid transparent;
+    border-radius: var(--radius-lg);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    font-size: var(--text-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    transition: var(--transition-normal);
+  }
+  .btn-shopping:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  .btn-shopping:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .shopping-list-message {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-3) var(--spacing-4);
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-4);
+    font-weight: var(--font-medium);
+    animation: slideDown 0.2s ease-out;
+  }
+  .shopping-list-message .message-icon {
+    font-size: var(--text-lg);
+  }
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
   .more-menu-container {
     position: relative;
   }
