@@ -67,6 +67,7 @@
   let aiProgress = $state('');
   let aiPreviewUrl = $state<string | null>(null);
   let aiError = $state<string | null>(null);
+  let aiInfo = $state<string | null>(null);
   let aiGeneratedPhotoId = $state<string | null>(null);
   let aiGeneratedPhoto = $state<SelectedPhoto | null>(null);
 
@@ -298,8 +299,14 @@
         isNew: true
       };
       aiProgress = '';
-    } catch (err) {
-      aiError = err instanceof Error ? err.message : 'Failed to generate image';
+    } catch (err: any) {
+      if (err?.isRateLimit) {
+        aiInfo = 'AI service is temporarily busy. Please try again in a moment.';
+        aiError = null;
+      } else {
+        aiError = err instanceof Error ? err.message : 'Failed to generate image';
+        aiInfo = null;
+      }
       aiProgress = '';
     } finally {
       aiGenerating = false;
@@ -516,6 +523,9 @@
             {#if aiError}
               <div class="error-banner">{aiError}</div>
             {/if}
+            {#if aiInfo}
+              <div class="info-banner">{aiInfo}</div>
+            {/if}
             <button class="btn-generate" onclick={handleGenerateAiImage} disabled={aiGenerating || selectedPhotos.length >= maxSelectable}>
               {aiGenerating ? 'Generating...' : 'Generate with AI'}
             </button>
@@ -655,7 +665,14 @@
     margin-bottom: 1rem;
     font-size: 0.875rem;
   }
-
+  .info-banner {
+    background: var(--color-info-bg, #dbeafe);
+    color: var(--color-info, #3b82f6);
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+  }
   .upload-area {
     position: relative;
     border: 2px dashed var(--color-border);

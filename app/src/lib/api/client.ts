@@ -13,8 +13,8 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
     const error = new Error(errorData.error || `HTTP ${response.status}`);
-    // Attach status code for error handling
     (error as any).status = response.status;
+    (error as any).isRateLimit = response.status === 429;
     throw error;
   }
 

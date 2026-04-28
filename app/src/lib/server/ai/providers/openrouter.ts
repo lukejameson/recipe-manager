@@ -10,6 +10,7 @@ import type {
 	ImageGenerationResult
 } from './base.js';
 import type { ImageProvider } from './base.js';
+import { AIRateLimitError } from '../../../utils/errors.js';
 
 export class OpenRouterProvider implements LLMProvider, ImageProvider {
 	readonly id = 'openrouter';
@@ -154,8 +155,7 @@ export class OpenRouterProvider implements LLMProvider, ImageProvider {
 
 			const data = await response.json();
 			const models = data.data || [];
-
-			return models.map((m: {
+			const mapped = models.map((m: {
 				id: string;
 				name?: string;
 				context_length?: number;
@@ -185,10 +185,15 @@ export class OpenRouterProvider implements LLMProvider, ImageProvider {
 					}
 				};
 			});
+			return this.filterFreeModels(mapped);
 		} catch (error) {
 			console.warn('Error fetching OpenRouter models:', error);
 			return filterImageModels ? this.knownImageModels : this.knownModels;
 		}
+	}
+
+	private filterFreeModels(models: ProviderModel[]): ProviderModel[] {
+		return models.filter(m => !m.id.includes(':free'));
 	}
 
 	async fetchImageModels(apiKey: string): Promise<ProviderModel[]> {
@@ -235,19 +240,21 @@ export class OpenRouterProvider implements LLMProvider, ImageProvider {
 		};
 
 		const response = await fetch(`${baseUrl}/chat/completions`, {
-			method: 'POST',
+		method: 'POST',
 			headers,
 			body: JSON.stringify(body)
 		});
-
 		if (!response.ok) {
-			const error = await response.text();
-			throw new Error(`OpenRouter API error: ${error}`);
+			const errorText = await response.text();
+			if (response.status === 429) {
+				throw new AIRateLimitError(
+					'AI service is temporarily busy. Please try again in a moment.'
+				);
+			}
+			throw new Error(`OpenRouter API error: ${errorText}`);
 		}
-
 		const data = await response.json();
 		const choice = data.choices?.[0];
-
 		return {
 			content: choice?.message?.content ?? '',
 			usage: {
@@ -257,7 +264,6 @@ export class OpenRouterProvider implements LLMProvider, ImageProvider {
 			finishReason: choice?.finish_reason ?? null
 		};
 	}
-
 	async *generateStream(options: GenerationOptions): AsyncIterable<StreamChunk> {
 		const baseUrl = options.baseUrl ?? this.baseUrl;
 		const messages = options.images?.length
@@ -389,8 +395,21 @@ export class OpenRouterProvider implements LLMProvider, ImageProvider {
 		});
 
 		if (!response.ok) {
-			const error = await response.text();
-			throw new Error(`OpenRouter image generation error: ${response.status} ${error}`);
+			const errorText = await response.text();
+			if (response.status === 429) {
+				let retryAfter: number | undefined;
+				try {
+					const errorJson = JSON.parse(errorText);
+					if (errorJson.error?.metadata?.raw?.includes('retry')) {
+						retryAfter = 30;
+					}
+				} catch {}
+				throw new AIRateLimitError(
+					'AI service is temporarily busy. Please try again in a moment.',
+					retryAfter
+				);
+			}
+			throw new Error(`OpenRouter API error: ${errorText}`);
 		}
 
 		const data = await response.json();

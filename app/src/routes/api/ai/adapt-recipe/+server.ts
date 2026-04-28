@@ -4,7 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
-import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
+import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 
 const adaptRecipeSchema = z.object({
   recipe: z.object({
@@ -94,6 +94,9 @@ Return a JSON object with the adapted recipe fields.`;
     return json(adaptedRecipe);
   } catch (e) {
     if ('status' in e) throw e;
+    if (isAIRateLimitError(e)) {
+      throw error(503, 'AI service is temporarily busy. Please try again in a moment.');
+    }
     if (isAIConfigurationError(e)) {
       throw error(503, e.message);
     }

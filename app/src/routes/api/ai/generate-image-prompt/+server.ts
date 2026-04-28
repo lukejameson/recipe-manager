@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { getCurrentUser } from '$lib/server/auth';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
-import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
+import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 import { z } from 'zod';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
@@ -53,10 +53,12 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		});
 
 		const generatedPrompt = generationResult.content.trim();
-
 		return json({ prompt: generatedPrompt });
 	} catch (e) {
 		if (typeof e === 'object' && e !== null && 'status' in e) throw e;
+		if (e instanceof AIRateLimitError) {
+			throw error(503, 'AI service is temporarily busy. Please try again in a moment.');
+		}
 		if (e instanceof AIConfigurationError) {
 			throw error(503, e.message);
 		}

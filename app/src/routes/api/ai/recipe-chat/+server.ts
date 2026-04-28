@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
 import type { Message } from '$lib/server/ai/providers';
-import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
+import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 
 const recipeChatSchema = z.object({
   messages: z.array(z.object({
@@ -119,6 +119,9 @@ The prepTime and cookTime are in minutes. Only include the JSON block when provi
     });
   } catch (e) {
     if ('status' in e) throw e;
+    if (isAIRateLimitError(e)) {
+      throw error(503, 'AI service is temporarily busy. Please try again in a moment.');
+    }
     if (isAIConfigurationError(e)) {
       throw error(503, e.message);
     }

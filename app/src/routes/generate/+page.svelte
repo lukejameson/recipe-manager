@@ -50,6 +50,9 @@
   let inputValue = $state('');
   let loading = $state(false);
   let error = $state('');
+  let showInfo = $state(false);
+  let infoMessage = $state('');
+  let infoTimer: ReturnType<typeof setTimeout> | null = null;
   let messagesContainer: HTMLDivElement;
   let pendingImages = $state<string[]>([]);
   let fileInput: HTMLInputElement;
@@ -121,8 +124,15 @@
       showSavedIndicator = false;
     }, 2000);
   }
-
-  // Format model ID for display (extract meaningful part)
+  function showInfoBox(message: string) {
+    if (infoTimer) clearTimeout(infoTimer);
+    infoMessage = message;
+    showInfo = true;
+    infoTimer = setTimeout(() => {
+      showInfo = false;
+      infoMessage = '';
+    }, 5000);
+  }
   function formatModelName(modelId: string | null): string {
     if (!modelId) return 'Default';
     // Extract model name from full ID like "claude-opus-4-20250514" -> "Opus 4"
@@ -625,7 +635,12 @@
       savedRecipeTitle = newRecipe.title;
       showSaveSuccessModal = true;
     } catch (err: any) {
-      error = err.message || 'Failed to save recipe';
+      if (err.isRateLimit) {
+        showInfoBox('AI service is temporarily busy. Please try again in a moment.');
+      } else {
+        error = err.message || 'Failed to get response';
+      }
+      messages = messages.slice(0, -1);
     } finally {
       savingRecipe = false;
       savingStatus = '';
@@ -1029,6 +1044,12 @@
 
     {#if error}
       <div class="error-message">{error}</div>
+    {/if}
+    {#if showInfo}
+      <div class="info-message">
+        <span>{infoMessage}</span>
+        <button class="info-close" onclick={() => { showInfo = false; if (infoTimer) clearTimeout(infoTimer); }}>&times;</button>
+      </div>
     {/if}
 
     <div class="input-section">
@@ -1773,7 +1794,31 @@
     margin-top: var(--spacing-3);
     flex-shrink: 0;
   }
-
+  .info-message {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    padding: var(--spacing-3) var(--spacing-4);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    margin-top: var(--spacing-3);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-2);
+  }
+  .info-close {
+    background: none;
+    border: none;
+    color: #3b82f6;
+    cursor: pointer;
+    font-size: var(--text-lg);
+    padding: 0;
+    line-height: 1;
+  }
+  .info-close:hover {
+    color: #2563eb;
+  }
   .input-section {
     display: flex;
     flex-direction: column;

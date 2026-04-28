@@ -20,7 +20,8 @@ import { AIConfigurationError } from '../../utils/errors.js';
 export class AIServiceV2 {
 	private static instance: AIServiceV2 | null = null;
 	private initialized = false;
-
+	private modelCache = new Map<string, { models: ProviderModel[]; expiresAt: number }>();
+	private static readonly CACHE_TTL_MS = 60 * 60 * 1000;
 	private constructor() {}
 
 	static async getInstance(): Promise<AIServiceV2> {
@@ -268,14 +269,27 @@ export class AIServiceV2 {
 		if (!provider) {
 			return [];
 		}
-
 		const apiKey = await this.getApiKey(providerId);
 		if (!apiKey) {
 			return [];
 		}
-
+		const cacheKey = providerId;
+		const cached = this.modelCache.get(cacheKey);
+		if (cached && cached.expiresAt > Date.now()) {
+			return cached.models.map((m) => ({
+				id: m.id,
+				name: m.name,
+				contextWindow: m.contextWindow,
+				supportsVision: m.supportsVision,
+				supportsJsonMode: m.supportsJsonMode
+			}));
+		}
 		try {
 			const models = await provider.fetchModels(apiKey);
+			this.modelCache.set(cacheKey, {
+				models,
+				expiresAt: Date.now() + AIServiceV2.CACHE_TTL_MS
+			});
 			return models.map((m: ProviderModel) => ({
 				id: m.id,
 				name: m.name,
@@ -287,7 +301,6 @@ export class AIServiceV2 {
 			return [];
 		}
 	}
-
 	async testProvider(providerId: string, apiKey: string, baseUrl?: string): Promise<{
 		success: boolean;
 		error?: string;

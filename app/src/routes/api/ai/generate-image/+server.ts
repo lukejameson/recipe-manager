@@ -6,7 +6,7 @@ import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
 import { providerRegistry } from '$lib/server/ai/providers/index.js';
 import { decrypt } from '$lib/server/utils/encryption';
-import { AIConfigurationError, isAIConfigurationError } from '$lib/utils/errors';
+import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 
 const generateImageSchema = z.object({
 	prompt: z.string().min(1)
@@ -65,6 +65,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		});
 	} catch (e) {
 		if (typeof e === 'object' && e !== null && 'status' in e) throw e;
+		if (e instanceof AIRateLimitError) {
+			throw error(503, 'AI service is temporarily busy. Please try again in a moment.');
+		}
 		if (e instanceof AIConfigurationError) {
 			throw error(503, e.message);
 		}

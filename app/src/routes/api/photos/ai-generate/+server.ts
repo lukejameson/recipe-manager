@@ -8,7 +8,7 @@ import { photos } from '$lib/server/db/schema';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
 import { providerRegistry } from '$lib/server/ai/providers/index.js';
-import { AIConfigurationError } from '$lib/utils/errors';
+import { AIConfigurationError, AIRateLimitError } from '$lib/utils/errors';
 import { z } from 'zod';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
@@ -172,6 +172,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			}
 		}
 		if (typeof e === 'object' && e !== null && 'status' in e) throw e;
+		if (e instanceof AIRateLimitError) {
+			throw error(503, 'AI service is temporarily busy. Please try again in a moment.');
+		}
 		if (e instanceof AIConfigurationError) {
 			throw error(503, (e as AIConfigurationError).message);
 		}
