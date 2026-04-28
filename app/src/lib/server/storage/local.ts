@@ -116,6 +116,10 @@ export class LocalStorageProvider implements StorageProvider {
     }
   }
 
+  async uploadBuffer(key: string, buffer: Buffer, _contentType: string): Promise<void> {
+    return this.saveFile(key, buffer);
+  }
+
   async saveFile(storageKey: string, buffer: Buffer): Promise<void> {
     const localPath = join(this.getBasePath(), storageKey);
     const dir = join(this.getBasePath(), storageKey.split('/').slice(0, -1).join('/'));

@@ -67,7 +67,7 @@ export class AIServiceV2 {
 		return configs?.[0] || null;
 	}
 
-	private async getApiKey(providerId: string): Promise<string | null> {
+	async getApiKey(providerId: string): Promise<string | null> {
 		const config = await this.getProviderConfig(providerId);
 		if (!config?.apiKey) return null;
 		try {

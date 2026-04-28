@@ -5,14 +5,17 @@ import type {
 	GenerationResult,
 	StreamChunk,
 	Message,
-	ImageData
+	ImageData,
+	ImageGenerationOptions,
+	ImageGenerationResult
 } from './base.js';
+import type { ImageProvider } from './base.js';
 
 /**
  * Google Gemini API provider
  * Implements LLMProvider interface for Google's Generative AI API
  */
-export class GoogleProvider implements LLMProvider {
+export class GoogleProvider implements LLMProvider, ImageProvider {
 	readonly id = 'google';
 	readonly name = 'Google AI';
 	readonly supportsVision = true;
@@ -246,6 +249,65 @@ export class GoogleProvider implements LLMProvider {
 	 */
 	async *generateStream(_options: GenerationOptions): AsyncIterable<StreamChunk> {
 		throw new Error('Streaming not implemented for Google provider');
+	}
+
+	async generateImage(options: ImageGenerationOptions): Promise<ImageGenerationResult> {
+		const apiKey = options.apiKey;
+		if (!apiKey) {
+			throw new Error('Google API key not configured');
+		}
+
+		const url = `${this.baseUrl}/models/${options.model}:predict?key=${apiKey}`;
+
+		const aspectRatioMap: Record<string, { width: number; height: number }> = {
+			'1:1': { width: 1024, height: 1024 },
+			'4:3': { width: 1024, height: 768 },
+			'16:9': { width: 1024, height: 576 }
+		};
+		const resolution = aspectRatioMap[options.aspectRatio || '1:1'];
+
+		const body = {
+			instances: [{ prompt: options.prompt }],
+			params: {
+				numberOfImages: 1,
+				aspectRatio: options.aspectRatio || '1:1',
+				personGeneration: 'dont_allow'
+			}
+		};
+
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(body)
+		});
+
+		if (!response.ok) {
+			const error = await response.text();
+			throw new Error(`Google Image Generation API error: ${response.status} ${error}`);
+		}
+
+		const data = await response.json();
+
+		if (!data.predictions || !data.predictions[0]) {
+			throw new Error('No image generated from API');
+		}
+
+		const prediction = data.predictions[0];
+		const base64Image = prediction.bytesBase64Encoded;
+
+		if (!base64Image) {
+			throw new Error('No image data in API response');
+		}
+
+		return {
+			imageData: base64Image,
+			mimeType: 'image/png',
+			width: resolution.width,
+			height: resolution.height,
+			finishReason: 'SUCCESS'
+		};
 	}
 
 	/**

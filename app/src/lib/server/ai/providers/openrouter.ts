@@ -5,22 +5,70 @@ import type {
 	GenerationResult,
 	StreamChunk,
 	Message,
-	ImageData
+	ImageData,
+	ImageGenerationOptions,
+	ImageGenerationResult
 } from './base.js';
+import type { ImageProvider } from './base.js';
 
-/**
- * OpenRouter provider implementation
- * OpenRouter provides a unified API for accessing many LLM models
- */
-export class OpenRouterProvider implements LLMProvider {
+export class OpenRouterProvider implements LLMProvider, ImageProvider {
 	readonly id = 'openrouter';
 	readonly name = 'OpenRouter';
 	readonly supportsVision = true;
 	readonly supportsStreaming = true;
-
 	private readonly baseUrl = 'https://openrouter.ai/api/v1';
 
-	// Known popular models available through OpenRouter
+	private readonly knownImageModels: ProviderModel[] = [
+		{
+			id: 'google/gemini-2.5-flash-image',
+			name: 'Gemini 2.5 Flash Image (via OpenRouter)',
+			contextWindow: 1000000,
+			supportsVision: true,
+			supportsJsonMode: true,
+			pricing: { input: 0.075, output: 0.30 }
+		},
+		{
+			id: 'google/gemini-3-pro-image-preview',
+			name: 'Gemini 3 Pro Image (via OpenRouter)',
+			contextWindow: 1000000,
+			supportsVision: true,
+			supportsJsonMode: true,
+			pricing: { input: 0.50, output: 2.00 }
+		},
+		{
+			id: 'google/gemini-3.1-flash-image-preview',
+			name: 'Gemini 3.1 Flash Image (via OpenRouter)',
+			contextWindow: 1000000,
+			supportsVision: true,
+			supportsJsonMode: true,
+			pricing: { input: 0.10, output: 0.40 }
+		},
+		{
+			id: 'black-forest-labs/flux.2-pro',
+			name: 'Flux 2 Pro (via OpenRouter)',
+			contextWindow: 8192,
+			supportsVision: false,
+			supportsJsonMode: true,
+			pricing: { input: 0.55, output: 0.55 }
+		},
+		{
+			id: 'black-forest-labs/flux.2-flex',
+			name: 'Flux 2 Flex (via OpenRouter)',
+			contextWindow: 8192,
+			supportsVision: false,
+			supportsJsonMode: true,
+			pricing: { input: 0.30, output: 0.30 }
+		},
+		{
+			id: 'sourceful/riverflow-v2-standard-preview',
+			name: 'Riverflow v2 Standard (via OpenRouter)',
+			contextWindow: 8192,
+			supportsVision: false,
+			supportsJsonMode: true,
+			pricing: { input: 0.20, output: 0.20 }
+		}
+	];
+
 	private readonly knownModels: ProviderModel[] = [
 		{
 			id: 'anthropic/claude-3.5-sonnet',
@@ -88,9 +136,10 @@ export class OpenRouterProvider implements LLMProvider {
 		}
 	];
 
-	async fetchModels(apiKey: string): Promise<ProviderModel[]> {
+	async fetchModels(apiKey: string, filterImageModels = false): Promise<ProviderModel[]> {
 		try {
-			const response = await fetch(`${this.baseUrl}/models`, {
+			const modalityFilter = filterImageModels ? '&output_modalities=image' : '';
+			const response = await fetch(`${this.baseUrl}/models${modalityFilter}`, {
 				method: 'GET',
 				headers: {
 					'Authorization': `Bearer ${apiKey}`,
@@ -100,7 +149,7 @@ export class OpenRouterProvider implements LLMProvider {
 
 			if (!response.ok) {
 				console.warn('Failed to fetch OpenRouter models, using known models');
-				return this.knownModels;
+				return filterImageModels ? this.knownImageModels : this.knownModels;
 			}
 
 			const data = await response.json();
@@ -111,15 +160,22 @@ export class OpenRouterProvider implements LLMProvider {
 				name?: string;
 				context_length?: number;
 				pricing?: { prompt?: number; completion?: number };
+				output_modalities?: string[];
 			}) => {
+				const knownImage = this.knownImageModels.find(k => k.id === m.id);
+				if (knownImage) return knownImage;
+
 				const known = this.knownModels.find(k => k.id === m.id);
 				if (known) return known;
+
+				const supportsImage = m.output_modalities?.includes('image') ?? false;
 
 				return {
 					id: m.id,
 					name: m.name || m.id,
 					contextWindow: m.context_length || 4096,
-					supportsVision: m.id.includes('vision') ||
+					supportsVision: supportsImage ||
+						m.id.includes('vision') ||
 						m.id.includes('claude-3') ||
 						m.id.includes('gpt-4o'),
 					supportsJsonMode: true,
@@ -131,8 +187,12 @@ export class OpenRouterProvider implements LLMProvider {
 			});
 		} catch (error) {
 			console.warn('Error fetching OpenRouter models:', error);
-			return this.knownModels;
+			return filterImageModels ? this.knownImageModels : this.knownModels;
 		}
+	}
+
+	async fetchImageModels(apiKey: string): Promise<ProviderModel[]> {
+		return this.fetchModels(apiKey, true);
 	}
 
 	async validateApiKey(apiKey: string): Promise<boolean> {
@@ -167,7 +227,6 @@ export class OpenRouterProvider implements LLMProvider {
 			body.response_format = { type: 'json_object' };
 		}
 
-		// Add OpenRouter-specific headers for routing preferences
 		const headers: Record<string, string> = {
 			'Authorization': `Bearer ${options.apiKey}`,
 			'Content-Type': 'application/json',
@@ -246,7 +305,6 @@ export class OpenRouterProvider implements LLMProvider {
 		try {
 			while (true) {
 				const { done, value } = await reader.read();
-
 				if (done) {
 					yield { content: '', isDone: true };
 					break;
@@ -265,7 +323,6 @@ export class OpenRouterProvider implements LLMProvider {
 						}
 						continue;
 					}
-
 					if (trimmed.startsWith('data: ')) {
 						try {
 							const json = JSON.parse(trimmed.slice(6));
@@ -274,7 +331,6 @@ export class OpenRouterProvider implements LLMProvider {
 								yield { content, isDone: false };
 							}
 						} catch {
-							// Ignore parse errors
 						}
 					}
 				}
@@ -285,14 +341,98 @@ export class OpenRouterProvider implements LLMProvider {
 	}
 
 	estimateCost(model: string, inputTokens: number, outputTokens: number): number {
-		const modelData = this.knownModels.find(m => m.id === model);
+		const modelData = this.knownModels.find(m => m.id === model) ||
+			this.knownImageModels.find(m => m.id === model);
 		if (!modelData) {
 			return (inputTokens * 5.0 + outputTokens * 15.0) / 1_000_000;
 		}
-
 		const inputCost = (inputTokens * modelData.pricing.input) / 1_000_000;
 		const outputCost = (outputTokens * modelData.pricing.output) / 1_000_000;
 		return inputCost + outputCost;
+	}
+
+	async generateImage(options: ImageGenerationOptions): Promise<ImageGenerationResult> {
+		const baseUrl = options.baseUrl ?? this.baseUrl;
+
+		const aspectRatioMap: Record<string, string> = {
+			'1:1': '1:1',
+			'4:3': '4:3',
+			'16:9': '16:9'
+		};
+		const aspectRatio = aspectRatioMap[options.aspectRatio || '1:1'] || '1:1';
+
+		const body: Record<string, unknown> = {
+			model: options.model,
+			messages: [
+				{
+					role: 'user',
+					content: options.prompt
+				}
+			],
+			modalities: ['image', 'text'],
+			image_config: {
+				aspect_ratio: aspectRatio
+			}
+		};
+
+		const headers: Record<string, string> = {
+			'Authorization': `Bearer ${options.apiKey}`,
+			'Content-Type': 'application/json',
+			'HTTP-Referer': 'https://recipe-manager.app',
+			'X-Title': 'Recipe Manager'
+		};
+
+		const response = await fetch(`${baseUrl}/chat/completions`, {
+			method: 'POST',
+			headers,
+			body: JSON.stringify(body)
+		});
+
+		if (!response.ok) {
+			const error = await response.text();
+			throw new Error(`OpenRouter image generation error: ${response.status} ${error}`);
+		}
+
+		const data = await response.json();
+		const message = data.choices?.[0]?.message;
+
+		if (!message?.images || message.images.length === 0) {
+			throw new Error('No image generated from OpenRouter API');
+		}
+
+		const imageInfo = message.images[0];
+		const imageUrl = imageInfo?.image_url?.url;
+
+		if (!imageUrl) {
+			throw new Error('No image URL in OpenRouter response');
+		}
+
+		let base64Image: string;
+		if (imageUrl.startsWith('data:')) {
+			base64Image = imageUrl.split(',')[1];
+		} else {
+			const imageResponse = await fetch(imageUrl);
+			if (!imageResponse.ok) {
+				throw new Error('Failed to fetch generated image');
+			}
+			const imageBuffer = await imageResponse.arrayBuffer();
+			base64Image = Buffer.from(imageBuffer).toString('base64');
+		}
+
+		const sizeMap: Record<string, { width: number; height: number }> = {
+			'1:1': { width: 1024, height: 1024 },
+			'4:3': { width: 1184, height: 864 },
+			'16:9': { width: 1344, height: 768 }
+		};
+		const dimensions = sizeMap[aspectRatio] || { width: 1024, height: 1024 };
+
+		return {
+			imageData: base64Image,
+			mimeType: 'image/png',
+			width: dimensions.width,
+			height: dimensions.height,
+			finishReason: 'SUCCESS'
+		};
 	}
 
 	private mapToOpenRouterMessages(messages: Message[], systemPrompt?: string): unknown[] {
@@ -315,7 +455,6 @@ export class OpenRouterProvider implements LLMProvider {
 		if (systemPrompt) {
 			result.push({ role: 'system', content: systemPrompt });
 		}
-
 		for (let i = 0; i < messages.length - 1; i++) {
 			result.push({
 				role: messages[i].role,
@@ -328,7 +467,6 @@ export class OpenRouterProvider implements LLMProvider {
 			const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
 				{ type: 'text', text: lastMessage.content }
 			];
-
 			for (const image of images) {
 				content.push({
 					type: 'image_url',
@@ -337,7 +475,6 @@ export class OpenRouterProvider implements LLMProvider {
 					}
 				});
 			}
-
 			result.push({ role: 'user', content });
 		} else if (lastMessage) {
 			result.push({
@@ -345,7 +482,6 @@ export class OpenRouterProvider implements LLMProvider {
 				content: lastMessage.content
 			});
 		}
-
 		return result;
 	}
 }

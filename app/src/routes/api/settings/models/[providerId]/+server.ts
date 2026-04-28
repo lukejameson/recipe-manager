@@ -6,56 +6,52 @@ import { getCurrentUser } from '$lib/server/auth';
 import { eq } from 'drizzle-orm';
 import { providerRegistry } from '$lib/server/ai/providers';
 import { decrypt } from '$lib/server/utils/encryption';
+import { AIFeature } from '$lib/server/ai/features';
 
-// GET /api/settings/models/[providerId] - Get available models for a provider
-export const GET: RequestHandler = async ({ params, cookies }) => {
+export const GET: RequestHandler = async ({ params, url, cookies }) => {
 	try {
 		const token = cookies.get('auth_token');
 		const user = await getCurrentUser(token);
-
 		if (!user?.isAdmin) {
 			throw error(403, 'Admin access required');
 		}
-
 		const { providerId } = params;
+		const featureParam = url.searchParams.get('feature');
+		const isImageGeneration = featureParam === AIFeature.IMAGE_GENERATION;
+
 		if (!providerId) {
 			throw error(400, 'Provider ID is required');
 		}
-
-		// Get provider config
 		const [config] = await db
 			.select()
 			.from(providerConfigs)
 			.where(eq(providerConfigs.providerId, providerId))
 			.limit(1);
-
 		if (!config) {
 			throw error(404, `Provider ${providerId} is not configured`);
 		}
-
-		// Decrypt API key
 		let apiKey = config.apiKey || '';
 		try {
 			apiKey = decrypt(apiKey);
 		} catch {
-			// If decryption fails, use as-is
 		}
-
 		if (!apiKey) {
 			throw error(400, 'No API key configured for this provider');
 		}
-
-		// Get provider and fetch models
 		const provider = providerRegistry.get(providerId);
 		if (!provider) {
 			throw error(400, `Unknown provider: ${providerId}`);
 		}
-
 		try {
-			const models = await provider.fetchModels(apiKey);
+			let models;
+			if (isImageGeneration && 'fetchImageModels' in provider) {
+				models = await (provider as any).fetchImageModels(apiKey);
+			} else {
+				models = await provider.fetchModels(apiKey);
+			}
 			return json({
 				providerId,
-				models: models.map(m => ({
+				models: models.map((m: any) => ({
 					id: m.id,
 					name: m.name,
 					contextWindow: m.contextWindow,

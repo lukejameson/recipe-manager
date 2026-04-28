@@ -908,6 +908,10 @@ onMount(async () => {
     maxSelectable={5}
     initialTab={changingCoverPhoto ? 'existing' : 'upload'}
     initialQuery={title}
+    recipeTitle={title}
+    recipeDescription={description}
+    recipeIngredients={ingredients.map((i: any) => i.text)}
+    recipeTags={tags.split(',').map((t: string) => t.trim()).filter(Boolean)}
     onclose={() => { photoPickerOpen = false; changingCoverPhoto = false; }}
     onselect={handleAddPhotos}
   />

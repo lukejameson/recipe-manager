@@ -209,9 +209,8 @@
     editingFeature = feature;
     featureModels = [];
     loadingFeatureModels = true;
-
     try {
-      const result = await apiClient.fetchProviderModels(feature.config?.providerId || '');
+      const result = await apiClient.fetchProviderModels(feature.config?.providerId || '', feature.id);
       featureModels = result.models.map(m => ({ id: m.id, name: m.name }));
     } catch (err) {
       console.error('Failed to fetch models:', err);
@@ -259,9 +258,8 @@
     }
 
     const defaultProvider = configuredProviders[0];
-
     try {
-      const modelsResult = await apiClient.fetchProviderModels(defaultProvider.providerId);
+      const modelsResult = await apiClient.fetchProviderModels(defaultProvider.providerId, feature.id);
       const defaultModel = modelsResult.models[0];
 
       if (!defaultModel) {
@@ -720,7 +718,7 @@
               onchange={async () => {
                 loadingFeatureModels = true;
                 try {
-                  const result = await apiClient.fetchProviderModels(editingFeature.config.providerId);
+                  const result = await apiClient.fetchProviderModels(editingFeature.config.providerId, editingFeature.id);
                   featureModels = result.models.map(m => ({ id: m.id, name: m.name }));
                   editingFeature.config.modelId = featureModels[0]?.id || '';
                 } catch (err) {

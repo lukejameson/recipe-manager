@@ -20,17 +20,25 @@
     maxSelectable = 5,
     initialTab = 'upload',
     initialQuery = '',
+    recipeTitle = '',
+    recipeDescription = '',
+    recipeIngredients = [] as string[],
+    recipeTags = [] as string[],
     onclose,
     onselect
   }: {
     recipeId?: string;
     maxSelectable?: number;
-    initialTab?: 'upload' | 'pexels' | 'existing';
+    initialTab?: 'upload' | 'pexels' | 'existing' | 'ai';
     initialQuery?: string;
+    recipeTitle?: string;
+    recipeDescription?: string;
+    recipeIngredients?: string[];
+    recipeTags?: string[];
     onclose: () => void;
     onselect: (photos: SelectedPhoto[]) => void;
   } = $props();
-  type Tab = 'upload' | 'pexels' | 'existing';
+  type Tab = 'upload' | 'pexels' | 'existing' | 'ai';
   let activeTab = $state<Tab>(initialTab);
   let selectedPhotos = $state<SelectedPhoto[]>([]);
   let uploading = $state(false);
@@ -55,6 +63,12 @@
 
   let fileInput: HTMLInputElement;
   let pendingBlobUrls = new Map<string, string>();
+  let aiGenerating = $state(false);
+  let aiProgress = $state('');
+  let aiPreviewUrl = $state<string | null>(null);
+  let aiError = $state<string | null>(null);
+  let aiGeneratedPhotoId = $state<string | null>(null);
+  let aiGeneratedPhoto = $state<SelectedPhoto | null>(null);
 
   async function handleFileSelect(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -248,6 +262,66 @@
     pexelsSelected = new Set(pexelsSelected);
   }
 
+  async function handleGenerateAiImage() {
+    if (!recipeTitle) {
+      aiError = 'Recipe title is required for AI generation';
+      return;
+    }
+    if (selectedPhotos.length >= maxSelectable) {
+      aiError = 'Maximum photos already selected';
+      return;
+    }
+
+    aiGenerating = true;
+    aiProgress = 'Generating image...';
+    aiError = null;
+    aiPreviewUrl = null;
+
+    try {
+      aiProgress = 'Creating prompt...';
+      const photo = await apiClient.generateAiPhoto({
+        recipeId: recipeId || undefined,
+        title: recipeTitle,
+        description: recipeDescription || undefined,
+        ingredients: recipeIngredients,
+        tags: recipeTags
+      });
+
+      aiProgress = 'Finalizing...';
+      aiPreviewUrl = photo.urls.original;
+      aiGeneratedPhotoId = photo.id;
+      aiGeneratedPhoto = {
+        id: photo.id,
+        urls: photo.urls,
+        width: photo.width,
+        height: photo.height,
+        isNew: true
+      };
+      aiProgress = '';
+    } catch (err) {
+      aiError = err instanceof Error ? err.message : 'Failed to generate image';
+      aiProgress = '';
+    } finally {
+      aiGenerating = false;
+    }
+  }
+
+  function handleUseAiPhoto() {
+    if (aiGeneratedPhoto) {
+      selectedPhotos = [...selectedPhotos, aiGeneratedPhoto];
+      aiPreviewUrl = null;
+      aiGeneratedPhotoId = null;
+      aiGeneratedPhoto = null;
+    }
+  }
+
+  function handleRegenerate() {
+    aiPreviewUrl = null;
+    aiGeneratedPhotoId = null;
+    aiGeneratedPhoto = null;
+    handleGenerateAiImage();
+  }
+
   function handleConfirm() {
     onselect(selectedPhotos);
     onclose();
@@ -301,6 +375,13 @@
         onclick={() => activeTab = 'existing'}
       >
         Existing
+      </button>
+      <button
+        class="tab"
+        class:active={activeTab === 'ai'}
+        onclick={() => activeTab = 'ai'}
+      >
+        AI Generate
       </button>
     </nav>
 
@@ -398,7 +479,49 @@
           </div>
         {/if}
       {/if}
-
+      {#if activeTab === 'ai'}
+        <div class="ai-generate">
+          {#if !recipeTitle}
+            <div class="ai-info">
+              <p>Add a recipe title to enable AI image generation.</p>
+            </div>
+          {:else if aiPreviewUrl}
+            <div class="ai-preview">
+              <img src={aiPreviewUrl} alt="Generated AI image" />
+            </div>
+            <div class="ai-actions">
+              <button class="btn-regenerate" onclick={handleRegenerate} disabled={aiGenerating}>
+                Regenerate
+              </button>
+              <button class="btn-use" onclick={handleUseAiPhoto} disabled={selectedPhotos.length >= maxSelectable}>
+                Use this image
+              </button>
+            </div>
+          {:else}
+            <div class="ai-info">
+              <h4>{recipeTitle}</h4>
+              {#if recipeDescription}
+                <p class="description">{recipeDescription}</p>
+              {/if}
+              {#if recipeIngredients.length > 0}
+                <p class="ingredients">Ingredients: {recipeIngredients.slice(0, 5).join(', ')}{recipeIngredients.length > 5 ? '...' : ''}</p>
+              {/if}
+            </div>
+            {#if aiGenerating}
+              <div class="ai-progress">
+                <div class="spinner"></div>
+                <span>{aiProgress}</span>
+              </div>
+            {/if}
+            {#if aiError}
+              <div class="error-banner">{aiError}</div>
+            {/if}
+            <button class="btn-generate" onclick={handleGenerateAiImage} disabled={aiGenerating || selectedPhotos.length >= maxSelectable}>
+              {aiGenerating ? 'Generating...' : 'Generate with AI'}
+            </button>
+          {/if}
+        </div>
+      {/if}
       {#if selectedPhotos.length > 0}
         <div class="selected-section">
           <h4>Selected ({selectedPhotos.length}/{maxSelectable})</h4>
@@ -798,5 +921,85 @@
   .btn-confirm:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+  .ai-generate {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .ai-info {
+    text-align: center;
+    padding: 1rem;
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-lg);
+  }
+  .ai-info h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+  }
+  .ai-info .description {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin: 0 0 0.5rem 0;
+  }
+  .ai-info .ingredients {
+    font-size: 0.8rem;
+    color: var(--color-text-light);
+    margin: 0;
+  }
+  .ai-preview {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--color-bg-subtle);
+  }
+  .ai-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .ai-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    color: var(--color-text-muted);
+  }
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .ai-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+  .btn-generate, .btn-regenerate, .btn-use {
+    flex: 1;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-generate:disabled, .btn-regenerate:disabled, .btn-use:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .btn-regenerate {
+    background: white;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
   }
 </style>

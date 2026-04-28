@@ -63,48 +63,37 @@ export interface StreamChunk {
 
 /** Base interface that all LLM providers must implement */
 export interface LLMProvider {
-	/** Unique provider identifier */
 	readonly id: string;
-
-	/** Human-readable provider name */
 	readonly name: string;
-
-	/** Whether this provider supports vision/image inputs */
 	readonly supportsVision: boolean;
-
-	/** Whether this provider supports streaming responses */
 	readonly supportsStreaming: boolean;
-
-	/**
-	 * Fetch available models from the provider
-	 * @param apiKey - The API key for authentication
-	 */
 	fetchModels(apiKey: string): Promise<ProviderModel[]>;
-
-	/**
-	 * Validate that an API key is valid and has necessary permissions
-	 * @param apiKey - The API key to validate
-	 */
 	validateApiKey(apiKey: string): Promise<boolean>;
-
-	/**
-	 * Generate a completion
-	 * @param options - Generation options
-	 */
 	generate(options: GenerationOptions): Promise<GenerationResult>;
-
-	/**
-	 * Generate a streaming completion (optional)
-	 * @param options - Generation options
-	 */
 	generateStream?(options: GenerationOptions): AsyncIterable<StreamChunk>;
-
-	/**
-	 * Estimate the cost of a request
-	 * @param model - Model ID
-	 * @param inputTokens - Number of input tokens
-	 * @param outputTokens - Number of output tokens
-	 * @returns Estimated cost in USD
-	 */
 	estimateCost(model: string, inputTokens: number, outputTokens: number): number;
+}
+
+export interface ImageGenerationOptions {
+	apiKey: string;
+	model: string;
+	prompt: string;
+	aspectRatio?: '1:1' | '4:3' | '16:9';
+	baseUrl?: string;
+}
+
+export interface ImageGenerationResult {
+	imageData: string;
+	mimeType: string;
+	width?: number;
+	height?: number;
+	finishReason?: string;
+}
+
+export interface ImageProvider {
+	readonly id: string;
+	readonly name: string;
+	generateImage(options: ImageGenerationOptions): Promise<ImageGenerationResult>;
+	validateApiKey(apiKey: string): Promise<boolean>;
+	fetchModels?(apiKey: string): Promise<ProviderModel[]>;
 }

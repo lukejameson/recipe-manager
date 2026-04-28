@@ -343,8 +343,10 @@ export const apiClient = {
       body: JSON.stringify(data),
     }),
 
-  fetchProviderModels: (providerId: string) =>
-    api<{ models: Array<{ id: string; name: string; contextWindow: number; supportsVision: boolean; supportsJsonMode: boolean }> }>(`/api/settings/models/${providerId}`),
+  fetchProviderModels: (providerId: string, feature?: string) =>
+    api<{ models: Array<{ id: string; name: string; contextWindow: number; supportsVision: boolean; supportsJsonMode: boolean }> }>(
+      feature ? `/api/settings/models/${providerId}?feature=${feature}` : `/api/settings/models/${providerId}`
+    ),
 
   getFeatureConfigs: () =>
     api<{
@@ -748,6 +750,7 @@ getAuditLogActions: () =>
       width: number;
       height: number;
       mimeType: string;
+      urls: { original: string; thumbnail: string; medium: string };
     }>('/api/photos/confirm', {
       method: 'POST',
       body: JSON.stringify({ storageKey, mimeType, size, recipeId }),
@@ -788,6 +791,32 @@ getAuditLogActions: () =>
       method: 'POST',
       body: JSON.stringify({ url, recipeId }),
     }),
+  generateImagePrompt: (data: { title: string; description?: string; ingredients: string[]; tags?: string[] }) =>
+    api<{ prompt: string }>('/api/ai/generate-image-prompt', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  generateImage: (prompt: string) =>
+    api<{ imageData: string; mimeType: string; width?: number; height?: number }>('/api/ai/generate-image', {
+      method: 'POST',
+      body: JSON.stringify({ prompt }),
+    }),
+  generateAiPhoto: (data: { recipeId?: string; title: string; description?: string; ingredients: string[]; tags?: string[] }) => {
+    const { recipeId, ...rest } = data;
+    return api<{
+      id: string;
+      originalKey: string;
+      thumbnailKey: string;
+      mediumKey: string;
+      width: number;
+      height: number;
+      mimeType: string;
+      urls: { original: string; thumbnail: string; medium: string };
+    }>(recipeId ? `/api/photos/ai-generate?recipeId=${recipeId}` : '/api/photos/ai-generate', {
+      method: 'POST',
+      body: JSON.stringify(rest),
+    });
+  },
   health: () =>
     api<{ status: string; timestamp: string }>('/api/health'),
 };

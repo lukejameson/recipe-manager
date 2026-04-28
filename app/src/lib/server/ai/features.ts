@@ -1,9 +1,3 @@
-/**
- * AI Feature enum and default configurations
- * Defines all AI features in the application with their default settings
- */
-
-/** AI Feature identifiers - matches the 16 AI features in the app */
 export enum AIFeature {
 	RECIPE_CHAT = 'recipe_chat',
 	RECIPE_CHAT_CONTEXTUAL = 'recipe_chat_contextual',
@@ -19,10 +13,10 @@ export enum AIFeature {
 	NUTRITION_CALCULATION = 'nutrition_calculation',
 	TECHNIQUE_EXPLANATION = 'technique_explanation',
 	PANTRY_MATCHING = 'pantry_matching',
-	RECIPE_MENTION_SEARCH = 'recipe_mention_search'
+	RECIPE_MENTION_SEARCH = 'recipe_mention_search',
+	IMAGE_PROMPT_GENERATION = 'image_prompt_generation',
+	IMAGE_GENERATION = 'image_generation'
 }
-
-/** Feature configuration interface */
 export interface FeatureConfig {
 	feature: AIFeature;
 	providerId: string;
@@ -31,8 +25,6 @@ export interface FeatureConfig {
 	maxTokens?: number;
 	enabled: boolean;
 }
-
-/** Default temperature and maxTokens for each feature */
 export const DEFAULT_FEATURE_CONFIGS: Record<AIFeature, { temperature: number; maxTokens: number; requiresVision: boolean }> = {
 	[AIFeature.RECIPE_CHAT]: {
 		temperature: 0.7,
@@ -108,10 +100,18 @@ export const DEFAULT_FEATURE_CONFIGS: Record<AIFeature, { temperature: number; m
 		temperature: 0.2,
 		maxTokens: 1024,
 		requiresVision: false
+	},
+	[AIFeature.IMAGE_PROMPT_GENERATION]: {
+		temperature: 0.3,
+		maxTokens: 1024,
+		requiresVision: false
+	},
+	[AIFeature.IMAGE_GENERATION]: {
+		temperature: 0.5,
+		maxTokens: 2048,
+		requiresVision: false
 	}
 };
-
-/** Human-readable feature names */
 export const FEATURE_NAMES: Record<AIFeature, string> = {
 	[AIFeature.RECIPE_CHAT]: 'Recipe Chat',
 	[AIFeature.RECIPE_CHAT_CONTEXTUAL]: 'Recipe Chat (Contextual)',
@@ -127,10 +127,10 @@ export const FEATURE_NAMES: Record<AIFeature, string> = {
 	[AIFeature.NUTRITION_CALCULATION]: 'Nutrition Calculation',
 	[AIFeature.TECHNIQUE_EXPLANATION]: 'Technique Explanation',
 	[AIFeature.PANTRY_MATCHING]: 'Pantry Matching',
-	[AIFeature.RECIPE_MENTION_SEARCH]: 'Recipe Mention Search'
+	[AIFeature.RECIPE_MENTION_SEARCH]: 'Recipe Mention Search',
+	[AIFeature.IMAGE_PROMPT_GENERATION]: 'Image Prompt Generation',
+	[AIFeature.IMAGE_GENERATION]: 'Image Generation'
 };
-
-/** Feature descriptions for UI tooltips */
 export const FEATURE_DESCRIPTIONS: Record<AIFeature, string> = {
 	[AIFeature.RECIPE_CHAT]: 'General chat about recipes and cooking',
 	[AIFeature.RECIPE_CHAT_CONTEXTUAL]: 'Chat about a specific recipe with full context',
@@ -146,18 +146,16 @@ export const FEATURE_DESCRIPTIONS: Record<AIFeature, string> = {
 	[AIFeature.NUTRITION_CALCULATION]: 'Calculate nutritional information',
 	[AIFeature.TECHNIQUE_EXPLANATION]: 'Explain cooking techniques',
 	[AIFeature.PANTRY_MATCHING]: 'Find recipes matching available pantry items',
-	[AIFeature.RECIPE_MENTION_SEARCH]: 'Search for recipes mentioned in text'
+	[AIFeature.RECIPE_MENTION_SEARCH]: 'Search for recipes mentioned in text',
+	[AIFeature.IMAGE_PROMPT_GENERATION]: 'Generate image prompts from recipe details',
+	[AIFeature.IMAGE_GENERATION]: 'Generate images from text prompts'
 };
-
-/** Feature categories for UI grouping */
 export enum FeatureCategory {
 	CHAT = 'chat',
 	GENERATION = 'generation',
 	ENHANCEMENT = 'enhancement',
 	ANALYSIS = 'analysis'
 }
-
-/** Category for each feature */
 export const FEATURE_CATEGORIES: Record<AIFeature, FeatureCategory> = {
 	[AIFeature.RECIPE_CHAT]: FeatureCategory.CHAT,
 	[AIFeature.RECIPE_CHAT_CONTEXTUAL]: FeatureCategory.CHAT,
@@ -173,10 +171,10 @@ export const FEATURE_CATEGORIES: Record<AIFeature, FeatureCategory> = {
 	[AIFeature.NUTRITION_CALCULATION]: FeatureCategory.ANALYSIS,
 	[AIFeature.TECHNIQUE_EXPLANATION]: FeatureCategory.ANALYSIS,
 	[AIFeature.PANTRY_MATCHING]: FeatureCategory.ANALYSIS,
-	[AIFeature.RECIPE_MENTION_SEARCH]: FeatureCategory.ANALYSIS
+	[AIFeature.RECIPE_MENTION_SEARCH]: FeatureCategory.ANALYSIS,
+	[AIFeature.IMAGE_PROMPT_GENERATION]: FeatureCategory.GENERATION,
+	[AIFeature.IMAGE_GENERATION]: FeatureCategory.GENERATION
 };
-
-/** Category display names */
 export const CATEGORY_NAMES: Record<FeatureCategory, string> = {
 	[FeatureCategory.CHAT]: 'Chat',
 	[FeatureCategory.GENERATION]: 'Generation',
