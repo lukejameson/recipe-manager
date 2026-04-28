@@ -42,7 +42,7 @@ function getPool(): Pool {
   const connectionString = getDatabaseUrl();
   poolInstance = new Pool({
     connectionString,
-    max: 10,
+    max: 25,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
   });

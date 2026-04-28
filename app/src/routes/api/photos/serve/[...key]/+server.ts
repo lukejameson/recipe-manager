@@ -15,13 +15,16 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
       throw error(400, 'Invalid storage key');
     }
     const accountId = pathParts[0];
+    let adminId: string | null = null;
     if (accountId !== user.userId) {
-      const adminId = await getAdminIdForUser(user.userId);
+      adminId = await getAdminIdForUser(user.userId);
       if (adminId !== accountId && !user.isAdmin) {
         throw error(403, 'Access denied');
       }
     }
-    const adminId = await getAdminIdForUser(user.userId);
+    if (!adminId) {
+      adminId = await getAdminIdForUser(user.userId);
+    }
     const provider = await getStorageProviderForAdmin(adminId);
     if (!provider) {
       throw error(404, 'Storage not configured');

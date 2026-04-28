@@ -1,11 +1,12 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/db';
-import { recipes, tags, recipeTags, recipeComponents } from '$lib/server/db/schema';
+import { recipes, tags, recipeTags, recipeComponents, photos, recipePhotos } from '$lib/server/db/schema';
 import { getCurrentUser } from '$lib/server/auth';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { normalizeRecipeData } from '$lib/utils/recipe-helpers';
+import { photoCache } from '$lib/server/cache/photo-cache';
 
 // Recipe item schema for structured ingredients/instructions
 const recipeItemSchema = z.object({
@@ -91,8 +92,51 @@ async function getRecipeTags(recipeId: string): Promise<string[]> {
     .from(recipeTags)
     .innerJoin(tags, eq(recipeTags.tagId, tags.id))
     .where(eq(recipeTags.recipeId, recipeId));
-
   return recipesWithTags.map(rt => rt.name);
+}
+
+interface RecipePhoto {
+  id: string;
+  isMain: boolean;
+  sortOrder: number;
+  urls: {
+    thumbnail: string | null;
+    medium: string | null;
+    original: string;
+  };
+}
+
+async function getRecipePhotosForSingle(recipeId: string): Promise<RecipePhoto[]> {
+  const cached = photoCache.get<RecipePhoto[]>(recipeId);
+  if (cached) return cached;
+
+  const recipePhotosList = await db
+    .select({
+      photoId: recipePhotos.photoId,
+      isMain: recipePhotos.isMain,
+      sortOrder: recipePhotos.sortOrder,
+      originalKey: photos.originalKey,
+      thumbnailKey: photos.thumbnailKey,
+      mediumKey: photos.mediumKey,
+    })
+    .from(recipePhotos)
+    .innerJoin(photos, eq(recipePhotos.photoId, photos.id))
+    .where(eq(recipePhotos.recipeId, recipeId))
+    .orderBy(desc(recipePhotos.isMain), recipePhotos.sortOrder);
+
+  const result: RecipePhoto[] = recipePhotosList.map(rp => ({
+    id: rp.photoId,
+    isMain: rp.isMain,
+    sortOrder: rp.sortOrder,
+    urls: {
+      thumbnail: rp.thumbnailKey ? `/api/photos/serve/${rp.thumbnailKey}` : null,
+      medium: rp.mediumKey ? `/api/photos/serve/${rp.mediumKey}` : null,
+      original: `/api/photos/serve/${rp.originalKey}`,
+    },
+  }));
+
+  photoCache.set(recipeId, result);
+  return result;
 }
 
 // GET /api/recipes/[id] - Get a specific recipe
@@ -119,8 +163,6 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
 
     // Get tags
     const recipeTagNames = await getRecipeTags(recipe.id);
-
-    // Get components (sub-recipes)
     const components = await db
       .select({
         id: recipeComponents.id,
@@ -130,14 +172,13 @@ export const GET: RequestHandler = async ({ params, cookies }) => {
       })
       .from(recipeComponents)
       .where(eq(recipeComponents.parentRecipeId, recipe.id));
-
-    // Normalize recipe data to ensure proper structure
+    const recipePhotosList = await getRecipePhotosForSingle(recipe.id);
     const normalizedRecipe = normalizeRecipeData(recipe);
-
     return json({
       ...normalizedRecipe,
       tags: recipeTagNames,
       components,
+      photos: recipePhotosList,
     });
   } catch (e) {
     if (e instanceof Error && 'status' in e) throw e;

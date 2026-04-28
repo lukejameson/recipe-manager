@@ -3,8 +3,9 @@ import type { RequestHandler } from './$types';
 import { getCurrentUser } from '$lib/server/auth';
 import { getStorageProviderForUser, getAdminIdForUser } from '$lib/server/storage/service';
 import { db } from '$lib/server/db/db';
-import { photos } from '$lib/server/db/schema';
+import { photos, recipePhotos } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { photoCache } from '$lib/server/cache/photo-cache';
 
 export const GET: RequestHandler = async ({ params, cookies }) => {
   try {
@@ -86,8 +87,15 @@ export const DELETE: RequestHandler = async ({ params, cookies }) => {
       await provider.delete(photo);
     }
 
-    await db.delete(photos).where(eq(photos.id, params.id));
+    const linkedRecipes = await db.query.recipePhotos.findMany({
+      where: eq(recipePhotos.photoId, params.id)
+    });
+    const recipeIds = linkedRecipes.map(rp => rp.recipeId);
+    if (recipeIds.length > 0) {
+      photoCache.invalidateMultiple(recipeIds);
+    }
 
+    await db.delete(photos).where(eq(photos.id, params.id));
     return json({ success: true });
   } catch (e) {
     if (e instanceof Error && 'status' in e) throw e;

@@ -1,12 +1,13 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db/db';
-import { recipes, tags, recipeTags, recipeCategories, recipeCategoryTags, users, DEFAULT_FEATURE_FLAGS } from '$lib/server/db/schema';
+import { recipes, tags, recipeTags, recipeCategories, recipeCategoryTags, users, DEFAULT_FEATURE_FLAGS, photos, recipePhotos } from '$lib/server/db/schema';
 import { getCurrentUser } from '$lib/server/auth';
 import { eq, and, like, or, inArray, sql, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { normalizeRecipeData } from '$lib/utils/recipe-helpers';
+import { photoCache } from '$lib/server/cache/photo-cache';
 
 // Recipe item schema for structured ingredients/instructions
 const recipeItemSchema = z.object({
@@ -86,7 +87,6 @@ async function getOrCreateTags(tagNames: string[], userId: string): Promise<stri
  */
 async function getRecipesTags(recipeIds: string[]) {
   if (recipeIds.length === 0) return {};
-
   const recipesWithTags = await db
     .select({
       recipeId: recipeTags.recipeId,
@@ -96,7 +96,6 @@ async function getRecipesTags(recipeIds: string[]) {
     .from(recipeTags)
     .innerJoin(tags, eq(recipeTags.tagId, tags.id))
     .where(inArray(recipeTags.recipeId, recipeIds));
-
   const tagsByRecipe: Record<string, Array<{ id: string; name: string }>> = {};
   for (const rt of recipesWithTags) {
     if (!tagsByRecipe[rt.recipeId]) {
@@ -104,11 +103,77 @@ async function getRecipesTags(recipeIds: string[]) {
     }
     tagsByRecipe[rt.recipeId].push({ id: rt.tagId, name: rt.tagName });
   }
-
   return tagsByRecipe;
 }
 
-// GET /api/recipes - List all recipes
+interface RecipePhoto {
+  id: string;
+  isMain: boolean;
+  sortOrder: number;
+  urls: {
+    thumbnail: string | null;
+    medium: string | null;
+    original: string;
+  };
+}
+
+async function getRecipesPhotos(recipeIds: string[]): Promise<Record<string, RecipePhoto[]>> {
+  if (recipeIds.length === 0) return {};
+
+  const cached: Record<string, RecipePhoto[]> = {};
+  const uncachedIds: string[] = [];
+
+  for (const id of recipeIds) {
+    const hit = photoCache.get<RecipePhoto[]>(id);
+    if (hit) {
+      cached[id] = hit;
+    } else {
+      uncachedIds.push(id);
+    }
+  }
+
+  if (uncachedIds.length === 0) {
+    return cached;
+  }
+
+  const recipePhotosList = await db
+    .select({
+      recipeId: recipePhotos.recipeId,
+      photoId: recipePhotos.photoId,
+      isMain: recipePhotos.isMain,
+      sortOrder: recipePhotos.sortOrder,
+      originalKey: photos.originalKey,
+      thumbnailKey: photos.thumbnailKey,
+      mediumKey: photos.mediumKey,
+    })
+    .from(recipePhotos)
+    .innerJoin(photos, eq(recipePhotos.photoId, photos.id))
+    .where(inArray(recipePhotos.recipeId, uncachedIds));
+
+  const photosByRecipe: Record<string, RecipePhoto[]> = {};
+
+  for (const rp of recipePhotosList) {
+    if (!photosByRecipe[rp.recipeId]) {
+      photosByRecipe[rp.recipeId] = [];
+    }
+    photosByRecipe[rp.recipeId].push({
+      id: rp.photoId,
+      isMain: rp.isMain,
+      sortOrder: rp.sortOrder,
+      urls: {
+        thumbnail: rp.thumbnailKey ? `/api/photos/serve/${rp.thumbnailKey}` : null,
+        medium: rp.mediumKey ? `/api/photos/serve/${rp.mediumKey}` : null,
+        original: `/api/photos/serve/${rp.originalKey}`,
+      },
+    });
+  }
+
+  for (const id of uncachedIds) {
+    photoCache.set(id, photosByRecipe[id] || []);
+  }
+
+  return { ...cached, ...photosByRecipe };
+}
 export const GET: RequestHandler = async ({ url, cookies }) => {
   try {
     const token = cookies.get('auth_token');
@@ -217,11 +282,13 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
     }
     const allRecipes = await query.limit(limit).offset(offset);
     const tagsByRecipe = await getRecipesTags(allRecipes.map(r => r.id));
+    const photosByRecipe = await getRecipesPhotos(allRecipes.map(r => r.id));
     const normalizedRecipes = allRecipes.map(recipe => {
       const normalized = normalizeRecipeData(recipe);
       return {
         ...normalized,
         tags: tagsByRecipe[recipe.id] || [],
+        photos: photosByRecipe[recipe.id] || [],
       };
     });
     return json(normalizedRecipes);

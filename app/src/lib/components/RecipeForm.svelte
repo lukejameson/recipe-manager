@@ -108,13 +108,8 @@ onMount(async () => {
         }
       } catch (err) {
       }
-      try {
-        const recipePhotos = await apiClient.getRecipePhotos(recipe.id);
-        if (recipePhotos.length > 0) {
-          photos = recipePhotos;
-        }
-      } catch (err) {
-        console.error('Failed to load recipe photos:', err);
+      if (recipe?.photos && recipe.photos.length > 0) {
+        photos = recipe.photos;
       }
     }
   });

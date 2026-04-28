@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { db } from '$lib/server/db/db';
 import { photos, recipePhotos, recipes } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
+import { photoCache } from '$lib/server/cache/photo-cache';
 
 export const PUT: RequestHandler = async ({ params, cookies }) => {
   try {
@@ -45,6 +46,8 @@ export const PUT: RequestHandler = async ({ params, cookies }) => {
         eq(recipePhotos.recipeId, params.id),
         eq(recipePhotos.photoId, params.photoId)
       ));
+
+    photoCache.invalidate(params.id);
 
     return json({ success: true });
   } catch (e) {
@@ -103,6 +106,8 @@ export const DELETE: RequestHandler = async ({ params, cookies }) => {
           eq(recipePhotos.photoId, remainingPhotos[0].photoId)
         ));
     }
+
+    photoCache.invalidate(params.id);
 
     return json({ success: true });
   } catch (e) {

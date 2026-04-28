@@ -28,7 +28,8 @@ export const handle: Handle = async ({ event, resolve }) => {
   // Rate limiting (skip for static assets)
   if (!event.url.pathname.startsWith('/icons/') &&
       !event.url.pathname.startsWith('/_app/') &&
-      !event.url.pathname.startsWith('/favicon')) {
+      !event.url.pathname.startsWith('/favicon') &&
+      !event.url.pathname.startsWith('/api/photos/serve/')) {
     const limit = rateLimits.get(clientAddress);
     if (limit) {
       if (now > limit.resetTime) {

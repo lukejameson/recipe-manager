@@ -777,14 +777,6 @@ getAuditLogActions: () =>
       width: number;
       height: number;
     }>>('/api/photos/my'),
-  getRecipePhotos: (recipeId: string) =>
-    api<Array<{
-      id: string;
-      isMain: boolean;
-      urls: { thumbnail?: string; medium?: string; original: string };
-      width: number;
-      height: number;
-    }>>(`/api/recipes/${recipeId}/photos`),
   addPhotoToRecipe: (recipeId: string, photoId: string) =>
     api<{ success: boolean }>(`/api/recipes/${recipeId}/photos`, {
       method: 'POST',
