@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 
 const findMatchingSchema = z.object({
@@ -33,23 +34,24 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     }
 
     const { availableIngredients, recipes } = result.data;
-
-    // Get AI service instance
     const aiService = await AIServiceV2.getInstance();
-
-    const userPrompt = `I have these ingredients: ${availableIngredients.join(', ')}
-
-Match them against these recipes and return a JSON array of matches with:
-- recipeId: string
-- matchScore: number (0-100 percentage)
-- matchedIngredients: array of matched ingredient names
-- missingIngredients: array of missing ingredient names
-
-RECIPES:
-${recipes.map(r => `ID: ${r.id}\nTitle: ${r.title}\nIngredients: ${r.ingredients.join(', ')}`).join('\n\n')}`;
-
+    const promptData = await PromptService.getPrompt(AIFeature.PANTRY_MATCHING);
+    let systemPrompt = promptData?.content || `Find recipes that can be made with available pantry items.
+Available pantry items: {{pantry_items}}
+Recipe ingredients needed: {{recipe_ingredients}}
+Calculate match score and identify:
+- Which recipes can be made completely from pantry
+- Which recipes are missing a few ingredients
+- Best matches overall
+Return a JSON array sorted by match score.`;
+    const recipeIngredients = recipes.map(r => `${r.title}: ${r.ingredients.join(', ')}`).join('; ');
+    systemPrompt = PromptService.resolvePromptVariables(systemPrompt, {
+      pantry_items: availableIngredients.join(', '),
+      recipe_ingredients: recipeIngredients
+    });
     const generationResult = await aiService.generateForFeature(AIFeature.PANTRY_MATCHING, {
-      messages: [{ role: 'user', content: userPrompt }],
+      systemPrompt,
+      messages: [{ role: 'user', content: 'Please find matching recipes based on available ingredients.' }],
     });
 
     const content = generationResult.content;

@@ -317,13 +317,13 @@ export const providerConfigs = pgTable('provider_configs', {
 // Feature-to-model mapping for multi-provider LLM support
 export const featureModelConfigs = pgTable('feature_model_configs', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  featureId: text('feature_id').notNull(), // AIFeature enum value
-  providerId: text('provider_id').notNull(), // References providerConfigs.providerId
+  featureId: text('feature_id').notNull(),
+  providerId: text('provider_id').notNull(),
   modelId: text('model_id').notNull(),
-  temperature: integer('temperature'), // Stored as integer (multiply by 100) to avoid float issues
+  temperature: integer('temperature'),
   maxTokens: integer('max_tokens'),
   isEnabled: boolean('is_enabled').notNull().default(true),
-  priority: integer('priority').notNull().default(0), // For fallback ordering
+  priority: integer('priority').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -331,6 +331,33 @@ export const featureModelConfigs = pgTable('feature_model_configs', {
     .notNull()
     .defaultNow(),
 });
+export const featurePrompts = pgTable('feature_prompts', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  featureId: text('feature_id').notNull().unique(),
+  content: text('content').notNull(),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedBy: text('updated_by').references(() => users.id, { onDelete: 'set null' }),
+});
+export const featurePromptHistory = pgTable('feature_prompt_history', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  promptId: text('prompt_id').notNull().references(() => featurePrompts.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  version: integer('version').notNull(),
+  changedBy: text('changed_by').references(() => users.id, { onDelete: 'set null' }),
+  changedAt: timestamp('changed_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+export type FeaturePrompt = typeof featurePrompts.$inferSelect;
+export type InsertFeaturePrompt = typeof featurePrompts.$inferInsert;
+export type FeaturePromptHistoryEntry = typeof featurePromptHistory.$inferSelect;
+export type InsertFeaturePromptHistoryEntry = typeof featurePromptHistory.$inferInsert;
 
 // User memories for AI context
 export const memories = pgTable('memories', {

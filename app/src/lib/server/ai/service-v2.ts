@@ -16,6 +16,7 @@ import {
 import { AIFeature, DEFAULT_FEATURE_CONFIGS } from '../ai/features.js';
 import { decrypt } from '../utils/encryption.js';
 import { AIConfigurationError } from '../../utils/errors.js';
+import { PromptService } from './prompt-service.js';
 
 export class AIServiceV2 {
 	private static instance: AIServiceV2 | null = null;
@@ -34,11 +35,9 @@ export class AIServiceV2 {
 
 	private async initialize(): Promise<void> {
 		if (this.initialized) return;
-
 		const configs = await db.query.providerConfigs?.findMany({
 			where: eq(providerConfigs.providerId, 'openai-compatible')
 		});
-
 		if (configs) {
 			for (const config of configs) {
 				if (config.baseUrl) {
@@ -46,10 +45,9 @@ export class AIServiceV2 {
 				}
 			}
 		}
-
+		await PromptService.ensureDefaultPrompts();
 		this.initialized = true;
 	}
-
 	async getProviderConfig(providerId: string) {
 		const configs = await db.query.providerConfigs?.findMany({
 			where: eq(providerConfigs.providerId, providerId)

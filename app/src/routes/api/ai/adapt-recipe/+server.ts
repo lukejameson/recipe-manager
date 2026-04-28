@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 
 const adaptRecipeSchema = z.object({
@@ -37,43 +38,34 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     }
 
     const { recipe, adaptationType } = result.data;
-
-    // Get AI service instance
     const aiService = await AIServiceV2.getInstance();
-
-    const adaptationPrompts: Record<string, string> = {
-      'vegan': 'Convert this recipe to be fully vegan. Replace all animal products with plant-based alternatives.',
-      'vegetarian': 'Convert this recipe to be vegetarian. Remove meat but keep dairy and eggs.',
-      'gluten-free': 'Make this recipe gluten-free. Replace wheat and gluten-containing ingredients.',
-      'dairy-free': 'Make this recipe dairy-free. Replace milk, butter, cheese with alternatives.',
-      'keto': 'Adapt this recipe for a keto diet. Reduce carbs significantly, increase healthy fats.',
-      'low-carb': 'Reduce carbohydrates in this recipe while keeping it flavorful.',
-      'quick': 'Create a quick 30-minute version of this recipe with shortcuts.',
-      'meal-prep': 'Adapt this recipe for meal prep - make it freezer-friendly or good for reheating.',
-      'air-fryer': 'Convert this recipe for air fryer cooking with adjusted times and temperatures.',
-      'instant-pot': 'Convert this recipe for Instant Pot pressure cooking.',
-      'kids-friendly': 'Make this recipe kid-friendly with milder flavors and simple ingredients.',
+    const promptData = await PromptService.getPrompt(AIFeature.RECIPE_ADAPTATION);
+    let systemPrompt = promptData?.content || `Adapt this recipe for: {{adaptation_type}}
+Recipe: {{recipe_title}}
+Dietary restrictions: {{dietary_restrictions}}
+Maintain the essence and flavor of the original recipe while accommodating the dietary requirements.
+Return the adapted recipe in JSON format.`;
+    const dietaryRestrictions = {
+      'vegan': 'fully vegan, no animal products',
+      'vegetarian': 'vegetarian, no meat but dairy and eggs allowed',
+      'gluten-free': 'gluten-free, no wheat or gluten',
+      'dairy-free': 'dairy-free, no milk products',
+      'keto': 'keto, low carb high fat',
+      'low-carb': 'low-carb',
+      'quick': 'quick version, under 30 minutes',
+      'meal-prep': 'meal prep friendly, freezer friendly',
+      'air-fryer': 'air fryer compatible',
+      'instant-pot': 'Instant Pot compatible',
+      'kids-friendly': 'kid-friendly, mild flavors'
     };
-
-    const userPrompt = `${adaptationPrompts[adaptationType]}
-
-ORIGINAL RECIPE:
-Title: ${recipe.title}
-Description: ${recipe.description || 'N/A'}
-Prep Time: ${recipe.prepTime || 'N/A'} min
-Cook Time: ${recipe.cookTime || 'N/A'} min
-Servings: ${recipe.servings || 'N/A'}
-
-Ingredients:
-${recipe.ingredients.join('\n')}
-
-Instructions:
-${recipe.instructions.join('\n')}
-
-Return a JSON object with the adapted recipe fields.`;
-
+    systemPrompt = PromptService.resolvePromptVariables(systemPrompt, {
+      adaptation_type: adaptationType,
+      recipe_title: recipe.title,
+      dietary_restrictions: dietaryRestrictions[adaptationType] || adaptationType
+    });
     const generationResult = await aiService.generateForFeature(AIFeature.RECIPE_ADAPTATION, {
-      messages: [{ role: 'user', content: userPrompt }],
+      systemPrompt,
+      messages: [{ role: 'user', content: `Please adapt this recipe for ${adaptationType}.` }],
       jsonMode: true,
     });
 

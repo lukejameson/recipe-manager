@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { decrypt } from '$lib/server/utils/encryption';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 
@@ -152,8 +153,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		const mimeType = contentType.startsWith('image/png') ? 'image/png' : 'image/jpeg';
 
 		const aiService = await AIServiceV2.getInstance();
-
-		const systemPrompt = `Extract recipe information from the provided image and caption text from an Instagram post.
+		const promptData = await PromptService.getPrompt(AIFeature.RECIPE_FROM_INSTAGRAM);
+		let systemPrompt = promptData?.content || `Extract recipe information from the provided image and caption text from an Instagram post.
 The caption may contain the full recipe including ingredients and instructions — prioritise text from the caption for accuracy.
 Return a JSON object with:
 - title: string
@@ -165,7 +166,10 @@ Return a JSON object with:
 - servings: number (optional)
 - notes: string (optional)
 Only include fields you can confidently extract.`;
-
+		systemPrompt = PromptService.resolvePromptVariables(systemPrompt, {
+			caption_text: caption || '',
+			image_description: 'Instagram post image'
+		});
 		const userMessage = caption
 			? `Caption from Instagram post:\n\n${caption}\n\nExtract the recipe from the caption and image above.`
 			: 'Extract the recipe from this Instagram post image.';

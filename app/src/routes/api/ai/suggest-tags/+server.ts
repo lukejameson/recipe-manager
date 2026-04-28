@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 
 const suggestTagsSchema = z.object({
@@ -33,23 +34,24 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     }
 
     const { recipe, existingTags } = result.data;
-
-    // Get AI service instance
     const aiService = await AIServiceV2.getInstance();
-
-    const userPrompt = `Suggest 3-7 relevant tags for this recipe. Exclude these existing tags: ${existingTags.join(', ') || 'none'}.
-
-Recipe: ${recipe.title}
-Description: ${recipe.description || 'N/A'}
-Ingredients: ${recipe.ingredients.join(', ')}
-
+    const promptData = await PromptService.getPrompt(AIFeature.TAG_SUGGESTIONS);
+    let systemPrompt = promptData?.content || `Suggest 3-7 relevant tags for this recipe. Exclude these existing tags: {{existing_tags}}.
+Recipe: {{recipe_title}}
+Description: {{recipe_description}}
+Ingredients: {{ingredients}}
 Return ONLY a JSON array of tag strings.`;
-
-    const generationResult = await aiService.generateForFeature(AIFeature.TAG_SUGGESTIONS, {
-      messages: [{ role: 'user', content: userPrompt }],
+    systemPrompt = PromptService.resolvePromptVariables(systemPrompt, {
+      existing_tags: existingTags.join(', ') || 'none',
+      recipe_title: recipe.title,
+      recipe_description: recipe.description || 'N/A',
+      ingredients: recipe.ingredients.join(', ')
     });
-
-    const content = generationResult.content;
+    const genResult = await aiService.generateForFeature(AIFeature.TAG_SUGGESTIONS, {
+      systemPrompt,
+      messages: [{ role: 'user', content: 'Please suggest tags for this recipe.' }],
+    });
+    const content = genResult.content;
 
     let suggestedTags: string[];
     try {

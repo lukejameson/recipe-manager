@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 
 const suggestSubstitutionsSchema = z.object({
@@ -29,19 +30,30 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     }
 
     const { ingredient, context } = result.data;
-
-    // Get AI service instance
     const aiService = await AIServiceV2.getInstance();
-
-    const userPrompt = `Suggest 3-5 substitutions for "${ingredient}"${context ? ` in the context of: ${context}` : ''}.
-
-Return a JSON array of objects with:
-- substitution: string (the substitute ingredient)
-- ratio: string (e.g., "1:1", "1 cup for every 2 cups")
-- notes: string (optional tips for using the substitute)`;
-
+    const promptData = await PromptService.getPrompt(AIFeature.INGREDIENT_SUBSTITUTIONS);
+    let systemPrompt = promptData?.content || `Suggest ingredient substitutions for: {{ingredient}}
+Context: {{context}}
+Consider:
+- Similar flavor profiles
+- Texture alternatives
+- Dietary restrictions (if applicable)
+- Common pantry substitutions
+Return a JSON array of substitution objects:
+[
+  {
+    "ingredient": "substitute ingredient",
+    "ratio": "1:1 or other ratio",
+    "notes": "any special considerations"
+  }
+]`;
+    systemPrompt = PromptService.resolvePromptVariables(systemPrompt, {
+      ingredient,
+      context: context || ''
+    });
     const generationResult = await aiService.generateForFeature(AIFeature.INGREDIENT_SUBSTITUTIONS, {
-      messages: [{ role: 'user', content: userPrompt }],
+      systemPrompt,
+      messages: [{ role: 'user', content: 'Please suggest substitutions.' }],
     });
 
     const content = generationResult.content;

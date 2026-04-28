@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 
 const nutritionSchema = z.object({
@@ -181,45 +182,27 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
     const { ingredients, servings, title } = result.data;
     const aiService = await AIServiceV2.getInstance();
-
-    const userPrompt = `Calculate the nutritional information per serving for this recipe${title ? ` "${title}"` : ''}.
-
-Ingredients:
-${ingredients.join('\n')}
-
-Total servings: ${servings}
-
-Return a complete JSON object with these fields (all numbers, no units):
-{
-  "calories": number,
-  "protein": number,
-  "carbohydrates": number,
-  "fat": number,
-  "saturatedFat": number (if known, otherwise omit),
-  "fiber": number (if known, otherwise omit),
-  "sugar": number (if known, otherwise omit),
-  "sodium": number (if known, otherwise omit),
-  "cholesterol": number (if known, otherwise omit)
-}
-
-Example complete response:
-{
-  "calories": 350,
-  "protein": 20,
-  "carbohydrates": 45,
-  "fat": 12,
-  "fiber": 3
-}
-
-CRITICAL:
-- Ensure the JSON is complete with all required fields you provide
-- The JSON must end with a closing brace }
-- Do not truncate or stop mid-response
-- Return ONLY the JSON object, no other text`;
-
+    const promptData = await PromptService.getPrompt(AIFeature.NUTRITION_CALCULATION);
+    let systemPrompt = promptData?.content || `Calculate nutritional information for this recipe:
+Recipe: {{recipe_title}}
+Servings: {{servings}}
+Ingredients: {{ingredients}}
+Provide per-serving values for:
+- Calories
+- Protein (g)
+- Carbohydrates (g)
+- Fat (g)
+- Fiber (g)
+- Sodium (mg)
+Return a JSON object with nutrition data.`;
+    systemPrompt = PromptService.resolvePromptVariables(systemPrompt, {
+      recipe_title: title || 'Unnamed Recipe',
+      servings: String(servings),
+      ingredients: ingredients.join(', ')
+    });
     const generationResult = await aiService.generateForFeature(AIFeature.NUTRITION_CALCULATION, {
-      messages: [{ role: 'user', content: userPrompt }],
-      // Note: Not using jsonMode to avoid truncation issues - prompt engineering is sufficient
+      systemPrompt,
+      messages: [{ role: 'user', content: 'Please calculate the nutritional information for this recipe.' }],
     });
 
     const content = generationResult.content;

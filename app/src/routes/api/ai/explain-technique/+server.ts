@@ -4,6 +4,7 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 
 const explainTechniqueSchema = z.object({
@@ -29,20 +30,23 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     }
 
     const { term, context } = result.data;
-
-    // Get AI service instance
     const aiService = await AIServiceV2.getInstance();
-
-    const userPrompt = `Explain the cooking technique "${term}"${context ? ` in the context of: ${context}` : ''}.
-
-Return a JSON object with:
-- term: string (the technique name)
-- definition: string (clear explanation)
-- steps: array of strings (step-by-step how to do it)
-- tips: array of strings (pro tips and common pitfalls)`;
-
+    const promptData = await PromptService.getPrompt(AIFeature.TECHNIQUE_EXPLANATION);
+    let systemPrompt = promptData?.content || `Explain the cooking technique: {{technique_name}}
+Context: {{context}}
+Provide:
+- What the technique is
+- Why it's important
+- Step-by-step how to do it
+- Common mistakes and how to avoid them
+- Tips for perfecting the technique`;
+    systemPrompt = PromptService.resolvePromptVariables(systemPrompt, {
+      technique_name: term,
+      context: context || ''
+    });
     const generationResult = await aiService.generateForFeature(AIFeature.TECHNIQUE_EXPLANATION, {
-      messages: [{ role: 'user', content: userPrompt }],
+      systemPrompt,
+      messages: [{ role: 'user', content: `Please explain the technique "${term}".` }],
     });
 
     const content = generationResult.content;

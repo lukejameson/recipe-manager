@@ -4,19 +4,17 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { randomUUID } from 'crypto';
-
 const bulkExtractSchema = z.object({
   imageGroups: z.array(z.array(z.string())),
 });
-
 interface RecipeItem {
   id: string;
   text: string;
   order: number;
   checked?: boolean;
 }
-
 function stringsToItemList(strings: string[]): { items: RecipeItem[] } {
   return {
     items: strings
@@ -29,10 +27,8 @@ function stringsToItemList(strings: string[]): { items: RecipeItem[] } {
       }))
   };
 }
-
 function parseStructuredItems(items: any[]): { items: RecipeItem[] } {
   if (!Array.isArray(items)) return { items: [] };
-
   return {
     items: items.map((item, i) => ({
       id: item.id || randomUUID(),
@@ -41,10 +37,8 @@ function parseStructuredItems(items: any[]): { items: RecipeItem[] } {
     }))
   };
 }
-
 function processRecipeData(recipeData: any): any {
   const processedData: Record<string, unknown> = { ...recipeData };
-
   if (recipeData.ingredients) {
     if (Array.isArray(recipeData.ingredients) && recipeData.ingredients.length > 0) {
       const firstItem = recipeData.ingredients[0];
@@ -57,7 +51,6 @@ function processRecipeData(recipeData: any): any {
       processedData.ingredients = { items: [] };
     }
   }
-
   if (recipeData.instructions) {
     if (Array.isArray(recipeData.instructions) && recipeData.instructions.length > 0) {
       const firstItem = recipeData.instructions[0];
@@ -70,36 +63,37 @@ function processRecipeData(recipeData: any): any {
       processedData.instructions = { items: [] };
     }
   }
-
   return processedData;
 }
-
-// POST /api/recipes/bulk-extract-from-photos - Extract multiple recipes from photo groups
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
     const token = cookies.get('auth_token');
     const user = await getCurrentUser(token);
-
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-
     const body = await request.json();
     const result = bulkExtractSchema.safeParse(body);
-
     if (!result.success) {
       throw error(400, result.error.message);
     }
-
     const { imageGroups } = result.data;
-
-    // Get AI service instance
     const aiService = await AIServiceV2.getInstance();
-
+    const promptData = await PromptService.getPrompt(AIFeature.RECIPE_FROM_PHOTOS);
+    let baseSystemPrompt = promptData?.content || `Extract recipe information from these images. Return a JSON object with:
+- title: string
+- description: string (optional)
+- ingredients: array of objects with id (optional UUID), text (string), and order (optional number) - OR array of strings
+- instructions: array of objects with id (optional UUID), text (string), and order (optional number) - OR array of strings
+- prepTime: number (minutes, optional)
+- cookTime: number (minutes, optional)
+- servings: number (optional)
+For ingredients and instructions, you can return either:
+1. Simple string arrays: ["2 cups flour", "1 cup sugar"]
+2. Structured objects: [{"id": "uuid", "text": "2 cups flour", "order": 0}]
+Only include fields you can confidently extract.`;
     const extractedRecipes = [];
-
     for (const images of imageGroups) {
-      // Convert base64 images to ImageData format
       const imageData = images.map(img => {
         const isPng = img.startsWith('data:image/png');
         const base64Data = img.split(',')[1];
@@ -108,32 +102,16 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
           data: base64Data
         };
       });
-
-      const systemPrompt = `Extract recipe information from these images. Return a JSON object with:
-- title: string
-- description: string (optional)
-- ingredients: array of objects with id (optional UUID), text (string), and order (optional number) - OR array of strings
-- instructions: array of objects with id (optional UUID), text (string), and order (optional number) - OR array of strings
-- prepTime: number (minutes, optional)
-- cookTime: number (minutes, optional)
-- servings: number (optional)
-
-For ingredients and instructions, you can return either:
-1. Simple string arrays: ["2 cups flour", "1 cup sugar"]
-2. Structured objects: [{"id": "uuid", "text": "2 cups flour", "order": 0}]
-
-Only include fields you can confidently extract.`;
-
-      // Process images with AIServiceV2 using vision
+      const systemPrompt = PromptService.resolvePromptVariables(baseSystemPrompt, {
+        image_count: String(images.length)
+      });
       const generationResult = await aiService.generateForFeature(AIFeature.RECIPE_FROM_PHOTOS, {
         systemPrompt,
         messages: [{ role: 'user', content: 'Extract the recipe from these images.' }],
         images: imageData,
         jsonMode: true,
       });
-
       const content = generationResult.content;
-
       try {
         const jsonMatch = content.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
@@ -144,7 +122,6 @@ Only include fields you can confidently extract.`;
         console.error('Failed to parse recipe from group');
       }
     }
-
     return json({
       recipes: extractedRecipes,
       count: extractedRecipes.length,

@@ -405,8 +405,81 @@ export const apiClient = {
     api<{ success: boolean; message: string }>(`/api/settings/feature-configs?featureId=${encodeURIComponent(featureId)}`, {
       method: 'DELETE',
     }),
-
-  // Memories
+  getPrompts: () =>
+    api<{
+      prompts: Array<{
+        featureId: string;
+        content: string;
+        version: number;
+        updatedAt: Date | null;
+        updatedBy: string | null;
+        updatedByUsername: string | null;
+        variables: Array<{
+          name: string;
+          description: string;
+          sampleValue: string;
+        }>;
+        isDefault: boolean;
+      }>;
+    }>('/api/settings/prompts'),
+  searchPrompts: (query: string) =>
+    api<{
+      prompts: Array<{
+        featureId: string;
+        content: string;
+        version: number;
+        updatedAt: Date | null;
+        updatedBy: string | null;
+        updatedByUsername: string | null;
+        variables: Array<{
+          name: string;
+          description: string;
+          sampleValue: string;
+        }>;
+        isDefault: boolean;
+      }>;
+    }>('/api/settings/prompts', {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    }),
+  getPrompt: (featureId: string) =>
+    api<{
+      prompt: {
+        featureId: string;
+        content: string;
+        version: number;
+        updatedAt: Date | null;
+        updatedBy: string | null;
+        updatedByUsername: string | null;
+        variables: Array<{
+          name: string;
+          description: string;
+          sampleValue: string;
+        }>;
+        isDefault: boolean;
+      };
+    }>(`/api/settings/prompts/${featureId}`),
+  updatePrompt: (featureId: string, content: string) =>
+    api<{ success: boolean }>(`/api/settings/prompts/${featureId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
+  resetPrompt: (featureId: string) =>
+    api<{ success: boolean }>(`/api/settings/prompts/${featureId}`, {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    }),
+  getPromptHistory: (featureId: string) =>
+    api<{
+      history: Array<{
+        id: string;
+        content: string;
+        version: number;
+        changedBy: string | null;
+        changedByUsername: string | null;
+        changedAt: Date;
+      }>;
+    }>(`/api/settings/prompts/${featureId}/history`),
   getMemories: () =>
     api<import('$lib/server/db/schema').Memory[]>('/api/settings/memories'),
 

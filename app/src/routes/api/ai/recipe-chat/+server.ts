@@ -4,8 +4,12 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import type { Message } from '$lib/server/ai/providers';
 import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
+import { db } from '$lib/server/db/db';
+import { agents } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 
 const recipeChatSchema = z.object({
   messages: z.array(z.object({
@@ -33,48 +37,35 @@ interface GeneratedRecipe {
   tags: string[];
 }
 
-// POST /api/ai/recipe-chat - AI chat for recipe assistance
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
     const token = cookies.get('auth_token');
     const user = await getCurrentUser(token);
-
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-
     const body = await request.json();
     const result = recipeChatSchema.safeParse(body);
-
     if (!result.success) {
       throw error(400, result.error.message);
     }
+    const { messages, agentId, referencedRecipes } = result.data;
 
-    const { messages, referencedRecipes } = result.data;
-
-    // Get AI service instance
     const aiService = await AIServiceV2.getInstance();
 
-    // Build system prompt
-    let systemPrompt = `You are a helpful cooking assistant. You help users with recipe questions, cooking techniques, ingredient substitutions, and meal planning.
-Be concise and practical in your responses.
+    let systemPrompt: string;
 
-When the user asks for a recipe or describes what they want to make, you should provide a complete recipe in the following JSON format at the end of your response:
-
-<recipe>
-{
-  "title": "Recipe Name",
-  "description": "Brief description of the recipe",
-  "ingredients": ["ingredient 1", "ingredient 2", ...],
-  "instructions": ["step 1", "step 2", ...],
-  "prepTime": 15,
-  "cookTime": 30,
-  "servings": 4,
-  "tags": ["tag1", "tag2"]
-}
-</recipe>
-
-The prepTime and cookTime are in minutes. Only include the JSON block when providing a complete recipe.`;
+    if (agentId) {
+      const agentResult = await db.select().from(agents).where(eq(agents.id, agentId)).limit(1);
+      if (agentResult.length > 0) {
+        systemPrompt = agentResult[0].systemPrompt;
+      } else {
+        systemPrompt = `You are a helpful cooking assistant.`;
+      }
+    } else {
+      const promptData = await PromptService.getPrompt(AIFeature.RECIPE_CHAT);
+      systemPrompt = promptData?.content || `You are a helpful cooking assistant.`;
+    }
 
     if (referencedRecipes && referencedRecipes.length > 0) {
       systemPrompt += '\n\nThe user is asking about these recipes:\n';
@@ -84,7 +75,6 @@ The prepTime and cookTime are in minutes. Only include the JSON block when provi
       }
     }
 
-    // Map messages to proper format
     const mappedMessages: Message[] = messages.map((m) => ({
       role: m.role,
       content: m.content,
@@ -95,10 +85,8 @@ The prepTime and cookTime are in minutes. Only include the JSON block when provi
       messages: mappedMessages,
     });
 
-    // Parse recipe from response if present
     let parsedRecipe: GeneratedRecipe | undefined;
     const recipeMatch = generationResult.content.match(/<recipe>([\s\S]*?)<\/recipe>/);
-
     if (recipeMatch) {
       try {
         const recipeJson = recipeMatch[1].trim();
@@ -108,7 +96,6 @@ The prepTime and cookTime are in minutes. Only include the JSON block when provi
       }
     }
 
-    // Clean up the message by removing the recipe JSON block
     let cleanMessage = generationResult.content
       .replace(/<recipe>[\s\S]*?<\/recipe>/g, '')
       .trim();

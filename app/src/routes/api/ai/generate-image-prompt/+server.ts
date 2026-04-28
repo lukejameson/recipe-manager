@@ -3,10 +3,9 @@ import type { RequestHandler } from './$types';
 import { getCurrentUser } from '$lib/server/auth';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
 import { z } from 'zod';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
 
 const generatePromptSchema = z.object({
 	title: z.string().min(1),
@@ -16,14 +15,13 @@ const generatePromptSchema = z.object({
 });
 
 async function getImagePromptTemplate(): Promise<string> {
-	try {
-		const templatePath = join(process.cwd(), 'docs', 'Image_gen_prompt.md');
-		return await readFile(templatePath, 'utf-8');
-	} catch {
-		return `You are a food photography art director for "Marrow", a recipe app with a clean, cozy, and modern aesthetic.
+	const promptData = await PromptService.getPrompt(AIFeature.IMAGE_PROMPT_GENERATION);
+	if (promptData?.content) {
+		return promptData.content;
+	}
+	return `You are a food photography art director for "Marrow", a recipe app with a clean, cozy, and modern aesthetic.
 Focus ONLY on the food in its bowl or plate. Apply Marrow visual identity: warm neutrals, soft natural lighting, matte ceramic.
 STRICT RULES - NEVER include: cutlery, tablecloths, hands, text, logos, props. Aspect ratio 4:3 or 1:1. Photorealistic.`;
-	}
 }
 
 export const POST: RequestHandler = async ({ request, cookies }) => {

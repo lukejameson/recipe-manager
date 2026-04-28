@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
+  import { goto } from '$app/navigation';
   import { apiClient } from '$lib/api/client';
   import { authStore } from '$lib/stores/auth.svelte';
   import Header from '$lib/components/Header.svelte';
   import StorageSettings from '$lib/components/StorageSettings.svelte';
+  import AgentSettings from '$lib/components/AgentSettings.svelte';
   type Provider = {
     id: string;
     name: string;
@@ -76,7 +79,11 @@
   let pexelsApiKey = $state('');
   let savingPexels = $state(false);
   let pexelsSuccess = $state('');
-  let activeTab = $state<'providers' | 'features' | 'storage' | 'imagesearch'>('providers');
+  let activeTab = $state<'providers' | 'features' | 'storage' | 'imagesearch' | 'agents'>(
+    ['providers', 'features', 'storage', 'imagesearch', 'agents'].includes(page.url.searchParams.get('tab') || '') 
+      ? page.url.searchParams.get('tab') as 'providers' | 'features' | 'storage' | 'imagesearch' | 'agents'
+      : 'providers'
+  );
   const providerDisplayNames: Record<string, string> = {
     'anthropic': 'Anthropic (Claude)',
     'openai': 'OpenAI (GPT)',
@@ -392,10 +399,11 @@
 
       {#if isAdmin}
         <nav class="settings-tabs">
-          <button class="tab-button" class:active={activeTab === 'providers'} onclick={() => activeTab = 'providers'}>AI Providers</button>
-          <button class="tab-button" class:active={activeTab === 'features'} onclick={() => activeTab = 'features'}>Features</button>
-          <button class="tab-button" class:active={activeTab === 'storage'} onclick={() => activeTab = 'storage'}>Storage</button>
-          <button class="tab-button" class:active={activeTab === 'imagesearch'} onclick={() => activeTab = 'imagesearch'}>Image Search</button>
+          <button class="tab-button" class:active={activeTab === 'providers'} onclick={() => { activeTab = 'providers'; goto('/settings?tab=providers', { replaceState: true }); }}>AI Providers</button>
+          <button class="tab-button" class:active={activeTab === 'features'} onclick={() => { activeTab = 'features'; goto('/settings?tab=features', { replaceState: true }); }}>Features</button>
+          <button class="tab-button" class:active={activeTab === 'storage'} onclick={() => { activeTab = 'storage'; goto('/settings?tab=storage', { replaceState: true }); }}>Storage</button>
+          <button class="tab-button" class:active={activeTab === 'imagesearch'} onclick={() => { activeTab = 'imagesearch'; goto('/settings?tab=imagesearch', { replaceState: true }); }}>Image Search</button>
+          <button class="tab-button" class:active={activeTab === 'agents'} onclick={() => { activeTab = 'agents'; goto('/settings?tab=agents', { replaceState: true }); }}>Agents</button>
         </nav>
         {#if activeTab === 'providers'}
         <section class="settings-section">
@@ -691,6 +699,11 @@
               </button>
             </div>
           {/if}
+        </section>
+        {/if}
+        {#if activeTab === 'agents'}
+        <section class="settings-section">
+          <AgentSettings isAdmin={isAdmin} />
         </section>
         {/if}
       {/if}

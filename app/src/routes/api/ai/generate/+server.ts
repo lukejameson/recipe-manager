@@ -4,9 +4,9 @@ import { getCurrentUser } from '$lib/server/auth';
 import { z } from 'zod';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { randomUUID } from 'crypto';
 import { AIConfigurationError, isAIConfigurationError, AIRateLimitError, isAIRateLimitError } from '$lib/utils/errors';
-
 const generateSchema = z.object({
   prompt: z.string().min(1),
   dietaryRestrictions: z.array(z.string()).optional(),
@@ -14,14 +14,12 @@ const generateSchema = z.object({
   difficulty: z.enum(['easy', 'medium', 'hard']).optional(),
   maxTime: z.number().optional(),
 });
-
 interface RecipeItem {
   id: string;
   text: string;
   order: number;
   checked?: boolean;
 }
-
 function stringsToItemList(strings: string[]): { items: RecipeItem[] } {
   return {
     items: strings
@@ -34,32 +32,22 @@ function stringsToItemList(strings: string[]): { items: RecipeItem[] } {
       }))
   };
 }
-
-// POST /api/ai/generate - Generate a recipe from prompt
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
     const token = cookies.get('auth_token');
     const user = await getCurrentUser(token);
-
     if (!user) {
       throw error(401, 'Not authenticated');
     }
-
     const body = await request.json();
     const result = generateSchema.safeParse(body);
-
     if (!result.success) {
       throw error(400, result.error.message);
     }
-
     const { prompt, dietaryRestrictions, cuisine, difficulty, maxTime } = result.data;
-
-    // Get AI service instance
     const aiService = await AIServiceV2.getInstance();
-
-    // Build the prompt for recipe generation
-    const systemPrompt = `You are a recipe creator. Create a complete, detailed recipe based on the user's request.
-
+    const promptData = await PromptService.getPrompt(AIFeature.RECIPE_GENERATION);
+    let systemPrompt = promptData?.content || `You are a recipe creator. Create a complete, detailed recipe based on the user's request.
 Your response MUST be a valid JSON object with these exact fields:
 {
   "title": "string - Recipe name",
@@ -71,15 +59,20 @@ Your response MUST be a valid JSON object with these exact fields:
   "servings": number (optional),
   "tags": ["array of relevant tags like 'dinner', 'vegetarian', 'quick'"]
 }
-
 Important:
 - Return ONLY the JSON object, no markdown formatting, no backticks
 - Ensure all JSON is valid (no trailing commas)
 - Ingredients should include specific quantities
 - Instructions should be clear and numbered logically`;
-
+    const variables: Record<string, string> = {
+      user_request: prompt,
+      dietary_restrictions: dietaryRestrictions?.length ? dietaryRestrictions.join(', ') : '',
+      cuisine: cuisine || '',
+      difficulty: difficulty || '',
+      max_time: maxTime ? `${maxTime}` : ''
+    };
+    systemPrompt = PromptService.resolvePromptVariables(systemPrompt, variables);
     let userPrompt = `Create a recipe for: ${prompt}`;
-
     if (dietaryRestrictions?.length) {
       userPrompt += `\n\nDietary restrictions: ${dietaryRestrictions.join(', ')}`;
     }
@@ -92,20 +85,14 @@ Important:
     if (maxTime) {
       userPrompt += `\n\nMaximum total time: ${maxTime} minutes`;
     }
-
-    // Use AIServiceV2 for generation
     const generationResult = await aiService.generateForFeature(AIFeature.RECIPE_GENERATION, {
       systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
       jsonMode: true,
     });
-
     const content = generationResult.content;
-
-    // Parse the JSON response
     let recipeData: Record<string, unknown>;
     try {
-      // Try to extract JSON from the response (in case there's any extra text)
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         recipeData = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
@@ -116,13 +103,10 @@ Important:
       console.error('Failed to parse AI response:', content);
       throw error(500, 'Failed to parse generated recipe');
     }
-
-    // Validate required fields
     if (!recipeData.title || !Array.isArray(recipeData.ingredients) || !Array.isArray(recipeData.instructions)) {
       console.error('Invalid recipe structure:', recipeData);
       throw error(500, 'Generated recipe has invalid structure');
     }
-
     return json({
       recipe: {
         title: String(recipeData.title),

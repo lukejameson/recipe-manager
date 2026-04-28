@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { getCurrentUser } from '$lib/server/auth';
 import { AIServiceV2 } from '$lib/server/ai/service-v2';
 import { AIFeature } from '$lib/server/ai/features';
+import { PromptService } from '$lib/server/ai/prompt-service';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 
@@ -52,10 +53,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		}
 
 		const { text, sourceUrl } = result.data;
-
 		const aiService = await AIServiceV2.getInstance();
-
-		const systemPrompt = `Extract a recipe from the following text. The text may be an Instagram caption, a blog post, a copied recipe, or any informal recipe description.
+		const promptData = await PromptService.getPrompt(AIFeature.RECIPE_GENERATION);
+		let systemPrompt = promptData?.content || `Extract a recipe from the following text. The text may be an Instagram caption, a blog post, a copied recipe, or any informal recipe description.
 Return a JSON object with:
 - title: string
 - description: string — ALWAYS include a 1-3 sentence description of the recipe. Capture what makes it special, its flavor profile, or key characteristics. If the text has any commentary or context, weave that into the description.
@@ -66,7 +66,6 @@ Return a JSON object with:
 - servings: number (optional)
 - notes: string (optional)
 For instructions, if the text only has a single description like "airfry at 190c for 15 minutes", expand that into clear step-by-step instructions.`;
-
 		const generationResult = await aiService.generateForFeature(AIFeature.RECIPE_GENERATION, {
 			systemPrompt,
 			messages: [{ role: 'user', content: `Extract the recipe from this text:\n\n${text}` }],
