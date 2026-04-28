@@ -177,7 +177,7 @@
     if (filterCategory !== 'all') {
       result = result.filter(i => i.category === filterCategory);
     }
-    return result.sort((a, b) => {
+      return [...result].sort((a, b) => {
       if (sortBy === 'name') return a.displayName.localeCompare(b.displayName);
       if (sortBy === 'expiration') {
         if (!a.expirationDate) return 1;
